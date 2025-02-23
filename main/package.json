@@ -1,0 +1,31 @@
+{
+  "name": "main",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "yarn build && electron ."
+  },
+  "build": {
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "electronVersion": "34.2.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.4",
+    "electron": "34.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "drizzle-orm": "^0.39.3",
+    "sqlite3": "^5.1.7"
+  }
+}

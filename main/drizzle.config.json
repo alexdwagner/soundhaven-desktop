@@ -1,0 +1,9 @@
+{
+    "schema": "./src/schema.ts",
+    "dialect": "sqlite",
+    "dbCredentials": {
+      "url": "./soundhaven.db"
+    },
+    "out": "./migrations"
+  }
+  

@@ -1,0 +1,32 @@
+{
+    "compilerOptions": {
+        "outDir": "./dist",
+        "module": "ESNext",
+        "moduleResolution": "Node",
+        "target": "ESNext",
+        "allowJs": true,
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "baseUrl": "./",
+        "paths": {
+            "@main/*": [
+                "./main/*"
+            ],
+            "@frontend/*": [
+                "./frontend/*"
+            ]
+        }
+    },
+    "scripts": {
+        "build": "yarn tsc --build --force",
+        "build:frontend": "cd frontend && yarn tsc --build --force",
+        "build:main": "cd main && yarn tsc --build --force",
+        "dev": "concurrently \"cd frontend && yarn dev\" \"yarn electron:start\""    
+    },
+    "include": [
+        "main/**/*",
+        "frontend/**/*"
+    ]
+}
