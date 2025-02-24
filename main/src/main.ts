@@ -5,7 +5,7 @@ import { users, tracks, playlists } from "./schema";
 
 let mainWindow: BrowserWindow | null = null;
 
-function createMainWindow() {
+async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -18,10 +18,19 @@ function createMainWindow() {
 
   console.log("mainWindow started");
 
-  mainWindow.loadURL("http://localhost:3001");
+  const isDev = !app.isPackaged; // Check if we're in dev mode
+
+  await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait to ensure Next.js is ready
+
+  mainWindow.loadURL(
+    isDev
+      ? "http://localhost:3001"
+      : `file://${path.join(__dirname, "../frontend/out/index.html")}`
+  );
 
   mainWindow.webContents.once("did-finish-load", () => {
     console.log("Main window loaded!");
+    mainWindow?.webContents.reloadIgnoringCache(); // ✅ Force reload to bypass cache
   });
 
   mainWindow.on("closed", () => {

@@ -1,45 +1,31 @@
-"use client";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import MainContent from "./components/layout/MainContent";
+import NavBar from "./components/layout/NavBar";
+import Footer from "./components/layout/Footer";
+import AuthModal from "./components/modals/AuthModal";
 
-export default function Home() {
-  const [message, setMessage] = useState("Waiting for Electron...");
-  const [users, setUsers] = useState<any[]>([]);
+// import { useAuth } from "../hooks/UseAuth";
+// import LoginForm from "../components/auth/LoginForm";
+// import RegisterForm from "../components/auth/RegisterForm";
+// import Modal from "../components/Modal";
+// import NavBar from "../components/layout/NavBar";
+// import { useTracks } from "../hooks/UseTracks";
 
-  useEffect(() => {
-    if (window.electron) {
-      setMessage(window.electron.test()); // Test Electron connection
-  
-      window.electron.getUsers().then((data: unknown) => {
-        if (Array.isArray(data)) {
-          setUsers(data);
-        } else {
-          console.error("Unexpected data format from getUsers:", data);
-          setUsers([]); // Prevents crashing
-        }
-      });
-  
-      window.electron.send("ping", "Hello from Next.js!");
-      window.electron.receive("pong", (data: string) => {
-        setMessage(`Received from Electron: ${data}`);
-      });
-    } else {
-      console.warn("Electron not detected in frontend.");
-      setMessage("Electron not detected.");
-    }
-  }, []);
-  
+// ✅ Client-side modals & authentication are separate components now
+// import AuthModal from "../components/auth/AuthModal";
 
-  return (
-    <main className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-2xl font-bold">{message}</h1>
-      <h2 className="text-lg">Users List</h2>
-      <ul>
-        {users.map((user) => (
-          <li key={user.id} className="p-2 border">
-            {user.name} ({user.email})
-          </li>
-        ))}
-      </ul>
-    </main>
-  );
+export default function HomePage() {
+
+return (
+  <div className="flex-col">
+    <NavBar />
+
+    <div className="flex min-h-screen">
+      <MainContent />
+    </div>
+
+    <AuthModal /> {/* ✅ This manages login & register modals separately */}
+    <Footer />
+  </div>
+);
 }
