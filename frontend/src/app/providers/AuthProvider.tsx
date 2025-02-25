@@ -1,9 +1,11 @@
+"use client";
+
 import React, { useState, ReactNode, FC, useEffect, useCallback } from 'react';
-import { AuthContext } from '@/contexts/AuthContext';
-import { User } from '../../types/types';
-import { backendUrl, handleResponse, logoutAPI } from '@/services/apiService';
-import { useTracks } from '@/hooks/UseTracks';
-import { usePlaylists } from '@/hooks/UsePlaylists';
+import { AuthContext } from '../contexts/AuthContext';
+import { User } from '../../../../shared/types';
+import { backendUrl, handleResponse, logoutAPI } from '../services/apiService';
+import { useTracks } from '../hooks/UseTracks';
+import { usePlaylists } from '../hooks/UsePlaylists';
 
 interface AuthProviderProps {
   children: ReactNode;

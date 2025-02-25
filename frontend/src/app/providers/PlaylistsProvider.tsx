@@ -1,10 +1,11 @@
+"use client";
+
 import React, { useState, ReactElement, useCallback, useEffect } from "react";
-import { handleResponse } from "@/services/apiService";
-import { Playlist } from "../../types/types";
-import { PlaylistsContext } from "@/contexts/PlaylistsContext";
-import { backendUrl } from "@/services/apiService";
-import { useAuth } from "@/hooks/UseAuth";
-import { Track } from "../../types/types";
+import { handleResponse } from "../services/apiService";
+import { Playlist, Track } from "../../../../shared/types";
+import { PlaylistsContext } from "../contexts/PlaylistsContext";
+import { backendUrl } from "../services/apiService";
+import { useAuth } from "../hooks/UseAuth";
 
 export const PlaylistsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

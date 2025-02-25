@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { PlaylistsContext } from '@/contexts/PlaylistsContext';
+import { PlaylistsContext } from '../contexts/PlaylistsContext';
 
 export function usePlaylists() {
   const context = useContext(PlaylistsContext);

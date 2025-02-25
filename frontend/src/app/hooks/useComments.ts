@@ -1,5 +1,5 @@
 import { useState, useContext, useCallback, useEffect } from 'react';
-import CommentsContext from '@/contexts/CommentsContext';
+import CommentsContext from '../contexts/CommentsContext';
 // import { CommentsContextType } from '../../types/types';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
 

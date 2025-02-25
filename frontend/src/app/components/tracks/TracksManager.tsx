@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import FileUpload from "../FileUpload";
+import FileUpload from "@/app/FileUpload";
 import TracksTable from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
 import CommentsPanel from "../comments/CommentsPanel";

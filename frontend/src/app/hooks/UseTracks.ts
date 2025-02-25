@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { TracksContext } from '@/contexts/TracksContext';
+import { TracksContext } from '../contexts/TracksContext';
 
 // Custom hook to use tracks context
 export function useTracks() {

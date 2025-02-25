@@ -1,6 +1,6 @@
 // src/hooks/useRegister.ts
 import { useContext } from 'react';
-import { AuthContext } from '@/contexts/AuthContext';
+import { AuthContext } from '../contexts/AuthContext';
 
 interface RegisterUserData {
   name: string;

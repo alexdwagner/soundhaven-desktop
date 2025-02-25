@@ -6,7 +6,7 @@ import { usePlaylists } from "@/app/hooks/UsePlaylists";
 import { useAuth } from "@/app/hooks/UseAuth";
 import { useTracks } from "@/app/hooks/UseTracks";
 import PlaylistItem from "./PlaylistItem";
-import DuplicateTrackModal from "./DuplicateTrackModal";
+import DuplicateTrackModal from "../modals/DuplicateTrackModal";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 

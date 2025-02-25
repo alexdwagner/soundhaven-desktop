@@ -1,6 +1,8 @@
+"use client";
+
 import React, { useState, FC, useCallback } from 'react';
-import { PlaybackContext } from '@/contexts/PlaybackContext';
-import { Track } from '../../types/types';
+import { PlaybackContext } from '../contexts/PlaybackContext';
+import { Track } from '../../../../shared/types';
 
 interface PlaybackProviderProps {
     children: React.ReactNode;

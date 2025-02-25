@@ -1,9 +1,11 @@
+"use client";
+
 import React, { useState, ReactElement, useCallback, useEffect } from "react";
-import { handleResponse } from "@/services/apiService";
-import { Track } from "../../types/types";
-import { TracksContext } from "@/contexts/TracksContext";
-import { backendUrl } from "@/services/apiService";
-import { useAuth } from "@/hooks/UseAuth";
+import { handleResponse } from "../services/apiService";
+import { Track } from "../../../../shared/types";
+import { TracksContext } from "../contexts/TracksContext";
+import { backendUrl } from "../services/apiService";
+import { useAuth } from "../hooks/UseAuth";
 
 export const TracksProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
