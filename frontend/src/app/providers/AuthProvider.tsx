@@ -3,7 +3,18 @@
 import React, { useState, ReactNode, FC, useEffect, useCallback } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { User } from '../../../../shared/types';
-import { backendUrl, handleResponse, logoutAPI } from '../services/apiService';
+
+interface LoginResponse {
+  user: User;
+  access_token: string;
+  refresh_token?: string;
+}
+
+interface RefreshTokenResponse {
+  access_token: string;
+  refresh_token?: string;
+}
+import electronApiService from '../../services/electronApiService';
 import { useTracks } from '../hooks/UseTracks';
 import { usePlaylists } from '../hooks/UsePlaylists';
 
@@ -18,96 +29,100 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   const { clearTracks } = useTracks();
   const { clearPlaylists } = usePlaylists();
 
+  // Initialize auth state from Electron secure storage
   useEffect(() => {
     const initializeAuthState = async () => {
-      const storedUser = localStorage.getItem('user');
-      const storedToken = localStorage.getItem('token');
+      try {
+        const [storedUser, storedToken] = await Promise.all([
+          electronApiService.getStoredUser(),
+          electronApiService.getToken()
+        ]);
 
-      console.log('Initializing auth state');
-      console.log('Stored user:', storedUser);
-      console.log('Stored token:', storedToken);
-      
-      if (storedUser && storedToken) {
-        setUser(JSON.parse(storedUser));
-        setToken(storedToken);
-      } else {
-        console.log('No stored user or token found');
+        console.log('Initializing auth state from secure storage', {
+          storedUser,
+          storedToken
+        });
+
+        if (storedUser && storedToken) {
+          // Create a full User object with required fields
+          const fullUser: User = {
+            ...storedUser,
+            name: storedUser.name || '',
+            createdAt: storedUser.createdAt || new Date().toISOString(),
+            updatedAt: storedUser.updatedAt || new Date().toISOString(),
+            playlists: [],
+            followedArtists: [],
+            refreshTokens: []
+          };
+          setUser(fullUser);
+          setToken(storedToken);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-  
-    initializeAuthState();
-  }, []);  
 
-  const register = async (name: string, email: string, password: string) => {
+    initializeAuthState();
+  }, []);
+
+  const register = async (name: string, email: string, password: string): Promise<User> => {
     setLoading(true);
     try {
-      const response = await fetch(`${backendUrl}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+      const response = await electronApiService.register({
+        name,
+        email,
+        password
       });
-      const data = await handleResponse(response);
-      if (data && data.user && data.access_token) {
-        localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('token', data.access_token);
-        await Promise.all([
-          setUser(data.user),
-          setToken(data.access_token)
-        ]);
-      } else {
-        throw new Error('Registration failed: No data received from register service');
+      
+      if (!response) {
+        throw new Error('No response from server');
       }
+
+      const { user, access_token } = response;
+
+      await Promise.all([
+        electronApiService.setUser(user),
+        electronApiService.setToken(access_token)
+      ]);
+
+      setUser(user);
+      setToken(access_token);
+      return user;
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
     } finally {
-      setLoading(false); 
+      setLoading(false);
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     setLoading(true);
-    // Create error state or error context
-    // setError(null);
-
     try {
-      console.log('Attempting login');
-
-      const response = await fetch(`${backendUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const response = await electronApiService.login({
+        email,
+        password
       });
-
-      const data = await handleResponse(response);
-
-      console.log('Login response received:', data);
-
-      if (!data || !data.access_token || !data.user) {
-        throw new Error('Invalid response from server');
+      
+      if (!response) {
+        throw new Error('No response from server');
       }
-  
-      console.log('Login successful, storing data');
-  
-      // Store data in localStorage
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('refreshToken', data.refresh_token);
-  
-      // Update state
+
+      const { user, access_token, refresh_token } = response as LoginResponse;
+
       await Promise.all([
-        setUser(data.user),
-        setToken(data.access_token)
+        electronApiService.setUser(user),
+        electronApiService.setToken(access_token),
+        refresh_token ? electronApiService.setRefreshToken(refresh_token) : Promise.resolve()
       ]);
-  
-      console.log('Login process completed');
-  
-      return data.user;
+
+      setUser(user);
+      setToken(access_token);
+      return user;
     } catch (error) {
       console.error('Login error:', error);
-      // You might want to set some error state here
-      // setError(error.message);
       throw error;
     } finally {
       setLoading(false);
@@ -116,95 +131,52 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
 
   const logout = useCallback(async () => {
     setLoading(true);
-    const accessToken = localStorage.getItem('token');
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    console.log('Logout initiated');
-    console.log('AccessToken:', accessToken);
-    console.log('RefreshToken:', refreshToken);
-
     try {
-      if (accessToken && refreshToken) {
-        await logoutAPI(accessToken, refreshToken);
-        console.log('API logout successful');
-      }
+      console.log('Logout initiated');
+      
+      await electronApiService.logout();
+      
+      // Clear local state
+      clearTracks();
+      clearPlaylists();
+      setUser(null);
+      setToken(null);
+
+      console.log('Logout completed');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-
-      console.log('LocalStorage after removal:', {
-        user: localStorage.getItem('user'),
-        token: localStorage.getItem('token'),
-        refreshToken: localStorage.getItem('refreshToken'),
-      });
-
-      // Clear tracks before clearing user and token
-      clearTracks();
-      clearPlaylists();
-
-      console.log("Tracks cleared");
-
-      setUser(null);
-      setToken(null);
-      console.log("User and tracks cleared in AuthProvider");
-
       setLoading(false);
-
-      console.log('State after logout:', {
-        user: null,
-        token: null,
-        tracks: [],
-      });
     }
-  }, [clearTracks]);
+  }, [clearTracks, clearPlaylists]);
 
   const refreshToken = useCallback(async (): Promise<string | null> => {
-    console.log('Attempting to refresh token');
-
-    const storedRefreshToken = localStorage.getItem('refreshToken');
-    console.log('Stored refresh token:', storedRefreshToken);
-
+    console.log('Attempting to refresh token via Electron');
+    const storedRefreshToken = await electronApiService.getRefreshToken();
     if (!storedRefreshToken) {
-      console.error('No refresh token available');
+      console.log('No refresh token available');
+      await logout();
       return null;
     }
-
-    // Check if current token is expired
-    const currentToken = localStorage.getItem('token');
-    if (currentToken) {
-      const decodedToken = JSON.parse(atob(currentToken.split('.')[1]));
-      if (decodedToken.exp * 1000 > Date.now()) {
-        return currentToken; // Current token is still valid
-      }
-    }
-  
+    
     try {
-      console.log('Sending refresh token request');
-
-      const response = await fetch(`${backendUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: storedRefreshToken }),
-      });
-      const data = await handleResponse(response);
-      console.log('Refresh token response:', data);
-
-      if (data && data.access_token) {
-        console.log('New token received, updating storage and state');
-        localStorage.setItem('token', data.access_token);
-        setToken(data.access_token);
-        return data.access_token;
-      } else {
-        throw new Error('Token refresh failed: No new token received');
+      const response = await electronApiService.refreshToken(storedRefreshToken);
+      if (!response) {
+        throw new Error('No response from refresh token endpoint');
       }
+
+      const { access_token, refresh_token } = response as RefreshTokenResponse;
+
+      await Promise.all([
+        electronApiService.setToken(access_token),
+        refresh_token ? electronApiService.setRefreshToken(refresh_token) : Promise.resolve()
+      ]);
+
+      setToken(access_token);
+      return access_token;
     } catch (error) {
       console.error('Token refresh error:', error);
-      logout();
+      await logout();
       return null;
     }
   }, [logout]);
@@ -213,14 +185,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
     return !!token && !!user;
   }, [token, user]);
 
-  const updateUser = useCallback((updatedUser: User) => {
+  const updateUser = useCallback(async (updatedUser: User) => {
     setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    await electronApiService.setUser(updatedUser);
   }, []);
 
-  const updateToken = useCallback((newToken: string) => {
+  const updateToken = useCallback(async (newToken: string) => {
     setToken(newToken);
-    localStorage.setItem('token', newToken);
+    await electronApiService.setToken(newToken);
   }, []);
 
   return (
@@ -238,7 +210,8 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
         setToken: updateToken,
         setUser,
         setLoading,
-      }}>
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

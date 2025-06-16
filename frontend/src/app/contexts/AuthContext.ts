@@ -1,13 +1,13 @@
 import { createContext, useContext } from 'react';
-import { User } from '../../types/types';
+import { User } from '../../../../shared/types';
 
 interface AuthContextState {
   user: User | null;
   token: string | null; // Include token
   loading: boolean; // Add loading state
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;  
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<User>;
   refreshToken: () => Promise<string | null>;
   isAuthenticated: () => boolean;
   updateUser: (updatedUser: User) => void;
@@ -20,9 +20,9 @@ const defaultContextValue: AuthContextState = {
   user: null,
   token: null, // Ensure token is included in the context's default state
   loading: true, // Default loading state
-  login: async () => { throw new Error("login function not implemented"); },
+  login: async (): Promise<User> => { throw new Error("login function not implemented"); },
   logout: async () => { throw new Error("logout function not implemented"); },
-  register: async () => { throw new Error("register function not implemented"); },
+  register: async (): Promise<User> => { throw new Error("register function not implemented"); },
   refreshToken: async () => { throw new Error("refreshToken function not implemented"); },
   isAuthenticated: () => false,
   updateUser: () => { throw new Error("updateUser function not implemented"); },

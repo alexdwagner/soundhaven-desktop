@@ -1,402 +1,297 @@
 "use client";
 
-import React, { useState, ReactElement, useCallback, useEffect } from "react";
-import { handleResponse } from "../services/apiService";
-import { Playlist, Track } from "../../../../shared/types";
-import { PlaylistsContext } from "../contexts/PlaylistsContext";
-import { backendUrl } from "../services/apiService";
+import * as React from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from "../hooks/UseAuth";
+import { apiService } from "../../services/electronApiService";
 
-export const PlaylistsProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}): ReactElement | null => {
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+// Import types
+import { Playlist, Track, User } from "../../../../shared/types";
+
+// Extend the base Playlist type to include required properties
+interface ExtendedPlaylist extends Playlist {
+  id: number;
+  userId: number;
+  user: User;
+  tracks: Track[];
+}
+
+interface PlaylistsContextType {
+  playlists: ExtendedPlaylist[];
+  currentPlaylistId: number | null;
+  currentPlaylistTracks: Track[];
+  loading: boolean;
+  error: string | null;
+  fetchPlaylists: () => Promise<void>;
+  fetchPlaylistById: (id: number) => Promise<ExtendedPlaylist | null>;
+  createPlaylist: (name: string, description?: string) => Promise<Playlist | null>;
+  deletePlaylist: (id: number) => Promise<boolean>;
+  addTrackToPlaylist: (playlistId: number, trackId: number, force?: boolean) => Promise<boolean>;
+  removeTrackFromPlaylist: (playlistId: number, trackId: number) => Promise<boolean>;
+  updatePlaylistMetadata: (playlistId: number, updates: { name?: string; description?: string }) => Promise<boolean>;
+  updatePlaylistOrder: (playlistIds: number[]) => Promise<Playlist[]>;
+  updatePlaylistTrackOrder: (playlistId: number, trackIds: number[]) => Promise<boolean>;
+  setCurrentPlaylistId: (id: number | null) => void;
+  setCurrentPlaylistTracks: (tracks: Track[]) => void;
+  clearPlaylists: () => void;
+  setPlaylists: React.Dispatch<React.SetStateAction<ExtendedPlaylist[]>>;
+  setError: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
+const PlaylistsContext = createContext<PlaylistsContextType | null>(null);
+
+interface PlaylistsProviderProps {
+  children: React.ReactNode;
+}
+
+export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }) => {
+  const [playlists, setPlaylists] = useState<ExtendedPlaylist[]>([]);
   const { token, refreshToken, setToken } = useAuth();
   const [currentPlaylistId, setCurrentPlaylistId] = useState<number | null>(null);
   const [currentPlaylistTracks, setCurrentPlaylistTracks] = useState<Track[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (token) {
       fetchPlaylists();
-    } else {
-      console.error("No token available");
     }
+    // Don't log error here as it's normal during initial load
   }, [token]);
 
   const fetchPlaylists = useCallback(async () => {
-    if (!token) {
-      console.error("No token available");
-      return;
-    }
+    if (!token) return;
 
     try {
-      const response = await fetch(`${backendUrl}/playlists`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const playlists = await apiService.getPlaylists() as ExtendedPlaylist[];
+      // Filter out any invalid playlists and ensure required fields exist
+      const validPlaylists = playlists.filter((playlist): playlist is ExtendedPlaylist => {
+        return (
+          !!playlist && 
+          typeof playlist.id === 'number' && 
+          typeof playlist.name === 'string' &&
+          typeof playlist.userId === 'number' &&
+          !!playlist.user &&
+          Array.isArray(playlist.tracks)
+        );
       });
-
-      const playlists = await handleResponse<Playlist[]>(response);
-      setPlaylists(playlists);
+      
+      setPlaylists(validPlaylists);
     } catch (error) {
-      console.error("Error fetching playlists:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error("Error fetching playlists:", errorMessage);
+      setError(errorMessage);
     }
   }, [token]);
 
-  const fetchPlaylistById = useCallback(
-    async (id: number): Promise<Playlist | undefined> => {
-      if (!token) {
-        console.error("No token available");
-        return undefined;
-      }
-
-      try {
-        const response = await fetch(`${backendUrl}/playlists/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (response.status === 403) {
-          console.error("Access forbidden: Check permissions");
-          throw new Error("Forbidden resource");
-        }
-
-        const playlist = await handleResponse<Playlist>(response);
-
-              // Convert TracksInPlaylist to tracks array
-      if (playlist && playlist.TracksInPlaylist) {
-        playlist.tracks = playlist.TracksInPlaylist.map(tip => ({
-          ...tip.track,
-          artist: tip.track.artist,
-          album: tip.track.album,
-        }));
-        delete playlist.TracksInPlaylist;
-      }
-
-      console.log("Fetched playlist:", playlist);
-        return playlist;
-      } catch (error) {
-        console.error(`Error fetching playlist with ID ${id}:`, error);
-        return undefined;
-      }
-    },
-    [token]
-  );
-
-  const createPlaylist = async (
-    playlistData: Partial<Playlist>
-  ): Promise<Playlist> => {
-    console.log("Creating playlist with data:", playlistData);
-
-    console.log("Backend URL:", `${backendUrl}/playlists`);
-    console.log("Token (first 10 chars):", token.substring(0, 10));
+  const fetchPlaylistById = useCallback(async (id: number): Promise<ExtendedPlaylist | null> => {
+    if (!token) return null;
 
     try {
-      if (!playlistData.name || !playlistData.userId) {
-        throw new Error("Name and userId are required to create a playlist");
-      }
+      const playlist = await apiService.getPlaylistById(id) as ExtendedPlaylist;
+      return playlist;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error fetching playlist ${id}:`, errorMessage);
+      setError(errorMessage);
+      return null;
+    }
+  }, [token]);
 
-      const response = await fetch(`${backendUrl}/playlists`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(playlistData),
-      });
+  const createPlaylist = useCallback(async (name: string, description?: string): Promise<Playlist | null> => {
+    if (!token) return null;
 
-      console.log("Response status:", response.status);
-      console.log(
-        "Response headers:",
-        JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)
-      );
-
-      const responseText = await response.text();
-      console.log("Raw response:", responseText);
-
-      if (!response.ok) {
-        console.error("Error response:", responseText);
-        throw new Error(
-          `Server responded with ${response.status}: ${responseText}`
-        );
-      }
-
-      if (!responseText) {
-        throw new Error("Empty response from server");
-      }
-
-      let newPlaylist: Playlist;
-      try {
-        newPlaylist = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Error parsing response:", e);
-        throw new Error("Invalid response from server");
-      }
-
-      console.log(
-        "Parsed new playlist from server:",
-        JSON.stringify(newPlaylist, null, 2)
-      );
-
-      setPlaylists((prev) => [...prev, newPlaylist]);
-
+    try {
+      const newPlaylist = await apiService.createPlaylist({ name, description }) as Playlist;
+      setPlaylists(prev => [...prev, newPlaylist]);
       return newPlaylist;
     } catch (error) {
-      console.error("Error in createPlaylist:", error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error("Error creating playlist:", errorMessage);
+      setError(errorMessage);
+      return null;
     }
-  };
+  }, [token]);
 
-  const deletePlaylist = async (id: number): Promise<void> => {
-    if (!token) {
-      throw new Error("No token available");
-    }
-  
+  const deletePlaylist = useCallback(async (id: number): Promise<boolean> => {
+    if (!token) return false;
+
     try {
-      const response = await fetch(`${backendUrl}/playlists/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-  
-      await handleResponse(response);
-  
-      setPlaylists((prev) => prev.filter((playlist) => playlist.id !== id));
-      setCurrentPlaylistId(null);
-      setCurrentPlaylistTracks([]);
-  
-      // No need to return anything as the function is typed to return void
+      await apiService.deletePlaylist(id);
+      setPlaylists(prev => prev.filter(playlist => playlist.id !== id));
+      return true;
     } catch (error) {
-      console.error(`Error deleting playlist with ID ${id}:`, error);
-  
-      if (error instanceof Error) {
-        throw new Error(`Failed to delete playlist: ${error.message}`);
-      } else {
-        throw new Error('An unknown error occurred while deleting the playlist');
-      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error deleting playlist ${id}:`, errorMessage);
+      setError(errorMessage);
+      return false;
     }
-  };
+  }, [token]);
 
-  const addTrackToPlaylist = async (playlistId: number, trackId: number, force: boolean = false) => {
-    if (!token) {
-      throw new Error("No token available");
-    }
-  
-    try {
-      console.log(`Attempting to add track ${trackId} to playlist ${playlistId}`);
-      const response = await fetch(
-        `${backendUrl}/playlists/${playlistId}/tracks/${trackId}${force ? '?force=true' : ''}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+  const addTrackToPlaylist = useCallback(
+    async (playlistId: number, trackId: number, force: boolean = false): Promise<boolean> => {
+      if (!token) return false;
+
+      try {
+        await apiService.addTrackToPlaylist(playlistId, trackId, force);
+
+        // Refresh the current playlist tracks if this is the current playlist
+        if (currentPlaylistId === playlistId) {
+          const updatedPlaylist = await fetchPlaylistById(playlistId);
+          if (updatedPlaylist) {
+            setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+          }
         }
-      );
-  
-      const result = await handleResponse(response);
-      
-      if (result.status === 'DUPLICATE' && !force) {
-        return result; // This will trigger the modal in the frontend
-      }
-  
-      console.log("Add track to playlist result:", result);
-  
-      const updatedPlaylist = await fetchPlaylistById(playlistId);
-      if (updatedPlaylist) {
-        setPlaylists((prev) =>
-          prev.map((playlist) =>
-            playlist.id === playlistId ? updatedPlaylist : playlist
-          )
+
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error(
+          `Error adding track ${trackId} to playlist ${playlistId}:`,
+          errorMessage
         );
+        setError(errorMessage);
+        return false;
       }
-  
-      return updatedPlaylist;
-    } catch (error) {
-      console.error(`Error adding track ${trackId} to playlist ${playlistId}:`, error);
-      throw error;
-    }
-  };
+    },
+    [token, currentPlaylistId, fetchPlaylistById]
+  );
 
-  const removeTrackFromPlaylist = async (
-    playlistId: number,
-    trackId: number
-  ) => {
-    if (!token) {
-      throw new Error("No token available");
-    }
+  const removeTrackFromPlaylist = useCallback(async (playlistId: number, trackId: number): Promise<boolean> => {
+    if (!token) return false;
 
     try {
-      const response = await fetch(
-        `${backendUrl}/playlists/${playlistId}/tracks/${trackId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await apiService.removeTrackFromPlaylist(playlistId, trackId);
 
-      await handleResponse(response);
-
-      const updatedPlaylist = await fetchPlaylistById(playlistId);
-      if (updatedPlaylist) {
-        setPlaylists((prev) =>
-          prev.map((playlist) =>
-            playlist.id === playlistId ? updatedPlaylist : playlist
-          )
-        );
-  
-        // If this is the currently selected playlist, update its tracks
-        if (currentPlaylistId === playlistId && updatedPlaylist.tracks) {
-          setCurrentPlaylistTracks(updatedPlaylist.tracks);
+      // Refresh the current playlist tracks if this is the current playlist
+      if (currentPlaylistId === playlistId) {
+        const updatedPlaylist = await fetchPlaylistById(playlistId);
+        if (updatedPlaylist) {
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
         }
       }
+
+      return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error(
-        `Error removing track from playlist with ID ${playlistId}:`,
-        error
+        `Error removing track ${trackId} from playlist ${playlistId}:`,
+        errorMessage
       );
-      throw error;
-    } 
-  };
+      setError(errorMessage);
+      return false;
+    }
+  }, [token, currentPlaylistId, fetchPlaylistById]);
 
   const clearPlaylists = useCallback(() => {
     setPlaylists([]);
   }, []);
 
+  // Clear playlists when token changes
   useEffect(() => {
     if (!token) {
       clearPlaylists();
     }
   }, [token, clearPlaylists]);
 
-  const updatePlaylistMetadata = async (playlistId: number, updateData: any) => {
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-  
-    try {
-      console.log(`Updating playlist ${playlistId} with data:`, updateData);
-      const response = await fetch(`${backendUrl}/playlists/${playlistId}/metadata`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(updateData),
-      });
+  const updatePlaylistMetadata = useCallback(
+    async (playlistId: number, updates: { name?: string; description?: string }): Promise<boolean> => {
+      if (!token) return false;
 
-      const responseData = await response.json();
-      console.log(`Response status: ${response.status}`, responseData);
-  
-      if (!response.ok) {
-        throw new Error(Array.isArray(responseData.message) 
-          ? responseData.message.join(', ') 
-          : responseData.message || 'Failed to update playlist metadata');
-      }
-  
-      setPlaylists((prevPlaylists) =>
-        prevPlaylists.map((playlist) =>
-          playlist.id === playlistId ? { ...playlist, ...updateData } : playlist
-        )
-      );
-  
-      return responseData;
-    } catch (error) {
-      console.error(`Error updating playlist metadata ${playlistId}:`, error);
-      throw error;
-    }
-  };
-  
-  const updatePlaylistOrder = async (playlistIds: number[]): Promise<Playlist[]> => {
-    console.log('Sending reorder request with payload:', { playlistIds });
+      try {
+        await apiService.updatePlaylistMetadata(playlistId, updates);
+        
+        // Update the local state with the new metadata
+        setPlaylists(prev =>
+          prev.map(playlist =>
+            playlist.id === playlistId
+              ? { ...playlist, ...updates, updatedAt: new Date().toISOString() }
+              : playlist
+          )
+        );
 
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-  
-    try {
-      const response = await fetch(`${backendUrl}/playlists/reorder`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ playlistIds }),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Reorder request failed:', errorData);
-        throw new Error(errorData.message || 'Failed to update playlist order');
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error(`Error updating playlist ${playlistId} metadata:`, errorMessage);
+        setError(errorMessage);
+        return false;
       }
-  
-      const updatedPlaylists = await response.json();
-      console.log('Reorder request successful:', updatedPlaylists);
+    },
+    [token]
+  );
+
+  const updatePlaylistOrder = useCallback(async (playlistIds: number[]): Promise<Playlist[]> => {
+    if (!token) return [];
+
+    try {
+      const updatedPlaylists = await apiService.reorderPlaylists(playlistIds) as Playlist[];
+      setPlaylists(updatedPlaylists);
       return updatedPlaylists;
     } catch (error) {
-      console.error(`Error reordering playlists:`, error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Error updating playlist order:', errorMessage);
+      setError(errorMessage);
+      return [];
     }
-  };
+  }, [token]);
 
-  const updatePlaylistTrackOrder = async (playlistId: number, trackIds: number[]): Promise<Playlist> => {
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-  
+  const updatePlaylistTrackOrder = useCallback(async (playlistId: number, trackIds: number[]): Promise<boolean> => {
+    if (!token) return false;
+
     try {
-      const response = await fetch(`${backendUrl}/playlists/${playlistId}/track-order`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ trackIds }),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update track order');
+      await apiService.reorderPlaylistTracks(playlistId, trackIds);
+      
+      // Update local state if this is the current playlist
+      if (currentPlaylistId === playlistId) {
+        const updatedPlaylist = await fetchPlaylistById(playlistId);
+        if (updatedPlaylist) {
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+        }
       }
-  
-      const updatedPlaylist = await response.json();
-      setPlaylists((prevPlaylists) =>
-        prevPlaylists.map((playlist) =>
-          playlist.id === playlistId ? updatedPlaylist : playlist
-        )
-      );
-      return updatedPlaylist;
+
+      return true;
     } catch (error) {
-      console.error(`Error updating track order for playlist ${playlistId}:`, error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error(`Error updating track order for playlist ${playlistId}:`, errorMessage);
+      setError(errorMessage);
+      return false;
     }
+  }, [token, currentPlaylistId, fetchPlaylistById]);
+
+  const contextValue: PlaylistsContextType = {
+    playlists,
+    setPlaylists,
+    fetchPlaylists,
+    fetchPlaylistById,
+    createPlaylist,
+    deletePlaylist,
+    addTrackToPlaylist,
+    removeTrackFromPlaylist,
+    updatePlaylistMetadata,
+    updatePlaylistOrder,
+    updatePlaylistTrackOrder,
+    currentPlaylistId,
+    currentPlaylistTracks,
+    setCurrentPlaylistId,
+    setCurrentPlaylistTracks,
+    clearPlaylists,
+    loading,
+    error,
+    setError,
   };
 
   return (
-    <PlaylistsContext.Provider
-      value={{
-        playlists,
-        setPlaylists,
-        fetchPlaylists,
-        fetchPlaylistById,
-        createPlaylist,
-        deletePlaylist,
-        addTrackToPlaylist,
-        removeTrackFromPlaylist,
-        clearPlaylists,
-        currentPlaylistId,
-        setCurrentPlaylistId,
-        currentPlaylistTracks,
-        setCurrentPlaylistTracks,
-        updatePlaylistMetadata,
-        updatePlaylistOrder,
-        updatePlaylistTrackOrder,
-      }}
-    >
+    <PlaylistsContext.Provider value={contextValue}>
       {children}
     </PlaylistsContext.Provider>
   );
+};
+
+export const usePlaylists = (): PlaylistsContextType => {
+  const context = useContext(PlaylistsContext);
+  if (!context) {
+    throw new Error('usePlaylists must be used within a PlaylistsProvider');
+  }
+  return context;
 };

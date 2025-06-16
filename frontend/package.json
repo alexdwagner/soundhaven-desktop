@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3000",
     "lint": "next lint"
   },
   "dependencies": {
@@ -23,7 +23,7 @@
     "react-icons": "^5.5.0",
     "react-infinite-scroll-component": "^6.1.0",
     "react-router-dom": "^7.2.0",
-    "wavesurfer.js": "^7.9.1"
+    "wavesurfer.js": "7.9.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

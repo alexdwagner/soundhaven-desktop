@@ -2,7 +2,8 @@ import React, { useState, useContext } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { FaGoogle } from 'react-icons/fa';
 import { AuthContext } from '@/app/contexts/AuthContext';
-import { register as registerUser } from '../../services/apiService';
+import { apiService } from '@/services/electronApiService';
+
 
 interface RegisterData {
   name: string;
@@ -38,7 +39,7 @@ const RegisterForm: React.FC<{ onSuccess: () => void, onCloseModal: () => void }
   
       console.log("Registration Payload:", payload);
   
-      await registerUser(payload);
+      await apiService.register(payload);
       console.log("User registered, attempting to log in");
   
       if (authContext.login) {

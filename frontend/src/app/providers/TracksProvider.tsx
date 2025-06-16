@@ -1,306 +1,317 @@
 "use client";
 
-import React, { useState, ReactElement, useCallback, useEffect } from "react";
-import { handleResponse } from "../services/apiService";
-import { Track } from "../../../../shared/types";
-import { TracksContext } from "../contexts/TracksContext";
-import { backendUrl } from "../services/apiService";
-import { useAuth } from "../hooks/UseAuth";
+import React, { createContext, useState, useCallback, useEffect, useMemo, useContext } from 'react';
+import { Track } from '../../../../shared/types';
+import { useAuth } from '../hooks/UseAuth';
+import { apiService } from '../../services/electronApiService';
 
-export const TracksProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}): ReactElement | null => {
+// Define the API service interface to ensure type safety
+interface ApiService {
+  getTrackById: (id: number) => Promise<Track>;
+  getTracks: () => Promise<Track[]>;
+  updateTrackMetadata: (id: number, updates: Partial<Track>) => Promise<Track>;
+  deleteTrack: (id: number) => Promise<void>;
+  uploadTrack: (formData: FormData) => Promise<Track>;
+}
+
+interface TracksContextType {
+  // State
+  tracks: Track[];
+  currentTrackIndex: number | null;
+  currentPlaylistId: string | null;
+  showDeleteModal: boolean;
+  doNotAskAgain: boolean;
+  isLoading: boolean;
+  error: string | null;
+  currentTrack: Track | null;
+  
+  // Actions
+  setTracks: (tracks: Track[]) => void;
+  fetchTrack: (id: number) => Promise<Track | undefined>;
+  updateTrack: (trackId: number, updates: Partial<Omit<Track, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<Track | undefined>;
+  updateTrackField: (trackId: number, field: keyof Track, value: string | number | boolean | null) => Promise<Track | undefined>;
+  fetchTracks: () => Promise<Track[]>;
+  deleteTrack: (id: number) => Promise<boolean>;
+  clearTracks: () => void;
+  setCurrentTrackIndex: (index: number | null) => void;
+  setCurrentPlaylistId: (id: string | null) => void;
+  setShowDeleteModal: (show: boolean) => void;
+  setDoNotAskAgain: (value: boolean) => void;
+  uploadTrack: (formData: FormData) => Promise<Track | undefined>;
+}
+
+export const TracksContext = createContext<TracksContextType | undefined>(undefined);
+
+interface TracksProviderProps {
+  children: React.ReactNode;
+}
+
+// Default context value to prevent null checks everywhere
+const defaultContextValue: TracksContextType = {
+  tracks: [],
+  currentTrackIndex: null,
+  currentPlaylistId: null,
+  showDeleteModal: false,
+  doNotAskAgain: false,
+  isLoading: false,
+  error: null,
+  currentTrack: null,
+  setTracks: () => {},
+  fetchTrack: async () => undefined,
+  updateTrack: async () => undefined,
+  updateTrackField: async () => undefined,
+  fetchTracks: async () => [],
+  deleteTrack: async () => false,
+  clearTracks: () => {},
+  setCurrentTrackIndex: () => {},
+  setCurrentPlaylistId: () => {},
+  setShowDeleteModal: () => {},
+  setDoNotAskAgain: () => {},
+  uploadTrack: async () => undefined,
+};
+
+export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
+  // State
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(
-    null
-  );
-  const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(
-    null
-  );
+  const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
+  const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [doNotAskAgain, setDoNotAskAgain] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Auth
   const { token, refreshToken, setToken } = useAuth();
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [doNotAskAgain, setDoNotAskAgain] = useState(false);
-
+  
+  // Derived state
+  const currentTrack = useMemo(() => 
+    currentTrackIndex !== null && tracks[currentTrackIndex] ? tracks[currentTrackIndex] : null,
+    [currentTrackIndex, tracks]
+  );
+  
+  // Fetch tracks when token is available
   useEffect(() => {
-    console.log("useAuth token:", token);
     if (token) {
-      fetchTracks();
-    } else {
-      console.error("No token available");
+      fetchTracks().catch(err => {
+        console.error("Error in fetchTracks effect:", err);
+        setError("Failed to load tracks");
+      });
     }
   }, [token]);
-
-  const fetchTrack = async (id: number): Promise<Track | undefined> => {
+  
+  // Fetch a single track by ID
+  const fetchTrack = useCallback(async (id: number): Promise<Track | undefined> => {
     if (!token) {
-      console.log("No token available");
-      throw new Error("No token available");
+      setError("Authentication required");
+      return undefined;
     }
 
     try {
-      const response = await fetch(`${backendUrl}/tracks/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const track = await handleResponse<Track>(response);
+      setIsLoading(true);
+      const track = await apiService.getTrackById(id);
       return track;
     } catch (error) {
       console.error("Error fetching track:", error);
-      throw new Error("Failed to fetch track");
-    }
-  };
-
-  const fetchTracks = useCallback(
-    async (retryCount = 0): Promise<Track[]> => {
-      if (!token) {
-        console.error("No token available");
-        return [];
-      }
-  
-      console.log(
-        `Attempting to fetch tracks with token (attempt ${retryCount + 1}):`,
-        token
-      );
-  
-      const maxRetries = 3;
-      const retryDelay = 1000; // 1 second
-  
-      try {
-        const response = await fetch(`${backendUrl}/tracks`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-  
-        if (response.status === 401) {
-          const errorBody = await response.text();
-          console.error("401 Unauthorized. Response body:", errorBody);
-  
-          if (retryCount >= maxRetries) {
-            console.error("Max retries reached. Unable to fetch tracks.");
-            return [];
-          }
-  
-          console.log("Token expired. Attempting to refresh...");
-          const newToken = await refreshToken();
-  
-          if (newToken) {
-            console.log("Token refreshed. Retrying fetch with new token...");
-            setToken(newToken);
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            return fetchTracks(retryCount + 1);
-          } else {
-            console.error("Failed to refresh token");
-            return [];
-          }
-        }
-  
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-  
-        const tracks = await handleResponse<Track[]>(response);
-        console.log("Tracks fetched successfully:", tracks);
-        setTracks(tracks);
-        return tracks; // Return the fetched tracks
-      } catch (error) {
-        console.error("Error fetching tracks:", error);
-        return []; // Return an empty array in case of error
-      }
-    },
-    [token, refreshToken, setToken]
-  );
-
-  // const uploadTrack = async (formData: FormData) => {
-  //   console.log("Preparing to upload file");
-
-  //   // Log the contents of formData for debugging
-  //   // Convert formData keys to an array and log them
-  //   const formDataKeys = Array.from(formData.keys());
-  //   for (const key of formDataKeys) {
-  //     console.log(key, formData.get(key));
-  //   }
-
-  //   try {
-  //     console.log("Sending upload request to server");
-  //     const response = await fetch(`${backendUrl}/tracks/upload`, {
-  //       method: 'POST',
-  //       body: formData,
-  //     });
-
-  //     console.log("Received response from upload request", response);
-
-  //     if (!response.ok) {
-  //       console.error('Response status:', response.status);
-  //       const errorData = await response.json();
-  //       console.error('Response error data:', errorData);
-  //       throw new Error(errorData.message || 'Error uploading track');
-  //     }
-
-  //     return await response.json();
-  //   } catch (error: any) {
-  //     console.error('Error uploading track:', error.message);
-  //     throw error;
-  //   }
-  // };
-
-  const uploadTrack = async (formData: FormData) => {
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-
-    try {
-      const response = await fetch(`${backendUrl}/tracks/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      return await handleResponse(response);
-    } catch (error) {
-      console.error("Error uploading track:", error);
-      throw error;
-    }
-  };
-
-  const deleteTrack = async (id: number) => {
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-  
-    try {
-      const response = await fetch(`${backendUrl}/tracks/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete track');
-      }
-  
-      const result = await response.json();
-      console.log(result.message); // Log the success message
-  
-      setTracks((prevTracks) => prevTracks.filter((track) => track.id !== id));
-      return result;
-    } catch (error) {
-      console.error(`Error deleting track with ID ${id}:`, error);
-      throw error;
-    }
-  };
-
-  // const updateTrackMetadata = async (trackId: number, updatedData: Partial<Track>) => {
-  //   console.log('updateTrackMetadata received', updatedData);
-
-  //   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL as string;
-
-  //   console.log("Final data being sent to backend:", { name: updatedData.name, artistName: updatedData.artist?.name, albumName: updatedData.album?.name });
-
-  //     // Preparing the payload
-  //     const payload = JSON.stringify({
-  //       name: updatedData.name,
-  //       artistName: updatedData.artistName,
-  //       albumName: updatedData.albumName,
-  //     });
-
-  //     console.log("Sending payload:", payload);
-
-  //     const response = await fetch(`${backendUrl}/tracks/${trackId}`, {
-  //       method: 'PATCH',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: payload,
-  //     });
-
-  //   if (!response.ok) {
-  //     const errorData = await response.json();
-  //     console.error(`Error updating track ${trackId}:`, errorData.message || 'Unknown error');
-  //     throw new Error(errorData.message || 'Error updating track');
-  //   }
-
-  //   const responseData = await response.json();
-  //   console.log(`Track ${trackId} updated successfully:`, responseData);
-  //   return responseData;
-  // };
-
-  const updateTrackMetadata = async (
-    trackId: number,
-    updatedData: Partial<Track>
-  ) => {
-    if (!token) {
-      console.error("No token available");
-      throw new Error("No token available");
-    }
-
-    const payload = JSON.stringify({
-      name: updatedData.name,
-      artistName: updatedData.artistName,
-      albumName: updatedData.albumName,
-    });
-
-    try {
-      const response = await fetch(`${backendUrl}/tracks/${trackId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: payload,
-      });
-
-      const responseData = await handleResponse(response);
-      setTracks((prevTracks) =>
-        prevTracks.map((track) =>
-          track.id === trackId ? { ...track, ...responseData } : track
-        )
-      );
-      return responseData;
-    } catch (error) {
-      console.error(`Error updating track ${trackId}:`, error);
-      throw error;
-    }
-  };
-
-  const updateTrack = (trackId: number, field: keyof Track, value: string) => {
-    setTracks((prevTracks) =>
-      prevTracks.map((track) =>
-        track.id === trackId ? { ...track, [field]: value } : track
-      )
-    );
-  };
-
-  const clearTracks = useCallback(() => {
-    console.log('clearTracks called in TracksProvider');
-    console.log('Tracks before clearing:', tracks);
-    setTracks([]);
-    console.log('Tracks after clearing:', tracks);
-    // Any other track-related state that needs to be cleared
-  }, []);
-
-  useEffect(() => {
-    if (!token) {
-      clearTracks();
+      setError(`Failed to fetch track: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return undefined;
+    } finally {
+      setIsLoading(false);
     }
   }, [token]);
+  
+  // Fetch all tracks with retry logic
+  const fetchTracks = useCallback(async (retryCount = 0): Promise<Track[]> => {
+    if (!token) {
+      setError("Authentication required");
+      return [];
+    }
+
+    try {
+      setIsLoading(true);
+      const tracks = await apiService.getTracks();
+      setTracks(tracks);
+      setError(null);
+      return tracks;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch tracks';
+      console.error("Error fetching tracks:", error);
+      setError(errorMessage);
+      
+      // Implement retry logic if needed
+      if (retryCount < 3) {
+        console.log(`Retrying fetchTracks (${retryCount + 1}/3)`);
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve(fetchTracks(retryCount + 1));
+          }, 1000 * Math.pow(2, retryCount)); // Exponential backoff
+        });
+      }
+      
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+  
+  // Update a track
+  const updateTrack = useCallback(async (
+    trackId: number, 
+    updates: Partial<Omit<Track, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<Track | undefined> => {
+    if (!token) {
+      setError("Authentication required");
+      return undefined;
+    }
+
+    try {
+      setIsLoading(true);
+      const updatedTrack = await apiService.updateTrackMetadata(trackId, updates);
+      
+      // Update local state
+      setTracks(prevTracks => 
+        prevTracks.map(track => 
+          track.id === trackId ? { ...track, ...updatedTrack } : track
+        )
+      );
+      
+      return updatedTrack;
+    } catch (error) {
+      console.error("Error updating track:", error);
+      setError(`Failed to update track: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return undefined;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+  
+  // Update a single field of a track
+  const updateTrackField = useCallback(async (
+    trackId: number, 
+    field: keyof Track, 
+    value: string | number | boolean | null
+  ): Promise<Track | undefined> => {
+    return updateTrack(trackId, { [field]: value } as Partial<Track>);
+  }, [updateTrack]);
+  
+  // Delete a track
+  const deleteTrack = useCallback(async (id: number): Promise<boolean> => {
+    if (!token) {
+      setError("Authentication required");
+      return false;
+    }
+
+    try {
+      setIsLoading(true);
+      await apiService.deleteTrack(id);
+      
+      // Update local state
+      setTracks(prevTracks => prevTracks.filter(track => track.id !== id));
+      
+      // Reset current track if it was deleted
+      if (currentTrackIndex !== null && tracks[currentTrackIndex]?.id === id) {
+        setCurrentTrackIndex(null);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error deleting track:", error);
+      setError(`Failed to delete track: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentTrackIndex, tracks]);
+  
+  // Upload a new track
+  const uploadTrack = useCallback(async (formData: FormData): Promise<Track | undefined> => {
+    if (!token) {
+      setError("Authentication required");
+      return undefined;
+    }
+
+    try {
+      setIsLoading(true);
+      const newTrack = await apiService.uploadTrack(formData);
+      
+      // Add new track to local state
+      setTracks(prevTracks => [...prevTracks, newTrack]);
+      
+      return newTrack;
+    } catch (error) {
+      console.error("Error uploading track:", error);
+      setError(`Failed to upload track: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return undefined;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+  
+  // Clear all tracks
+  const clearTracks = useCallback((): void => {
+    setTracks([]);
+    setCurrentTrackIndex(null);
+    setCurrentPlaylistId(null);
+  }, []);
+  
+  // Context value
+  const contextValue: TracksContextType = useMemo(() => ({
+    tracks,
+    currentTrackIndex,
+    currentPlaylistId,
+    showDeleteModal,
+    doNotAskAgain,
+    isLoading,
+    error,
+    currentTrack,
+    setTracks,
+    fetchTrack,
+    updateTrack,
+    updateTrackField,
+    fetchTracks,
+    deleteTrack,
+    clearTracks,
+    setCurrentTrackIndex,
+    setCurrentPlaylistId,
+    setShowDeleteModal,
+    setDoNotAskAgain,
+    uploadTrack,
+  }), [
+    tracks, 
+    currentTrackIndex, 
+    currentPlaylistId, 
+    showDeleteModal, 
+    doNotAskAgain, 
+    isLoading, 
+    error, 
+    currentTrack,
+    setTracks,
+    fetchTrack,
+    updateTrack,
+    updateTrackField,
+    fetchTracks,
+    deleteTrack,
+    clearTracks,
+    setCurrentTrackIndex,
+    setCurrentPlaylistId,
+    setShowDeleteModal,
+    setDoNotAskAgain,
+    uploadTrack,
+  ]);
 
   return (
-    <TracksContext.Provider
-      value={{
-        tracks,
-        setTracks,
-        fetchTrack,
-        updateTrack,
-        updateTrackMetadata,
-        deleteTrack,
-        fetchTracks,
-        uploadTrack,
-        clearTracks,
-        showDeleteModal,
-        setShowDeleteModal,
-        doNotAskAgain,
-        setDoNotAskAgain,
-      }}
-    >
+    <TracksContext.Provider value={contextValue}>
       {children}
     </TracksContext.Provider>
   );
 };
+
+export function useTracks(): TracksContextType {
+  const context = useContext(TracksContext);
+  if (context === undefined) {
+    console.warn('useTracks must be used within a TracksProvider');
+    return defaultContextValue;
+  }
+  return context;
+};
+
+export default TracksProvider;

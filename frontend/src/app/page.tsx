@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+'use client';
+
+import React, { useState } from "react";
 import MainContent from "./components/layout/MainContent";
 import NavBar from "./components/layout/NavBar";
 import Footer from "./components/layout/Footer";
@@ -15,17 +17,37 @@ import AuthModal from "./components/modals/AuthModal";
 // import AuthModal from "../components/auth/AuthModal";
 
 export default function HomePage() {
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
-return (
-  <div className="flex-col">
-    <NavBar />
+  const handleLoginClick = () => {
+    setAuthMode('login');
+    setShowAuthModal(true);
+  };
 
-    <div className="flex min-h-screen">
-      <MainContent />
+  const handleRegisterClick = () => {
+    setAuthMode('register');
+    setShowAuthModal(true);
+  };
+
+  return (
+    <div className="flex-col">
+      <NavBar 
+        onLoginClick={handleLoginClick}
+        onRegisterClick={handleRegisterClick}
+      />
+
+      <div className="flex min-h-screen">
+        <MainContent />
+      </div>
+
+      {showAuthModal && (
+        <AuthModal 
+          initialMode={authMode}
+          onClose={() => setShowAuthModal(false)}
+        />
+      )}
+      <Footer />
     </div>
-
-    <AuthModal /> {/* ✅ This manages login & register modals separately */}
-    <Footer />
-  </div>
-);
+  );
 }

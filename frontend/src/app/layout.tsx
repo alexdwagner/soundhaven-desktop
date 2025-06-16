@@ -28,14 +28,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en" data-mode="light">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-gray-900`}>
         <AuthProvider>
           <CommentsProvider>
             <TracksProvider>
               <PlaybackProvider>
                 <PlaylistsProvider>
-                  <main>{children}</main>
+                  <main className="min-h-screen">{children}</main>
                 </PlaylistsProvider>
               </PlaybackProvider>
             </TracksProvider>

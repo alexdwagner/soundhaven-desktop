@@ -1,41 +1,78 @@
-import { useEffect, useState } from 'react';
-import { validateToken } from '@/services/apiService';
+import { useState, useCallback } from 'react';
+import { apiService } from '@/services/electronApiService';
+import { User } from '../../../../shared/types';
 
-// Assuming validateTokenFromLocalStorage is either imported here or defined within this file
-const validateTokenFromLocalStorage = async () => {
-  const token = localStorage.getItem('token');
-  console.log("Retrieving token from localStorage for validation:", token);
+const validateTokenFromLocalStorage = async (): Promise<{ user: User; access_token: string }> => {
+  const token = apiService.getToken();
+  console.log('Validating token from localStorage');
 
   if (!token) {
     throw new Error('No token found in localStorage');
   }
 
   try {
-    // Directly use validateToken function with the retrieved token
-    const response = await validateToken(token);
-    console.log("Response from validateToken with localStorage token:", response);
-    return response;
+    // Use the refresh token to get a new access token
+    const response = await apiService.refreshToken(token);
+    
+    if (!response) {
+      throw new Error('No response from token refresh');
+    }
+
+    console.log('Token validation successful');
+    
+    // Update the stored token with the new one
+    apiService.setToken(response.access_token);
+    if (response.refresh_token) {
+      apiService.setRefreshToken(response.refresh_token);
+    }
+    
+    // Get the user from localStorage or make an API call if needed
+    const user = apiService.getStoredUser();
+    if (!user) {
+      throw new Error('User not found in storage');
+    }
+    
+    return {
+      user,
+      access_token: response.access_token
+    };
   } catch (error) {
-    console.error('Error validating token retrieved from localStorage:', error);
+    console.error('Error validating token:', error);
+    // Clear invalid tokens
+    apiService.setToken(null);
+    apiService.setRefreshToken(null);
     throw error;
   }
 };
 
-export default function useValidateToken() {
-  console.log("useValidateToken hook executing"); // Log when the hook is executing
+export const useValidateToken = () => {
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
-  const [isValid, setIsValid] = useState(false);
+  const validate = useCallback(async () => {
+    setIsValidating(true);
+    setError(null);
+    
+    try {
+      const { user, access_token } = await validateTokenFromLocalStorage();
+      setUser(user);
+      return { user, access_token };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Token validation failed');
+      setError(error);
+      throw error;
+    } finally {
+      setIsValidating(false);
+    }
+  }, []);
 
-  useEffect(() => {
-    validateTokenFromLocalStorage()
-      .then(() => {
-        console.log("Token is valid"); // Log if the token validation is successful
-        setIsValid(true);
-      })
-      .catch(() => {
-        console.log("Token validation failed"); // Log if the token validation fails
-        setIsValid(false);
-      });
-  }, []); 
-  return isValid;
-}
+  return {
+    validate,
+    isValidating,
+    error,
+    user
+  };
+};
+
+export default useValidateToken;

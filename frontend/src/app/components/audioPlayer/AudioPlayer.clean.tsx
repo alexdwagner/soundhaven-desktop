@@ -1,47 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
-import type { WaveSurfer as WaveSurferType } from 'wavesurfer.js';
-import type { Region } from 'wavesurfer.js/dist/plugins/regions';
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
-
-// Extend the WaveSurfer type to include our custom properties
-declare module 'wavesurfer.js' {
-  interface WaveSurfer {
-    // Add the regions property to WaveSurfer instance
-    regions?: {
-      getRegions: () => Region[];
-      addRegion: (options: RegionParams) => Region;
-      clearRegions: () => void;
-    };
-    // Add any other missing methods that we use
-    getDuration: () => number;
-    getCurrentTime: () => number;
-    isPlaying: () => boolean;
-    play: (start?: number, end?: number) => Promise<void>;
-    pause: () => void;
-    setTime: (time: number) => void;
-    setVolume: (volume: number) => void;
-    setPlaybackRate: (rate: number) => void;
-    on: (event: string, callback: (...args: any[]) => void) => void;
-    destroy: () => void;
-  }
-
-  // Add RegionParams type if not already defined
-  interface RegionParams {
-    id?: string;
-    start: number;
-    end: number;
-    color?: string;
-    drag?: boolean;
-    resize?: boolean;
-    channelIdx?: number;
-    content?: string | HTMLElement;
-    data?: {
-      commentId: string;
-      color?: string;
-    };
-  }
-}
 
 // Types
 interface Marker {
@@ -60,14 +19,51 @@ interface Track {
   markers?: Marker[];
 }
 
-// Type for our custom region data
-interface CustomRegionData {
-  commentId: string;
-  color?: string;
+interface WaveSurferRegion {
+  id: string;
+  start: number;
+  end: number;
+  data?: {
+    commentId: string;
+    color?: string;
+  };
+  remove: () => void;
+  update: (options: WaveSurferRegionParams) => void;
+  on: (event: string, callback: (region: WaveSurferRegion) => void) => void;
+  off: (event: string, callback: (region: WaveSurferRegion) => void) => void;
 }
 
-// Type for WaveSurfer instance with our custom properties
-type WaveSurferWithRegions = WaveSurferType;
+interface WaveSurferRegionParams {
+  id?: string;
+  start: number;
+  end: number;
+  color?: string;
+  drag?: boolean;
+  resize?: boolean;
+  data?: {
+    commentId: string;
+    color?: string;
+  };
+}
+
+interface WaveSurferWithRegions extends WaveSurfer {
+  regions: {
+    list: Record<string, WaveSurferRegion>;
+    add: (options: WaveSurferRegionParams) => WaveSurferRegion;
+    clearRegions: () => void;
+  };
+}
+
+// Extend WaveSurfer types
+declare module 'wavesurfer.js' {
+  interface WaveSurfer {
+    regions?: {
+      list: Record<string, WaveSurferRegion>;
+      add: (options: WaveSurferRegionParams) => WaveSurferRegion;
+      clearRegions: () => void;
+    };
+  }
+}
 
 // AudioPlayer props
 interface AudioPlayerProps {
@@ -97,7 +93,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const waveSurferRef = useRef<WaveSurferWithRegions | null>(null);
-  const regionsRef = useRef<ReturnType<typeof RegionsPlugin.create> | null>(null);
+  const regionsRef = useRef<RegionsPlugin | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -117,23 +113,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       height: 100,
       barGap: 2,
       normalize: true,
+      partialRender: true,
       url: track.filePath,
-      // Initialize with regions plugin
-      plugins: [
-        // @ts-ignore - The create method exists on the plugin
-        RegionsPlugin.create()
-      ]
     }) as WaveSurferWithRegions;
 
-    // Get the regions plugin from the instance
-    // @ts-ignore - The regions plugin is added to the instance
-    if (!ws.regions) {
-      console.warn('Regions plugin not properly initialized');
-      return;
-    }
-    
-    // Store the regions plugin reference
-    regionsRef.current = ws.regions;
+    // Initialize regions plugin
+    const regions = ws.registerPlugin(RegionsPlugin.create()) as unknown as RegionsPlugin;
+    regionsRef.current = regions;
 
     // Set up event listeners
     ws.on('ready', () => {
@@ -144,35 +130,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       // Set initial volume and playback rate
       ws.setVolume(volume);
       ws.setPlaybackRate(playbackSpeed);
-
-      // Set up region events after WaveSurfer is ready
-      if (regionsRef.current) {
-        // @ts-ignore - The events exist on the regions plugin
-        regionsRef.current.on('region-created', (region: Region) => {
-          // Handle region created
-          console.log('Region created:', region);
-        });
-
-        // @ts-ignore - The events exist on the regions plugin
-        regionsRef.current.on('region-clicked', (region: Region, e: MouseEvent) => {
-          // Handle region click
-          e.stopPropagation();
-          console.log('Region clicked:', region);
-        });
-      }
     });
 
     ws.on('audioprocess', () => {
       if (ws.isPlaying()) {
-        const currentTime = ws.getCurrentTime();
-        setCurrentTime(currentTime);
-        onSeek(currentTime);
+        setCurrentTime(ws.getCurrentTime());
       }
     });
 
-    ws.on('seek', (time: number) => {
-      setCurrentTime(time);
-      onSeek(time);
+    ws.on('seek', () => {
+      setCurrentTime(ws.getCurrentTime());
     });
 
     // Cleanup
@@ -188,10 +155,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (!waveSurferRef.current || !isReady) return;
 
     if (isPlaying) {
-      // @ts-ignore - The play method exists
-      waveSurferRef.current.play().catch(console.error);
+      waveSurferRef.current.play();
     } else {
-      // @ts-ignore - The pause method exists
       waveSurferRef.current.pause();
     }
   }, [isPlaying, isReady]);
@@ -199,12 +164,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Handle seek
   const handleSeek = useCallback((time: number) => {
     if (waveSurferRef.current) {
-      const seekTime = Math.min(Math.max(0, time), duration || 0);
-      waveSurferRef.current.setTime(seekTime);
-      setCurrentTime(seekTime);
-      onSeek(seekTime);
+      waveSurferRef.current.seekTo(time);
+      setCurrentTime(time * (duration || 1));
     }
-  }, [duration, onSeek]);
+  }, [duration]);
 
   // Handle volume change
   useEffect(() => {
@@ -212,16 +175,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       waveSurferRef.current.setVolume(volume);
     }
   }, [volume]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (waveSurferRef.current) {
-        waveSurferRef.current.destroy();
-        waveSurferRef.current = null;
-      }
-    };
-  }, []);
 
   // Handle playback speed change
   useEffect(() => {
@@ -232,28 +185,24 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Add regions for markers
   useEffect(() => {
-    if (!waveSurferRef.current || !track?.markers?.length) return;
+    if (!regionsRef.current || !track?.markers?.length) return;
 
     // Clear existing regions
-    if (waveSurferRef.current.regions) {
-      waveSurferRef.current.regions.clearRegions();
-    }
+    regionsRef.current.clearRegions();
 
     // Add new regions for each marker
     track.markers.forEach((marker) => {
-      if (waveSurferRef.current?.regions) {
-        waveSurferRef.current.regions.addRegion({
-          id: marker.id,
-          start: marker.time,
-          end: marker.time + 0.5, // Small region for marker
-          color: marker.color || 'rgba(255, 165, 0, 0.5)',
-          drag: false,
-          resize: false,
-          data: {
-            commentId: marker.commentId,
-          },
-        });
-      }
+      regionsRef.current?.addRegion({
+        id: marker.id,
+        start: marker.time,
+        end: marker.time + 0.5, // Small region for marker
+        color: marker.color || 'rgba(255, 165, 0, 0.5)',
+        drag: false,
+        resize: false,
+        data: {
+          commentId: marker.commentId,
+        },
+      });
     });
   }, [track?.markers]);
 
