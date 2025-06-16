@@ -72,7 +72,40 @@ async function createMainWindow() {
   });
 }
 
-app.whenReady().then(createMainWindow);
+async function ensureTestUser() {
+  try {
+    // Check if test user already exists
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, 'test@example.com'));
+
+    if (!existingUser) {
+      // Hash the test password
+      const hashedPassword = await hashPassword('testpassword');
+      
+      // Insert test user
+      await db.insert(users).values({
+        email: 'test@example.com',
+        password: hashedPassword,
+        name: 'Test User',
+        createdAt: Math.floor(Date.now() / 1000),
+        updatedAt: Math.floor(Date.now() / 1000)
+      });
+      
+      console.log('Test user created successfully');
+    } else {
+      console.log('Test user already exists');
+    }
+  } catch (error) {
+    console.error('Error ensuring test user exists:', error);
+  }
+}
+
+app.whenReady().then(async () => {
+  await ensureTestUser();
+  createMainWindow();
+});
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

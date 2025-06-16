@@ -52,11 +52,22 @@ const makeRequest = async <T = any>(
   if (isElectron) {
     // Use Electron IPC
     try {
+      // Parse the request body if it exists
+      let parsedBody = null;
+      if (options.body) {
+        try {
+          parsedBody = JSON.parse(options.body as string);
+        } catch (e) {
+          console.warn('Failed to parse request body as JSON:', e);
+          parsedBody = options.body;
+        }
+      }
+      
       const response = await window.electron!.ipcRenderer.invoke('api-request', {
         endpoint,
         method: options.method || 'GET',
         headers: options.headers || {},
-        body: options.body,
+        body: parsedBody,
       });
       return { data: response, status: 200 };
     } catch (error) {
