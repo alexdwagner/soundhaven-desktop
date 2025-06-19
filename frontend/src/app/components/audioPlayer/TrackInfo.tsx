@@ -1,5 +1,5 @@
 import React from 'react';
-import { Track } from '../../../types/types'; // Adjust the import path as needed
+import { Track } from '../../../../shared/types'; // Adjust the import path as needed
 
 interface TrackInfoProps {
   // Make track optional to handle cases where it might not be provided

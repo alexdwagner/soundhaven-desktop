@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Playlist } from "../../../types/types";
+import { Playlist } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/hooks/UsePlaylists";
 import { FaEllipsisH, FaEdit, FaTrash } from "react-icons/fa";
 

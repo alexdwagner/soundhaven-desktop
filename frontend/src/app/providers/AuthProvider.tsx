@@ -5,14 +5,20 @@ import { AuthContext } from '../contexts/AuthContext';
 import { User } from '../../../../shared/types';
 
 interface LoginResponse {
-  user: User;
-  access_token: string;
-  refresh_token?: string;
+  data?: {
+    user: User;
+    accessToken: string;
+    refreshToken?: string;
+  };
+  error?: string;
 }
 
 interface RefreshTokenResponse {
-  access_token: string;
-  refresh_token?: string;
+  data?: {
+    accessToken: string;
+    refreshToken?: string;
+  };
+  error?: string;
 }
 import electronApiService from '../../services/electronApiService';
 import { useTracks } from '../hooks/UseTracks';
@@ -99,6 +105,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (email: string, password: string): Promise<User> => {
+    console.log('AuthProvider: Starting login...');
     setLoading(true);
     try {
       const response = await electronApiService.login({
@@ -106,23 +113,28 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
         password
       });
       
-      if (!response) {
+      console.log('AuthProvider: Login response:', response);
+      
+      if (!response?.data) {
         throw new Error('No response from server');
       }
 
-      const { user, access_token, refresh_token } = response as LoginResponse;
+      const { user, accessToken, refreshToken } = response.data;
+      console.log('AuthProvider: Setting user and tokens...');
 
       await Promise.all([
         electronApiService.setUser(user),
-        electronApiService.setToken(access_token),
-        refresh_token ? electronApiService.setRefreshToken(refresh_token) : Promise.resolve()
+        electronApiService.setToken(accessToken),
+        refreshToken ? electronApiService.setRefreshToken(refreshToken) : Promise.resolve()
       ]);
 
+      console.log('AuthProvider: Updating state...');
       setUser(user);
-      setToken(access_token);
+      setToken(accessToken);
+      console.log('AuthProvider: Login complete, returning user:', user);
       return user;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('AuthProvider: Login error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -160,20 +172,20 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
     }
     
     try {
-      const response = await electronApiService.refreshToken(storedRefreshToken);
-      if (!response) {
+      const response = await electronApiService.refreshToken();
+      if (!response?.data) {
         throw new Error('No response from refresh token endpoint');
       }
 
-      const { access_token, refresh_token } = response as RefreshTokenResponse;
+      const { accessToken, refreshToken } = response.data;
 
       await Promise.all([
-        electronApiService.setToken(access_token),
-        refresh_token ? electronApiService.setRefreshToken(refresh_token) : Promise.resolve()
+        electronApiService.setToken(accessToken),
+        refreshToken ? electronApiService.setRefreshToken(refreshToken) : Promise.resolve()
       ]);
 
-      setToken(access_token);
-      return access_token;
+      setToken(accessToken);
+      return accessToken;
     } catch (error) {
       console.error('Token refresh error:', error);
       await logout();

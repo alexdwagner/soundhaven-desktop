@@ -21,6 +21,15 @@ const nextConfig = {
       },
     ];
   },
+  // Proxy audio requests to Electron backend
+  async rewrites() {
+    return [
+      {
+        source: '/audio/:path*',
+        destination: 'http://localhost:3000/audio/:path*',
+      },
+    ];
+  },
 };
 
 // Only require @next/bundle-analyzer in development

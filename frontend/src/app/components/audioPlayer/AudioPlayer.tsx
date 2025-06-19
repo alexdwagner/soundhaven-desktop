@@ -52,9 +52,9 @@ interface Marker {
 }
 
 interface Track {
-  id: string;
-  title: string;
-  artist: string;
+  id: number;
+  name: string;
+  artist?: { name: string };
   filePath: string;
   duration: number;
   markers?: Marker[];
@@ -79,6 +79,7 @@ interface AudioPlayerProps {
   onSeek: (time: number) => void;
   onVolumeChange: (volume: number) => void;
   onPlaybackSpeedChange: (speed: number) => void;
+  onAddComment: (time: number) => void;
   volume: number;
   playbackSpeed: number;
 }
@@ -92,20 +93,28 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onSeek,
   onVolumeChange,
   onPlaybackSpeedChange,
+  onAddComment,
   volume,
   playbackSpeed,
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const waveSurferRef = useRef<WaveSurferWithRegions | null>(null);
-  const regionsRef = useRef<ReturnType<typeof RegionsPlugin.create> | null>(null);
+  const regionsRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   // Initialize WaveSurfer
   useEffect(() => {
-    if (!waveformRef.current || !track?.filePath) return;
+    console.log('AudioPlayer: Initializing WaveSurfer with track:', track);
+    console.log('AudioPlayer: filePath:', track?.filePath);
+    
+    if (!waveformRef.current || !track?.filePath) {
+      console.log('AudioPlayer: Missing waveformRef or filePath, returning early');
+      return;
+    }
 
+    console.log('AudioPlayer: Creating WaveSurfer instance...');
     const ws = WaveSurfer.create({
       container: waveformRef.current,
       waveColor: '#4a5568',
@@ -125,18 +134,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       ]
     }) as WaveSurferWithRegions;
 
-    // Get the regions plugin from the instance
+    console.log('AudioPlayer: WaveSurfer instance created, setting up event listeners...');
+
+    // Get the regions plugin from the instance (optional)
     // @ts-ignore - The regions plugin is added to the instance
-    if (!ws.regions) {
-      console.warn('Regions plugin not properly initialized');
-      return;
+    if (ws.regions) {
+      regionsRef.current = ws.regions;
+      console.log('Regions plugin initialized successfully');
+    } else {
+      console.log('Regions plugin not available, continuing without regions');
     }
-    
-    // Store the regions plugin reference
-    regionsRef.current = ws.regions;
 
     // Set up event listeners
     ws.on('ready', () => {
+      console.log('AudioPlayer: WaveSurfer is ready!');
       waveSurferRef.current = ws;
       setDuration(ws.getDuration());
       setIsReady(true);
@@ -162,6 +173,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       }
     });
 
+    ws.on('error', (error) => {
+      console.error('AudioPlayer: WaveSurfer error:', error);
+    });
+
     ws.on('audioprocess', () => {
       if (ws.isPlaying()) {
         const currentTime = ws.getCurrentTime();
@@ -177,6 +192,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     // Cleanup
     return () => {
+      console.log('AudioPlayer: Cleaning up WaveSurfer instance');
       if (ws) {
         ws.destroy();
       }
@@ -269,14 +285,33 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     <div className="flex flex-col space-y-4">
       {/* Track info */}
       <div className="p-4 bg-white rounded-lg shadow">
-        <h2 className="text-xl font-bold">{track.title}</h2>
-        <p className="text-gray-600">{track.artist}</p>
+        <h2 className="text-xl font-bold">{track.name}</h2>
+        <p className="text-gray-600">{track.artist?.name}</p>
       </div>
 
       {/* Waveform */}
       <div 
         ref={waveformRef} 
-        className="w-full h-32 bg-gray-100 rounded-lg overflow-hidden"
+        className="w-full h-32 bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
+        onDoubleClick={(e) => {
+          if (!waveSurferRef.current) return;
+          
+          // Get click position relative to the waveform container
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickPercent = clickX / rect.width;
+          
+          // Convert to time based on duration
+          const clickTime = clickPercent * duration;
+          
+          console.log('Double-click at time:', clickTime, 'seconds');
+          
+          // Trigger comment creation
+          if (onAddComment) {
+            onAddComment(clickTime);
+          }
+        }}
+        title="Double-click to add a comment"
       />
 
       {/* Controls */}

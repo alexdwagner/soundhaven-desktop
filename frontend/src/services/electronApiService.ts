@@ -63,13 +63,42 @@ const makeRequest = async <T = any>(
         }
       }
       
+      console.log('Making IPC request:', {
+        endpoint,
+        method: options.method || 'GET',
+        body: parsedBody
+      });
+
       const response = await window.electron!.ipcRenderer.invoke('api-request', {
         endpoint,
         method: options.method || 'GET',
         headers: options.headers || {},
         body: parsedBody,
       });
-      return { data: response, status: 200 };
+
+      console.log('IPC response:', response);
+
+      // Handle the response structure
+      if (response?.error) {
+        return {
+          error: response.error,
+          status: response.status || 500
+        };
+      }
+
+      // If the response is already in the correct format, return it
+      if (response?.data) {
+        return {
+          data: response.data,
+          status: 200
+        };
+      }
+
+      // Otherwise, wrap the response in a data property
+      return {
+        data: response,
+        status: 200
+      };
     } catch (error) {
       console.error('Electron API request failed:', error);
       return {
@@ -122,14 +151,28 @@ export const apiService = {
       }
     );
     console.log('Login response:', { data, error });
+    console.log('Login response data structure:', JSON.stringify(data, null, 2));
 
-    if (data?.user && data.accessToken) {
-      this.setUser(data.user);
-      this.setToken(data.accessToken);
-      this.setRefreshToken(data.refreshToken);
+    if (error) {
+      throw new Error(error);
     }
 
-    return { data, error };
+    if (!data?.user || !data.accessToken) {
+      console.error('Invalid response structure:', {
+        hasUser: !!data?.user,
+        hasAccessToken: !!data?.accessToken,
+        dataKeys: data ? Object.keys(data) : []
+      });
+      throw new Error('Invalid response from server');
+    }
+
+    await Promise.all([
+      this.setUser(data.user),
+      this.setToken(data.accessToken),
+      data.refreshToken ? this.setRefreshToken(data.refreshToken) : Promise.resolve()
+    ]);
+
+    return { data, error: null };
   },
 
   async register(userData: { name: string; email: string; password: string }) {
@@ -211,10 +254,32 @@ export const apiService = {
   },
 
   // ===== Track Management =====
-  async getTracks() {
-    const { data, error } = await makeRequest<Track[]>('/tracks');
-    if (error) throw new Error(error);
-    return data || [];
+  async getTracks(): Promise<ApiResponse<Track[]>> {
+    try {
+      const response = await makeRequest<Track[]>('/tracks');
+      if (response.error) {
+        return { error: response.error, status: response.status };
+      }
+      // Ensure the response data matches the Track interface
+      const tracks = response.data.map(track => ({
+        id: track.id,
+        name: track.name,
+        duration: track.duration,
+        artistId: track.artistId,
+        artist: track.artist,
+        albumId: track.albumId,
+        album: track.album,
+        createdAt: track.createdAt,
+        updatedAt: track.updatedAt,
+        playlists: track.playlists || [],
+        genres: track.genres || [],
+        filePath: track.filePath
+      }));
+      return { data: tracks, error: null, status: 200 };
+    } catch (error) {
+      console.error('Error fetching tracks:', error);
+      return { error: 'Failed to fetch tracks', status: 500 };
+    }
   },
 
   async getTrackById(id: number) {
@@ -359,6 +424,75 @@ export const apiService = {
         success: false, 
         error: error instanceof Error ? error.message : 'Logout failed' 
       };
+    }
+  },
+
+  // Track Management
+  async updateTrackMetadata(id: number, updates: Partial<Track>): Promise<Track> {
+    const response = await makeRequest<Track>(`/tracks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
+    if (response.error || !response.data) {
+      throw new Error(response.error || 'No data returned');
+    }
+    // Ensure the response data matches the Track interface
+    return {
+      id: response.data.id,
+      name: response.data.name,
+      duration: response.data.duration,
+      artistId: response.data.artistId,
+      artist: response.data.artist,
+      albumId: response.data.albumId,
+      album: response.data.album,
+      createdAt: response.data.createdAt,
+      updatedAt: response.data.updatedAt,
+      playlists: response.data.playlists || [],
+      genres: response.data.genres || [],
+      filePath: response.data.filePath
+    };
+  },
+
+  async deleteTrack(id: number): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`/tracks/${id}`, {
+        method: 'DELETE'
+      });
+      return { ...response, status: response.status || 200 };
+    } catch (error) {
+      console.error('Error deleting track:', error);
+      return { error: 'Failed to delete track', status: 500 };
+    }
+  },
+
+  async uploadTrack(formData: FormData): Promise<ApiResponse<Track>> {
+    try {
+      const response = await makeRequest<Track>('/tracks', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.error) {
+        return { error: response.error, status: response.status };
+      }
+      // Ensure the response data matches the Track interface
+      const track = {
+        id: response.data.id,
+        name: response.data.name,
+        duration: response.data.duration,
+        artistId: response.data.artistId,
+        artist: response.data.artist,
+        albumId: response.data.albumId,
+        album: response.data.album,
+        createdAt: response.data.createdAt,
+        updatedAt: response.data.updatedAt,
+        playlists: response.data.playlists || [],
+        genres: response.data.genres || [],
+        filePath: response.data.filePath
+      };
+      return { data: track, error: null, status: 200 };
+    } catch (error) {
+      console.error('Error uploading track:', error);
+      return { error: 'Failed to upload track', status: 500 };
     }
   },
 };

@@ -1,10 +1,7 @@
-import { and, eq, gte } from 'drizzle-orm';
-import { db } from '../db';
-import { users, refreshTokens } from '../schema';
+import { dbAsync } from '../db';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import { sql } from 'drizzle-orm/sql';
 
 dotenv.config();
 
@@ -85,15 +82,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     }
 
     // Check if the refresh token exists in the database and is not expired
-    const [tokenRecord] = await db
-      .select()
-      .from(refreshTokens)
-      .where(
-        and(
-          eq(refreshTokens.token, refreshToken),
-          gte(refreshTokens.expiresIn, Math.floor(Date.now() / 1000))
-        )
-      );
+    const tokenRecord = await dbAsync.get(
+      'SELECT * FROM refresh_tokens WHERE token = ? AND expires_in >= ?',
+      [refreshToken, Math.floor(Date.now() / 1000)]
+    );
 
     if (!tokenRecord) {
       throw new Error('Invalid or expired refresh token');
@@ -105,13 +97,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     const newExpiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
 
     // Update the refresh token in the database
-    await db
-      .update(refreshTokens)
-      .set({ 
-        token: newRefreshToken,
-        expiresIn: newExpiresIn
-      })
-      .where(eq(refreshTokens.id, tokenRecord.id));
+    await dbAsync.run(
+      'UPDATE refresh_tokens SET token = ?, expires_in = ? WHERE id = ?',
+      [newRefreshToken, newExpiresIn, tokenRecord.id]
+    );
 
     return {
       accessToken: newAccessToken,
@@ -138,11 +127,10 @@ export async function invalidateRefreshToken(token: string): Promise<boolean> {
 
   try {
     // First check if the token exists to avoid unnecessary DB operations
-    const [existingToken] = await db
-      .select()
-      .from(refreshTokens)
-      .where(eq(refreshTokens.token, token))
-      .limit(1);
+    const existingToken = await dbAsync.get(
+      'SELECT * FROM refresh_tokens WHERE token = ?',
+      [token]
+    );
 
     if (!existingToken) {
       console.warn('Token not found for invalidation');
@@ -150,9 +138,10 @@ export async function invalidateRefreshToken(token: string): Promise<boolean> {
     }
 
     // Delete the token
-    const result = await db
-      .delete(refreshTokens)
-      .where(eq(refreshTokens.token, token));
+    const result = await dbAsync.run(
+      'DELETE FROM refresh_tokens WHERE token = ?',
+      [token]
+    );
 
     return result.changes > 0;
   } catch (error) {
@@ -160,5 +149,3 @@ export async function invalidateRefreshToken(token: string): Promise<boolean> {
     throw error; // Re-throw to be handled by the caller
   }
 }
-
-export { eq };

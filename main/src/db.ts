@@ -1,20 +1,51 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import fs from "fs";
-import path from "path";
+import { Database } from 'sqlite3';
+import * as path from 'path';
 
-// Define the database file path
-const dbPath = path.join(__dirname, "../soundhaven.db");
+// Database file path
+const dbPath = path.join(process.cwd(), 'db.sqlite');
 
-// Ensure the database directory exists
-if (!fs.existsSync(dbPath)) {
-  console.log("⚠️ Database file does not exist, creating one...");
-}
+// Create database connection
+export const db = new Database(dbPath, (err) => {
+  if (err) {
+    console.error('Error opening database:', err);
+  } else {
+    console.log('✅ SQLite database connected successfully');
+  }
+});
 
-// Initialize SQLite connection
-const sqlite = new Database(dbPath, { verbose: console.log });
+// Enable foreign keys
+db.run('PRAGMA foreign_keys = ON', (err) => {
+  if (err) {
+    console.error('Error enabling foreign keys:', err);
+  }
+});
 
-// Create a Drizzle ORM instance
-export const db = drizzle(sqlite);
+// Export a promise-based wrapper for easier use
+export const dbAsync = {
+  run: (sql: string, params: any[] = []): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) {
+        if (err) reject(err);
+        else resolve({ lastID: this.lastID, changes: this.changes });
+      });
+    });
+  },
 
-console.log("✅ SQLite Database Connected! File path:", dbPath);
+  get: (sql: string, params: any[] = []): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      db.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  },
+
+  all: (sql: string, params: any[] = []): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
+};

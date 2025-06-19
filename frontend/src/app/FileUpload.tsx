@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTracks } from './hooks/UseTracks';
-import { Track } from '../../types/types';
+import { Track } from '../../../shared/types';
 
 interface FileUploadProps {
     onUploadSuccess: () => void;

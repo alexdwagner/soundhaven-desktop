@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "dev": "concurrently \"cd frontend && yarn dev\" \"cd main && yarn start\"",
+    "kill": "./kill-electron.sh",
     "electron:start": "cd main && electron dist/main.js",
     "build": "cd main && yarn build && electron-builder",
     "postinstall": "electron-builder install-app-deps"

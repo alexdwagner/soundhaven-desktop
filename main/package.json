@@ -4,17 +4,19 @@
   "main": "dist/main.js",
   "license": "MIT",
   "scripts": {
+    "dev": "tsx watch src/main.ts",
     "build": "tsc",
-    "start": "yarn build && electron .",
-    "seed:test-user": "ts-node scripts/seedTestUser.ts"
+    "start": "electron dist/main.js",
+    "seed:test-user": "ts-node scripts/seedTestUser.ts",
+    "seed:test-track": "ts-node scripts/seedTestTrack.ts",
+    "setup-db": "node scripts/setup-db.js",
+    "reset-db": "node scripts/setup-db.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "^11.8.1",
     "dotenv": "^16.5.0",
-    "drizzle-orm": "^0.39.3",
     "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.7"
   },
@@ -29,10 +31,10 @@
     "electronVersion": "34.2.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.4",
     "electron": "34.2.0",
     "electron-rebuild": "^3.2.9",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
     "typescript": "^5.7.3"
   }
 }

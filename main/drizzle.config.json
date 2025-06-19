@@ -2,7 +2,7 @@
     "schema": "./src/schema.ts",
     "dialect": "sqlite",
     "dbCredentials": {
-      "url": "./soundhaven.db"
+      "url": "./dist/db.sqlite"
     },
     "out": "./migrations"
   }

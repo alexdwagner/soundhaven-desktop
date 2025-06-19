@@ -38,12 +38,18 @@ const LoginForm: React.FC<{ onCloseModal: () => void }> = ({ onCloseModal }) => 
 
   const handleTestUserLogin = async () => {
     try {
+      console.log('Starting test user login...');
       setIsTestUserLoading(true);
-      await login('test@example.com', 'testpassword');
-      onCloseModal();
+      const user = await login('test@example.com', 'testpassword');
+      console.log('Test user login result:', user);
+      if (user) {
+        onCloseModal();
+      } else {
+        throw new Error('Login failed - no user returned');
+      }
     } catch (err: any) {
-      setError('Failed to log in as test user. Please try again.');
       console.error('Test user login error:', err);
+      setError('Failed to log in as test user. Please try again.');
     } finally {
       setIsTestUserLoading(false);
     }
@@ -102,7 +108,7 @@ const LoginForm: React.FC<{ onCloseModal: () => void }> = ({ onCloseModal }) => 
       </button>
       <p className="text-center mt-4 text-gray-700">
         <b>
-          Don’t have an Account?{' '}
+          Don't have an Account?{' '}
           <Link href="/register">
             <span className="text-blue-500 hover:underline">Sign up.</span>
           </Link>

@@ -1,5 +1,5 @@
 import { createContext, Dispatch, SetStateAction } from 'react';
-import { Playlist, Track } from '../../types/types';
+import { Playlist, Track } from '../../../shared/types';
 
 interface PlaylistsContextType {
   playlists: Playlist[];

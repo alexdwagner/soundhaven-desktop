@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Playlist, Track } from "../../../types/types";
+import { Playlist, Track } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/hooks/UsePlaylists";
 import { useAuth } from "@/app/hooks/UseAuth";
 import { useTracks } from "@/app/hooks/UseTracks";
@@ -89,7 +89,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
           Add Playlist
         </button>
         <button ref={libraryButtonRef} className="w-full hover:text-blue-400 text-white font-bold py-2 mt-2 rounded my-1 text-left" onClick={onViewAllTracks}>
-          {user ? `${user.name}'s Library` : "Anon’s Library"}
+          {user ? `${user.name}'s Library` : "Anon's Library"}
         </button>
 
         <h3 className="font-bold my-1 py-2 border-b border-t border-gray-600">Playlists</h3>

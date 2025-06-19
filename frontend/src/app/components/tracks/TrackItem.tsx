@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Track } from "../../../types/types";
+import { Track } from "../../../../../shared/types";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -65,10 +65,11 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
       if (
         openMenuTrackId !== null &&
-        !event.target.closest(".menu-container") &&
-        !event.target.closest(".menu-item")
+        !target?.closest(".menu-container") &&
+        !target?.closest(".menu-item")
       ) {
         setOpenMenuTrackId(null);
       }

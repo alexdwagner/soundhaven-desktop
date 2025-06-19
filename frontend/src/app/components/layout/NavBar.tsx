@@ -1,9 +1,9 @@
 "use client";
 
-import React, { ReactNode, useState, useEffect, useRef } from "react";
+import React, { ReactNode, useState, useRef, useEffect } from "react";
 import { FaBars } from "react-icons/fa";
 import { usePlaylists } from "@/app/hooks/UsePlaylists";
-import { apiService } from "@/services/electronApiService";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 // Define a local User type that matches what we expect from the API
 interface User {
@@ -20,61 +20,19 @@ interface NavBarProps {
 }
 
 const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const { clearPlaylists } = usePlaylists();
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const storedUser = apiService.getStoredUser();
-        if (storedUser) {
-          setUser(storedUser);
-          return;
-        }
+    console.log('NavBar: Auth state changed', { user, loading, isInitialLoad });
+  }, [user, loading, isInitialLoad]);
 
-        // If no stored user, try to refresh the token
-        const token = apiService.getToken();
-        if (!token) {
-          setLoading(false);
-          return;
-        }
-
-        try {
-          const userId = JSON.parse(atob(token.split('.')[1])).id;
-          const response = await apiService.getUserById(userId);
-          if (response) {
-            // The response might be the user object directly or in a data property
-            const userData = (typeof response === 'object' && 'data' in response 
-              ? response.data 
-              : response) as Partial<User>;
-              
-            if (userData && 
-                typeof userData === 'object' && 
-                'id' in userData && 
-                'email' in userData &&
-                typeof userData.id === 'number' &&
-                typeof userData.email === 'string') {
-              setUser({
-                id: userData.id,
-                email: userData.email,
-                name: userData.name || undefined
-              });
-            }
-          }
-        } catch (tokenError) {
-          console.error('Error refreshing user:', tokenError);
-        }
-      } catch (error) {
-        console.error('Error in fetchUser:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
+  useEffect(() => {
+    // Set isInitialLoad to false after the first render
+    setIsInitialLoad(false);
   }, []);
 
   const toggleDropdown = () => setShowDropdown(!showDropdown);
@@ -87,9 +45,8 @@ const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick
 
   const handleLogout = async () => {
     try {
-      await apiService.logout();
+      await logout();
       clearPlaylists();
-      setUser(null);
       setShowDropdown(false);
     } catch (error) {
       console.error('Logout failed:', error);
@@ -103,7 +60,8 @@ const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick
     };
   }, []);
 
-  if (loading) {
+  // Only show loading state if we're actively logging in (not during initial load)
+  if (loading && !isInitialLoad) {
     return <div className="p-4 bg-gray-100 text-center">Logging in...</div>;
   }
 

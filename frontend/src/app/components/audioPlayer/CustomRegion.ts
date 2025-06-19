@@ -1,4 +1,4 @@
-import { Marker } from "../../../types/types";
+import { Marker } from "../../../../shared/types";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
 import { RegionParams } from "wavesurfer.js/src/plugin/regions";
 import WaveSurfer from "wavesurfer.js";

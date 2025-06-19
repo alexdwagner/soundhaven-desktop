@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Track } from '../../types/types';
-import { useTracks } from '@/hooks/UseTracks';
+import { Track } from '../../../../../shared/types';
+import { useTracks } from '../../hooks/UseTracks';
 
 interface EditTrackFormProps {
   track: Track;
