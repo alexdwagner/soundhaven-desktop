@@ -13,3 +13,87 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   color-scheme: light;
 }
+
+/* WaveSurfer region styling for better visibility */
+.wavesurfer-region {
+  border: 2px solid #ff0000 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  min-height: 20px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+  opacity: 0.8 !important;
+  transition: all 0.2s ease !important;
+}
+
+.wavesurfer-region:hover {
+  opacity: 1 !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
+  transform: scale(1.02) !important;
+}
+
+/* WaveSurfer waveform styling */
+.wavesurfer-container {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.wavesurfer-container canvas {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Ensure waveform bars are properly styled */
+.wavesurfer-container wave {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Make sure the waveform is visible */
+.wavesurfer-container {
+  background: transparent !important;
+  min-height: 120px !important;
+}
+
+/* Ensure the waveform canvas is visible */
+.wavesurfer-container canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 120px !important;
+}
+
+/* Custom slider styling */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #6b7280;
+  cursor: pointer;
+  border: none;
+}
+
+.slider::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #6b7280;
+  cursor: pointer;
+  border: none;
+}
+
+.slider::-webkit-slider-track {
+  background: #d1d5db;
+  border-radius: 4px;
+  height: 4px;
+}
+
+.slider::-moz-range-track {
+  background: #d1d5db;
+  border-radius: 4px;
+  height: 4px;
+  border: none;
+}

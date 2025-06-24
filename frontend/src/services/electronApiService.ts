@@ -10,6 +10,8 @@ import {
   Marker, 
   Playlist 
 } from '../../../shared/types';
+import type { CreateCommentDto } from '@shared/dtos/create-comment.dto';
+import type { Comment } from '@shared/types/comment';
 
 // Define types for API responses
 interface ApiResponse<T> {
@@ -493,6 +495,48 @@ export const apiService = {
     } catch (error) {
       console.error('Error uploading track:', error);
       return { error: 'Failed to upload track', status: 500 };
+    }
+  },
+
+  async addMarkerAndComment(dto: CreateCommentDto): Promise<Comment> {
+    console.log('Adding marker and comment:', dto);
+    try {
+      const response = await makeRequest<{ comment: Comment }>('/api/comments/with-marker', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.getToken()}`
+        },
+        body: JSON.stringify(dto),
+      });
+      
+      console.log('Add marker and comment response:', response);
+      
+      if (response.error || !response.data) {
+        console.error('Failed to add comment with marker:', response.error || 'No data returned');
+        throw new Error(response.error || 'Failed to add comment with marker');
+      }
+      
+      return response.data.comment;
+    } catch (error) {
+      console.error('Error in addMarkerAndComment:', error);
+      throw error;
+    }
+  },
+
+  async fetchCommentsAndMarkers(trackId: number, page: number = 1, limit: number = 10): Promise<ApiResponse<Comment[]>> {
+    console.log('Fetching comments and markers for track:', trackId);
+    try {
+      const response = await makeRequest<Comment[]>(`/api/comments?trackId=${trackId}&page=${page}&limit=${limit}`);
+      
+      console.log('Comments API response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error fetching comments and markers:', error);
+      return { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 500
+      };
     }
   },
 };

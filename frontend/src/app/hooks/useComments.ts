@@ -1,7 +1,17 @@
 import { useState, useContext, useCallback, useEffect } from 'react';
 import CommentsContext from '../contexts/CommentsContext';
 // import { CommentsContextType } from '../../types/types';
+import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
+import type { Region } from 'wavesurfer.js/dist/plugins/regions';
+
+// Define a type for region with data
+interface RegionWithData extends Region {
+  data: {
+    commentId: number;
+  };
+  update: (options: any) => void;
+}
 
 export const useComments = (
   waveSurferRef: React.MutableRefObject<WaveSurfer | null>,
@@ -27,6 +37,27 @@ export const useComments = (
   } = useContext(CommentsContext);
 
   const [newCommentInput, setNewCommentInput] = useState('');
+
+  console.log("useComments hook - markers:", markers);
+  console.log("useComments hook - regionCommentMap:", regionCommentMap);
+
+  // Add debugging for waveSurfer and regions
+  useEffect(() => {
+    console.log("useComments - waveSurferRef.current:", !!waveSurferRef.current);
+    console.log("useComments - regionsRef.current:", !!regionsRef.current);
+    
+    if (waveSurferRef.current && regionsRef.current && markers?.length) {
+      console.log("useComments - We have waveSurfer, regions, and markers. Should be able to create regions.");
+      
+      // Check if regions are being created
+      setTimeout(() => {
+        if (regionsRef.current) {
+          const regions = regionsRef.current.getRegions();
+          console.log("useComments - Current regions:", regions);
+        }
+      }, 1000);
+    }
+  }, [waveSurferRef.current, regionsRef.current, markers]);
 
   // console.log("Markers in useComments:•", markers);
 
@@ -62,12 +93,17 @@ export const useComments = (
     }
 
     // Merged logic from AudioPlayer's handleSelectComment
-    Object.values(regionsRef.current.list).forEach((region) => {
-      if (region.data.commentId === commentId) {
-        region.update({ color: 'rgba(0, 255, 0, 0.7)' });
-        waveSurferRef.current.seekTo(region.start / waveSurferRef.current.getDuration());
-      }
-    });
+    if (regionsRef.current) {
+      const regions = regionsRef.current.getRegions();
+      regions.forEach((region: any) => {
+        if (region.data?.commentId === commentId) {
+          region.update({ color: 'rgba(0, 255, 0, 0.7)' });
+          if (waveSurferRef.current) {
+            waveSurferRef.current.seekTo(region.start / waveSurferRef.current.getDuration());
+          }
+        }
+      });
+    }
   }, [regionCommentMap, setSelectedCommentId, comments, waveSurferRef, regionsRef]);
 
   return { 

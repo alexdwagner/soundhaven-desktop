@@ -1,7 +1,7 @@
 {
   "name": "soundhaven-desktop",
   "version": "1.0.0",
-  "main": "dist/main.js",
+  "main": "main/dist/main/src/main.js",
   "author": "",
   "license": "ISC",
   "private": true,
@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "concurrently \"cd frontend && yarn dev\" \"cd main && yarn start\"",
     "kill": "./kill-electron.sh",
-    "electron:start": "cd main && electron dist/main.js",
+    "electron:start": "cd main && electron dist/main/src/main.js",
     "build": "cd main && yarn build && electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },

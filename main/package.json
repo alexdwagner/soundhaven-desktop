@@ -1,12 +1,12 @@
 {
   "name": "main",
   "version": "1.0.0",
-  "main": "dist/main.js",
+  "main": "dist/main/src/main.js",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "build": "tsc",
-    "start": "electron dist/main.js",
+    "dev:node": "tsx watch src/main.ts",
+    "build": "rimraf dist && tsc",
+    "start": "electron dist/main/src/main.js",
     "seed:test-user": "ts-node scripts/seedTestUser.ts",
     "seed:test-track": "ts-node scripts/seedTestTrack.ts",
     "setup-db": "node scripts/setup-db.js",
@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.9",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.7"
   },
@@ -33,7 +35,9 @@
   "devDependencies": {
     "electron": "34.2.0",
     "electron-rebuild": "^3.2.9",
+    "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.3",
     "typescript": "^5.7.3"
   }

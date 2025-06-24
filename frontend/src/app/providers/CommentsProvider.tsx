@@ -11,7 +11,7 @@ import React, {
 import CommentsContext from "../contexts/CommentsContext";
 import { PlaybackContext } from "../contexts/PlaybackContext";
 import { _Comment, Marker } from "../../../../shared/types";
-import { apiService } from "@/services/electronApiService";
+import apiService from "@/services/electronApiService";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 interface CommentsProviderProps {
@@ -31,7 +31,7 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
   const [isLoadingComments, setIsLoadingComments] = useState<boolean>(false);
   const [isLoadingMarkers, setIsLoadingMarkers] = useState<boolean>(false);
   const [regionCommentMap, setRegionCommentMap] = useState<Record<string, number>>({});
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentAddedFlag, setCommentAddedFlag] = useState(false);
   const { currentTrack } = useContext(PlaybackContext);
@@ -100,21 +100,25 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
       setIsLoadingMarkers(true);
 
       try {
-        const response = await fetch(
-          `/api/comments?trackId=${trackId}&page=${page}&limit=${limit}`
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch comments: ${response.statusText}`);
+        console.log('Fetching comments and markers for track:', trackId);
+        
+        const response = await apiService.fetchCommentsAndMarkers(trackId, page, limit);
+        
+        if (response.error) {
+          console.error('Error fetching comments:', response.error);
+          throw new Error(`Failed to fetch comments: ${response.error}`);
         }
-
-        const fetchedComments: _Comment[] = await response.json();
+        
+        const fetchedComments = response.data;
+        console.log('Fetched comments:', fetchedComments);
 
         if (!Array.isArray(fetchedComments)) {
           console.error(
             "Expected an array of comments, received:",
-            typeof fetchedComments
+            typeof fetchedComments,
+            fetchedComments
           );
+          setError("Invalid response format from server");
           setIsLoadingMarkers(false);
           return;
         }
@@ -127,8 +131,8 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
             id: comment.marker?.id || 0,
             commentId: comment.id,
             time: comment.marker?.time || 0,
-            trackId: comment.marker.trackId,
-            createdAt: comment.marker.createdAt,
+            trackId: comment.marker?.trackId ?? 0,
+            createdAt: comment.marker?.createdAt ?? '',
             waveSurferRegionID: comment.marker?.waveSurferRegionID ?? "",
             data: {
               customColor: comment.marker?.data?.customColor || "#FF0000",
@@ -138,6 +142,7 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
             }
           }));
 
+        console.log('Extracted markers:', extractedMarkers);
         setMarkers(extractedMarkers);
 
         const newRegionCommentMap: Record<string, number> =
@@ -151,7 +156,7 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         setIsLoadingMarkers(false);
       } catch (error) {
         console.error("Error fetching comments and markers:", error);
-        setError("Failed to fetch comments and markers. Please try again.");
+        setError(`Failed to fetch comments and markers: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setIsLoadingMarkers(false);
       }
     },
@@ -167,35 +172,73 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
     setIsCommentAdding(true);
 
     try {
-      const response = await fetch(`/api/comments/with-marker`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          trackId,
-          content,
-          time,
-          color,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to add comment with marker: ${response.statusText}`);
+      console.log('Adding comment with marker:', { trackId, content, time, color, userId: user?.id });
+      
+      if (!user?.id) {
+        console.error('Cannot add comment: User ID is missing');
+        throw new Error('User ID is required to add a comment');
+      }
+      
+      const commentData = {
+        trackId,
+        content,
+        time,
+        color,
+        userId: user.id,
+      };
+      
+      const comment = await apiService.addMarkerAndComment(commentData);
+      console.log('Comment added successfully:', comment);
+      
+      if (!comment) {
+        console.error('Invalid response format from API');
+        throw new Error('Invalid response format from server');
       }
 
-      const data = await response.json();
+      setComments((prev) => [comment, ...prev]);
 
-      setComments((prev) => [data.comment, ...prev]);
-
-      if (data.marker) {
-        setMarkers((prev) => [data.marker, ...prev]);
+      if (comment.marker) {
+        console.log('Marker data received:', comment.marker);
+        
+        // Create a properly formatted marker object
+        const newMarker = {
+          id: comment.marker.id,
+          commentId: comment.id,
+          time: comment.marker.time,
+          trackId: comment.marker.trackId,
+          createdAt: comment.marker.createdAt,
+          waveSurferRegionID: comment.marker.waveSurferRegionID,
+          data: {
+            customColor: color || "#FF0000",
+            isVisible: true,
+            isDraggable: true,
+            isResizable: false
+          }
+        };
+        
+        console.log('Adding new marker to state:', newMarker);
+        setMarkers((prev) => [newMarker, ...prev]);
+        
+        // Update region comment map if needed
+        if (comment.marker.waveSurferRegionID) {
+          console.log('Updating region comment map:', {
+            regionId: comment.marker.waveSurferRegionID,
+            commentId: comment.id
+          });
+          
+          setRegionCommentMap((prev) => ({
+            ...prev,
+            [comment.marker.waveSurferRegionID]: comment.id
+          }));
+        }
+      } else {
+        console.warn('Comment added but no marker data was returned');
       }
 
-      return data.comment;
+      return comment;
     } catch (error) {
       console.error("Error adding comment with marker:", error);
+      setError(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     } finally {
       setIsCommentAdding(false);

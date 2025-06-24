@@ -46,6 +46,11 @@ frontend/.next/
 .env.test.local
 .env.production.local
 
+# Development roadmap (private)
+ROADMAP.md
+
 # Electron cache
 .cache/
 electron-build/
+
+/soundhaven-backend/

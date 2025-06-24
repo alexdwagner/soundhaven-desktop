@@ -9,14 +9,15 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "baseUrl": "./",
+        "baseUrl": ".",
         "paths": {
             "@main/*": [
                 "./main/*"
             ],
             "@frontend/*": [
                 "./frontend/*"
-            ]
+            ],
+            "@shared/*": ["shared/*"]
         }
     },
     "scripts": {
@@ -27,6 +28,7 @@
     },
     "include": [
         "main/**/*",
-        "frontend/**/*"
+        "frontend/**/*",
+        "shared/**/*"
     ]
 }

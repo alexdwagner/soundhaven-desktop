@@ -84,7 +84,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div className="playlist-sidebar p-4 bg-gray-800 text-white min-w-48">
+      <div className="playlist-sidebar p-4 text-gray min-w-48">
         <button className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded" onClick={handleCreatePlaylist}>
           Add Playlist
         </button>

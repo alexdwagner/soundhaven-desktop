@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import FileUpload from "@/app/FileUpload";
 import TracksTable from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
@@ -51,13 +51,60 @@ export default function TracksManager() {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
   const [commentTime, setCommentTime] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
   const regionsRef = useRef(null);
 
   // Add comments functionality
-  const { addMarkerAndComment, fetchCommentsAndMarkers } = useComments(waveSurferRef, regionsRef);
+  const { addMarkerAndComment, fetchCommentsAndMarkers, markers, setMarkers, selectedCommentId } = useComments(waveSurferRef, regionsRef);
+
+  // Add hardcoded test markers for debugging
+  useEffect(() => {
+    console.log('🎯 SETTING HARDCODED MARKERS - trackId:', playbackCurrentTrack?.id);
+    console.log('🎯 setMarkers function available:', !!setMarkers);
+    
+    if (playbackCurrentTrack?.id) {
+      console.log('✅ Setting hardcoded test markers for track:', playbackCurrentTrack.id);
+      const testMarkers = [
+        {
+          id: 'test-marker-1',
+          time: 10,
+          commentId: 1,
+          waveSurferRegionID: 'test-region-1',
+          data: { customColor: 'rgba(255, 0, 0, 0.7)' }
+        },
+        {
+          id: 'test-marker-2', 
+          time: 30,
+          commentId: 2,
+          waveSurferRegionID: 'test-region-2',
+          data: { customColor: 'rgba(0, 255, 0, 0.7)' }
+        },
+        {
+          id: 'test-marker-3',
+          time: 60,
+          commentId: 3,
+          waveSurferRegionID: 'test-region-3',
+          data: { customColor: 'rgba(0, 0, 255, 0.7)' }
+        }
+      ];
+      console.log('Test markers to set:', testMarkers);
+      setMarkers(testMarkers);
+      console.log('✅ setMarkers called');
+    } else {
+      console.log('❌ No playbackCurrentTrack?.id, skipping marker setup');
+    }
+  }, [playbackCurrentTrack?.id, setMarkers]);
+
+  // Debug markers
+  useEffect(() => {
+    console.log('=== MARKERS UPDATED IN TRACKSMANAGER ===');
+    console.log('markers:', markers);
+    console.log('markers length:', markers?.length);
+    console.log('markers type:', typeof markers);
+  }, [markers]);
 
   const handleSelectTrack = (trackId: number) => {
     const trackIndex = tracks.findIndex((t) => t.id === trackId);
@@ -98,7 +145,7 @@ export default function TracksManager() {
 
   const handleSeek = (time: number) => {
     // This will be handled by the AudioPlayer component
-    console.log('Seeking to:', time);
+    // console.log('Seeking to:', time);
   };
 
   const handleNext = () => {
@@ -122,10 +169,31 @@ export default function TracksManager() {
 
   const handleSubmitComment = async () => {
     if (!commentContent.trim() || !playbackCurrentTrack?.id || !user || !token) {
+      console.error('Cannot submit comment: missing required data', { 
+        hasContent: !!commentContent.trim(), 
+        trackId: playbackCurrentTrack?.id,
+        hasUser: !!user,
+        hasToken: !!token
+      });
+      
+      if (!commentContent.trim()) {
+        setError('Comment content cannot be empty');
+      } else if (!user) {
+        setError('You must be logged in to add comments');
+      } else {
+        setError('Missing required information to add comment');
+      }
+      
       return;
     }
 
     try {
+      console.log('Submitting comment:', { 
+        trackId: playbackCurrentTrack.id,
+        time: commentTime,
+        contentLength: commentContent.length
+      });
+      
       await addMarkerAndComment(
         playbackCurrentTrack.id,
         commentContent.trim(),
@@ -138,11 +206,18 @@ export default function TracksManager() {
       
       // Refresh comments to show the new comment
       if (fetchCommentsAndMarkers) {
-        await fetchCommentsAndMarkers(playbackCurrentTrack.id, 1, 10);
+        console.log('Refreshing comments after adding new comment');
+        try {
+          await fetchCommentsAndMarkers(playbackCurrentTrack.id, 1, 10);
+        } catch (refreshError) {
+          console.error('Failed to refresh comments after adding new comment:', refreshError);
+          // Don't throw here, as the comment was already added successfully
+        }
       }
     } catch (error) {
       console.error('Error adding comment:', error);
-      alert('Failed to add comment. Please try again.');
+      setError(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Keep the modal open so the user can try again
     }
   };
 
@@ -150,14 +225,33 @@ export default function TracksManager() {
     console.log('Comment selected:', commentId);
   };
 
+  // Auto-show comments panel when a comment is selected via marker click
+  useEffect(() => {
+    console.log('=== AUTO-SHOW EFFECT ===');
+    console.log('selectedCommentId:', selectedCommentId);
+    console.log('showComments:', showComments);
+    console.log('playbackCurrentTrack?.id:', playbackCurrentTrack?.id);
+    
+    if (selectedCommentId && !showComments) {
+      console.log('✅ Auto-showing comments panel due to selected comment:', selectedCommentId);
+      setShowComments(true);
+    } else if (selectedCommentId && showComments) {
+      console.log('✅ Comments panel already showing for selected comment:', selectedCommentId);
+    } else if (!selectedCommentId) {
+      console.log('❌ No selected comment ID');
+    } else {
+      console.log('❌ Comments panel already showing but no selected comment');
+    }
+  }, [selectedCommentId, showComments]);
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Audio player at the top */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+      <div className="border-b bg-white p-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            {playbackCurrentTrack ? playbackCurrentTrack.name : 'No track selected'}
-          </h3>
+          <div className="flex-1">
+            {/* Left side content can go here if needed */}
+          </div>
           <button
             onClick={() => setShowComments(!showComments)}
             disabled={!playbackCurrentTrack}
@@ -182,6 +276,8 @@ export default function TracksManager() {
           onAddComment={handleAddComment}
           volume={volume}
           playbackSpeed={playbackSpeed}
+          waveSurferRef={waveSurferRef}
+          regionsRef={regionsRef}
         />
       </div>
 
@@ -197,7 +293,7 @@ export default function TracksManager() {
           <FileUpload onUploadSuccess={fetchTracks} />
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow overflow-hidden">
           <TracksTable
             tracks={safeTracks}
             onSelectTrack={handleSelectTrack}
@@ -215,9 +311,6 @@ export default function TracksManager() {
             regionsRef={regionsRef}
             waveSurferRef={waveSurferRef}
             onSelectComment={handleSelectComment}
-            comments={[]}
-            addComment={async () => {}}
-            handleCommentClick={() => {}}
           />
         )}
       </div>
@@ -233,7 +326,7 @@ export default function TracksManager() {
       {/* Comment Modal */}
       {showCommentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
             <h3 className="text-lg font-medium mb-4">Add Comment</h3>
             <p className="text-sm text-gray-600 mb-4">
               Time: {Math.floor(commentTime / 60)}:{(commentTime % 60).toFixed(0).padStart(2, '0')}

@@ -1,8 +1,11 @@
 import { Database } from 'sqlite3';
 import * as path from 'path';
+import { config } from './config';
 
 // Database file path
-const dbPath = path.join(process.cwd(), 'db.sqlite');
+const dbPath = path.isAbsolute(config.database.path)
+  ? config.database.path
+  : path.resolve(process.cwd(), config.database.path);
 
 // Create database connection
 export const db = new Database(dbPath, (err) => {

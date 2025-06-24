@@ -16,6 +16,8 @@ import { config } from "./config";
 import dotenv from 'dotenv';
 import * as http from 'http';
 import * as fs from 'fs';
+import type { CreateCommentDto } from '@shared/dtos/create-comment.dto';
+import { startAudioServer } from './audioServer';
 
 dotenv.config();
 
@@ -71,16 +73,16 @@ async function createMainWindow() {
   console.log("mainWindow started");
 
   const isDev = !app.isPackaged; // Check if we're in dev mode
-  const port = 3001;
+  const frontendPort = config.frontendPort;
   
   if (isDev) {
     // Wait for Next.js to be ready
-    await waitForNextJS(port);
-    await mainWindow.loadURL(`http://localhost:${port}`);
+    await waitForNextJS(frontendPort);
+    await mainWindow.loadURL(`http://localhost:${frontendPort}`);
   } else {
     await mainWindow.loadFile(path.join(__dirname, '../frontend/dist/index.html'));
   }
-  console.log(`Window loading URL: ${isDev ? 'Dev' : 'Production'} mode, port: ${port}`);
+  console.log(`Window loading URL: ${isDev ? 'Dev' : 'Production'} mode, port: ${frontendPort}`);
 
   mainWindow.webContents.once("did-finish-load", () => {
     console.log("Main window loaded!");
@@ -119,6 +121,53 @@ async function ensureTestUser() {
   }
 }
 
+async function ensureTestTrack() {
+  try {
+    // Check if test track already exists
+    const existingTrack = await dbAsync.get(
+      'SELECT * FROM tracks WHERE name = ?',
+      ['Careless Whisper']
+    );
+
+    if (!existingTrack) {
+      // Get the test user ID
+      const testUser = await dbAsync.get(
+        'SELECT id FROM users WHERE email = ?',
+        ['test@example.com']
+      );
+
+      if (!testUser) {
+        console.error('Test user not found. Cannot create test track.');
+        return;
+      }
+
+      // Create a test track using the careless whisper file
+      const testTrackPath = '/audio/careless_whisper.mp3';
+      
+      // Check if the file exists in the public directory
+      const publicDir = path.join(process.cwd(), 'public');
+      const filePath = path.join(publicDir, 'careless_whisper.mp3');
+      
+      if (!fs.existsSync(filePath)) {
+        console.error(`Test track file not found at ${filePath}`);
+        return;
+      }
+      
+      await dbAsync.run(
+        'INSERT INTO tracks (name, duration, user_id, file_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        ['Careless Whisper', 300, testUser.id, testTrackPath, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]
+      );
+      
+      console.log('Test track "Careless Whisper" created successfully');
+      console.log('File path:', testTrackPath);
+    } else {
+      console.log('Test track already exists');
+    }
+  } catch (error) {
+    console.error('Error ensuring test track exists:', error);
+  }
+}
+
 app.whenReady().then(async () => {
   try {
     // Start audio HTTP server
@@ -129,6 +178,9 @@ app.whenReady().then(async () => {
     
     // Create test user
     await ensureTestUser();
+    
+    // Create test track
+    await ensureTestTrack();
     
     // Create main window
     createMainWindow();
@@ -482,14 +534,15 @@ const authHandlers = {
 
 // API Request Handler
 ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = null, headers = {} }) => {
+  console.log('[API DEBUG] Incoming:', { endpoint, method, body });
   try {
-    const url = new URL(endpoint, 'http://localhost:3001');
-    const requestPath = url.pathname;
+    const url = new URL(endpoint, `http://localhost:${config.audioServerPort}`);
+    const normalizedPath = url.pathname;
     
-    console.log('API Request:', { endpoint, method, requestPath });
+    console.log('API Request:', { endpoint, method, normalizedPath });
     
     // Handle authentication routes
-    if (requestPath === '/api/auth/register' && method === 'POST') {
+    if (normalizedPath === '/api/auth/register' && method === 'POST') {
       const { name, email, password } = body;
       if (!name || !email || !password) {
         throw new Error('Name, email, and password are required');
@@ -497,7 +550,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       return await authHandlers.register({ name, email, password });
     }
     
-    if (requestPath === '/api/auth/login' && method === 'POST') {
+    if (normalizedPath === '/api/auth/login' && method === 'POST') {
       const { email, password } = body;
       console.log('Login request received:', { email });
       if (!email || !password) {
@@ -512,7 +565,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       }
     }
     
-    if (requestPath === '/api/auth/refresh' && method === 'POST') {
+    if (normalizedPath === '/api/auth/refresh' && method === 'POST') {
       const { refreshToken } = body;
       if (!refreshToken) {
         throw new Error('Refresh token is required');
@@ -520,7 +573,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       return await authHandlers.refreshToken({ refreshToken });
     }
     
-    if (requestPath === '/api/auth/logout' && method === 'POST') {
+    if (normalizedPath === '/api/auth/logout' && method === 'POST') {
       const { refreshToken } = body;
       if (!refreshToken) {
         throw new Error('Refresh token is required');
@@ -528,15 +581,34 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       return await authHandlers.logout({ refreshToken });
     }
     
+    if (normalizedPath.startsWith('/audio/')) {
+      const fileName = normalizedPath.replace('/audio/', '');
+      const filePath = path.join(process.cwd(), 'public', fileName);
+      console.log('[AUDIO DEBUG] Requested:', filePath);
+      if (!fs.existsSync(filePath)) {
+        console.log('[AUDIO DEBUG] File not found:', filePath);
+        return { status: 404, error: 'File not found' };
+      }
+      const fileBuffer = fs.readFileSync(filePath);
+      return {
+        headers: {
+          'Content-Type': 'audio/mpeg', // You may want to use mime-types for other formats
+          'Content-Length': fileBuffer.length,
+        },
+        data: fileBuffer,
+      };
+    }
+    
     // Normalize path to handle both /api/ and / paths for other API requests
-    let normalizedPath = requestPath;
-    if (!normalizedPath.startsWith('/api/') && normalizedPath.startsWith('/')) {
-      normalizedPath = `/api${normalizedPath}`;
+    let apiPath = normalizedPath;
+    if (!apiPath.startsWith('/api/') && apiPath.startsWith('/')) {
+      apiPath = `/api${apiPath}`;
     }
     
     // Route the request to the appropriate handler
-    if (normalizedPath.startsWith('/api/auth/')) {
-      const action = normalizedPath.split('/').pop();
+    console.log('API Request:', { endpoint, method, apiPath });
+    if (apiPath.startsWith('/api/auth/')) {
+      const action = apiPath.split('/').pop();
       
       if (action === 'login' && method === 'POST') {
         const result = await ipcMain.handle('auth:login', () => body);
@@ -548,7 +620,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         const result = await ipcMain.handle('auth:refresh', () => body);
         return { data: result };
       }
-    } else if (normalizedPath.startsWith('/api/tracks') && method === 'GET') {
+    } else if (apiPath.startsWith('/api/tracks') && method === 'GET') {
       console.log('Tracks API request received');
       const result = await dbAsync.all('SELECT * FROM tracks');
       console.log('Raw tracks from database:', result);
@@ -566,16 +638,193 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       }));
       console.log('Mapped tracks:', mapped);
       return { data: mapped };
-    } else if (normalizedPath.startsWith('/api/playlists') && method === 'GET') {
+    } else if (apiPath.startsWith('/api/playlists') && method === 'GET') {
       const result = await dbAsync.all('SELECT * FROM playlists');
       return { data: result };
-    } else if (normalizedPath.startsWith('/api/users') && method === 'GET') {
+    } else if (apiPath.startsWith('/api/users') && method === 'GET') {
       const result = await ipcMain.handle('getUsers', () => []);
       return { data: result };
-    } else if (normalizedPath.startsWith('/api/user') && method === 'GET') {
+    } else if (apiPath.startsWith('/api/user') && method === 'GET') {
       const userId = url.searchParams.get('id');
       const result = await ipcMain.handle('getUser', () => ({}));
       return { data: result };
+    } else if (apiPath.startsWith('/api/comments') && method === 'GET' && !apiPath.includes('/with-marker')) {
+      console.log('[API DEBUG] Matched /api/comments GET');
+      const trackId = url.searchParams.get('trackId');
+      const page = parseInt(url.searchParams.get('page') || '1', 10);
+      const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+      
+      if (!trackId) {
+        console.error('[API DEBUG] Missing trackId query parameter');
+        return { error: 'Missing trackId parameter', status: 400 };
+      }
+      
+      try {
+        console.log('[API DEBUG] Fetching comments for track:', trackId);
+        
+        // First get all comments for the track
+        const comments = await dbAsync.all(
+          'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+          [trackId, limit, (page - 1) * limit]
+        );
+        
+        console.log('[API DEBUG] Found comments:', comments.length);
+        
+        // For each comment, check if it has an associated marker
+        const commentsWithMarkers = await Promise.all(comments.map(async (comment) => {
+          const marker = await dbAsync.get(
+            'SELECT * FROM markers WHERE comment_id = ?',
+            [comment.id]
+          );
+          
+          return {
+            id: comment.id,
+            content: comment.content,
+            trackId: comment.track_id,
+            userId: comment.user_id,
+            userName: comment.user_name || 'Unknown User',
+            createdAt: comment.created_at,
+            marker: marker ? {
+              id: marker.id,
+              time: marker.time,
+              end: marker.time + (marker.duration || 0.5),
+              duration: marker.duration || 0.5,
+              trackId: marker.track_id,
+              commentId: marker.comment_id,
+              createdAt: marker.created_at,
+              waveSurferRegionID: marker.wave_surfer_region_id,
+              data: {
+                customColor: "#FF0000", // Default color
+                isVisible: true,
+                isDraggable: true,
+                isResizable: false
+              }
+            } : null
+          };
+        }));
+        
+        console.log('[API DEBUG] Processed comments with markers:', commentsWithMarkers.length);
+        return { data: commentsWithMarkers };
+      } catch (error) {
+        console.error('[API DEBUG] Error fetching comments:', error);
+        return { error: 'Failed to fetch comments', status: 500 };
+      }
+    } else if (apiPath.includes('/api/comments/with-marker') && method === 'POST') {
+      console.log('[API DEBUG] Matched /api/comments/with-marker POST', { body });
+      const { trackId, userId, content, time, color } = body as CreateCommentDto;
+      
+      // Validate required fields
+      if (!trackId) {
+        console.error('[API DEBUG] Missing trackId in request body');
+        return { error: 'Missing trackId', status: 400 };
+      }
+      if (!userId) {
+        console.error('[API DEBUG] Missing userId in request body');
+        return { error: 'Missing userId', status: 400 };
+      }
+      if (!content) {
+        console.error('[API DEBUG] Missing content in request body');
+        return { error: 'Missing content', status: 400 };
+      }
+      if (typeof time !== 'number') {
+        console.error('[API DEBUG] Missing or invalid time in request body:', time);
+        return { error: 'Missing or invalid time', status: 400 };
+      }
+      
+      const now = Math.floor(Date.now() / 1000);
+      
+      try {
+        // Insert comment
+        console.log('[API DEBUG] Inserting comment:', { content, trackId, userId, now });
+        const commentResult = await dbAsync.run(
+          'INSERT INTO comments (content, track_id, user_id, created_at) VALUES (?, ?, ?, ?)',
+          [content, trackId, userId, now]
+        );
+        
+        if (!commentResult || !commentResult.lastID) {
+          console.error('[API DEBUG] Failed to insert comment, no lastID returned');
+          return { error: 'Failed to create comment', status: 500 };
+        }
+        
+        const commentId = commentResult.lastID;
+        console.log('[API DEBUG] Comment created with ID:', commentId);
+        
+        // Insert marker
+        const regionId = `region_${commentId}_${Date.now()}`;
+        console.log('[API DEBUG] Inserting marker:', { regionId, time, commentId, trackId });
+        const markerResult = await dbAsync.run(
+          'INSERT INTO markers (wave_surfer_region_id, time, duration, comment_id, track_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [regionId, time, 0.5, commentId, trackId, now]
+        );
+        
+        if (!markerResult || !markerResult.lastID) {
+          console.error('[API DEBUG] Failed to insert marker, no lastID returned');
+          // Attempt to rollback the comment
+          try {
+            await dbAsync.run('DELETE FROM comments WHERE id = ?', [commentId]);
+            console.log('[API DEBUG] Rolled back comment:', commentId);
+          } catch (rollbackError) {
+            console.error('[API DEBUG] Failed to rollback comment:', rollbackError);
+          }
+          return { error: 'Failed to create marker', status: 500 };
+        }
+        
+        const markerId = markerResult.lastID;
+        console.log('[API DEBUG] Marker created with ID:', markerId);
+        
+        // Fetch the new comment
+        const comment = await dbAsync.get('SELECT * FROM comments WHERE id = ?', [commentId]);
+        if (!comment) {
+          console.error('[API DEBUG] Failed to fetch created comment with ID:', commentId);
+          return { error: 'Failed to retrieve created comment', status: 500 };
+        }
+        
+        // Fetch the new marker
+        const marker = await dbAsync.get('SELECT * FROM markers WHERE id = ?', [markerId]);
+        if (!marker) {
+          console.error('[API DEBUG] Failed to fetch created marker with ID:', markerId);
+          return { error: 'Failed to retrieve created marker', status: 500 };
+        }
+        
+        // Get user info
+        const user = await dbAsync.get('SELECT name FROM users WHERE id = ?', [userId]);
+        const userName = user ? user.name : 'Unknown User';
+        
+        console.log('[API DEBUG] Created comment and marker:', { comment, marker });
+        
+        // Return in the format expected by the frontend
+        return {
+          data: {
+            comment: {
+              id: comment.id,
+              content: comment.content,
+              trackId: comment.track_id,
+              userId: comment.user_id,
+              userName: userName,
+              createdAt: comment.created_at,
+              marker: {
+                id: marker.id,
+                time: marker.time,
+                end: marker.time + marker.duration,
+                duration: marker.duration,
+                trackId: marker.track_id,
+                commentId: marker.comment_id,
+                createdAt: marker.created_at,
+                waveSurferRegionID: marker.wave_surfer_region_id,
+                data: {
+                  customColor: color || "#FF0000",
+                  isVisible: true,
+                  isDraggable: true,
+                  isResizable: false
+                }
+              }
+            }
+          }
+        };
+      } catch (error) {
+        console.error('[API DEBUG] Error creating comment with marker:', error);
+        return { error: 'Failed to create comment with marker', status: 500 };
+      }
     }
     
     throw new Error(`No handler for ${method} ${endpoint}`);
@@ -692,55 +941,6 @@ ipcMain.handle('auth:logout', async () => {
   tokenStore.refreshToken = null;
   return { success: true };
 });
-
-// Function to start audio HTTP server
-function startAudioServer() {
-  const port = 3000;
-  
-  audioServer = http.createServer((req, res) => {
-    if (req.url?.startsWith('/audio/')) {
-      const fileName = req.url.replace('/audio/', '');
-      const filePath = path.join(process.cwd(), '..', 'public', fileName);
-      
-      console.log('Audio request:', {
-        url: req.url,
-        fileName,
-        filePath,
-        exists: fs.existsSync(filePath)
-      });
-      
-      if (fs.existsSync(filePath)) {
-        const stat = fs.statSync(filePath);
-        const fileStream = fs.createReadStream(filePath);
-        
-        res.writeHead(200, {
-          'Content-Type': 'audio/mpeg',
-          'Content-Length': stat.size,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD',
-          'Access-Control-Allow-Headers': 'Range'
-        });
-        
-        fileStream.pipe(res);
-      } else {
-        console.log('Audio file not found:', filePath);
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('File not found');
-      }
-    } else {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not found');
-    }
-  });
-  
-  audioServer.listen(port, () => {
-    console.log(`✅ Audio server running on port ${port}`);
-  });
-  
-  audioServer.on('error', (error) => {
-    console.error('Audio server error:', error);
-  });
-}
 
 // Function to stop audio HTTP server
 function stopAudioServer() {

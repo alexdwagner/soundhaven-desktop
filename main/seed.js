@@ -74,6 +74,31 @@ async function seedDatabase() {
       console.log('Test track already exists');
     }
 
+    // Seed a few test comments for the test track and user
+    if (existingUser && existingTrack) {
+      const now = Math.floor(Date.now() / 1000);
+      const commentsToSeed = [
+        'This is a seeded comment 1.',
+        'Another seeded comment for testing.',
+        'Third test comment!'
+      ];
+      for (const content of commentsToSeed) {
+        // Check if comment already exists to avoid duplicates
+        const existingComment = await getSQL('SELECT * FROM comments WHERE content = ? AND track_id = ? AND user_id = ?', [content, existingTrack.id, existingUser.id]);
+        if (!existingComment) {
+          await runSQL(
+            'INSERT INTO comments (content, track_id, user_id, created_at) VALUES (?, ?, ?, ?)',
+            [content, existingTrack.id, existingUser.id, now]
+          );
+          console.log(`Seeded comment: "${content}"`);
+        } else {
+          console.log(`Comment already exists: "${content}"`);
+        }
+      }
+    } else {
+      console.log('Cannot seed comments: test user or test track not found.');
+    }
+
     // Verify the data
     const users = await new Promise((resolve, reject) => {
       db.all('SELECT * FROM users', (err, rows) => {
