@@ -31,6 +31,7 @@ interface TracksContextType {
   updateTrackMetadata: (trackId: string, metadata: Partial<Track>) => Promise<void>;
   deleteTrack: (trackId: string) => Promise<void>;
   uploadTrack: (formData: FormData) => Promise<Track | undefined>;
+  uploadBatchTracks: (files: File[]) => Promise<{ uploaded: Track[], failed: any[], total: number, successful: number, failedCount: number } | undefined>;
 }
 
 export const TracksContext = createContext<TracksContextType | undefined>(undefined);
@@ -57,6 +58,7 @@ const defaultContextValue: TracksContextType = {
   updateTrackMetadata: async () => {},
   deleteTrack: async () => {},
   uploadTrack: async () => undefined,
+  uploadBatchTracks: async () => undefined,
 };
 
 export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
@@ -225,6 +227,35 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Upload multiple tracks
+  const uploadBatchTracks = useCallback(async (files: File[]) => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.uploadBatchTracks(files);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      if (response.data) {
+        // Add successfully uploaded tracks to the list
+        setTracks(prevTracks => [...prevTracks, ...response.data!.uploaded]);
+        return {
+          uploaded: response.data.uploaded,
+          failed: response.data.failed,
+          total: response.data.total,
+          successful: response.data.successful,
+          failedCount: response.data.failed.length
+        };
+      }
+      return undefined;
+    } catch (error) {
+      console.error('Error uploading batch tracks:', error);
+      setError(error instanceof Error ? error.message : 'Failed to upload batch tracks');
+      return undefined;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const value = useMemo(() => ({
     tracks,
     currentTrackIndex,
@@ -241,7 +272,8 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     fetchTracks,
     updateTrackMetadata,
     deleteTrack,
-    uploadTrack
+    uploadTrack,
+    uploadBatchTracks
   }), [
     tracks,
     currentTrackIndex,
@@ -258,7 +290,8 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     fetchTracks,
     updateTrackMetadata,
     deleteTrack,
-    uploadTrack
+    uploadTrack,
+    uploadBatchTracks
   ]);
 
   return (

@@ -28,6 +28,10 @@ const validChannels = [
   'auth:register',
   'auth:refresh',
   'api-request',
+  'debug:test',
+  'upload:single-track',
+  'upload:batch-tracks',
+  'get-file-url',
   // Add other valid IPC channels here
 ];
 

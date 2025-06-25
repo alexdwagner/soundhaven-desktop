@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import FileUpload from "@/app/FileUpload";
+import { useState, useRef, useEffect, useCallback } from "react";
 import TracksTable from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
 import CommentsPanel from "../comments/CommentsPanel";
@@ -9,7 +8,7 @@ import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useComments } from "@/app/hooks/useComments";
-import { Track, _Comment as Comment } from "../../../../../shared/types";
+import { _Comment as Comment } from "../../../../../shared/types";
 
 // Temporary mock for the auth user - replace with your actual auth context
 const useMockAuth = () => ({
@@ -22,8 +21,8 @@ export default function TracksManager() {
     tracks = [], 
     fetchTracks, 
     deleteTrack, 
-    currentTrack, 
     setCurrentTrackIndex,
+    uploadBatchTracks,
     error: fetchError
   } = useTracks();
   
@@ -46,12 +45,16 @@ export default function TracksManager() {
   const [showComments, setShowComments] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [doNotAskAgain, setDoNotAskAgain] = useState(false);
-  const [comments, setComments] = useState<Comment[]>([]);
   const { user, token } = useMockAuth(); // Replace with your actual auth hook
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
   const [commentTime, setCommentTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  // Drag & Drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number }[]>([]);
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
@@ -225,6 +228,88 @@ export default function TracksManager() {
     console.log('Comment selected:', commentId);
   };
 
+  // Drag & Drop handlers
+  const validateFile = useCallback((file: File): string | null => {
+    const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/mp4', 'audio/aac', 'audio/ogg'];
+    const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+
+    if (!allowedTypes.includes(file.type)) {
+      return `File type ${file.type} is not supported`;
+    }
+
+    if (file.size > maxSize) {
+      return `File size ${(file.size / 1024 / 1024).toFixed(1)}MB exceeds 2GB limit`;
+    }
+
+    return null;
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const validFiles: File[] = [];
+      const errors: string[] = [];
+
+      files.forEach(file => {
+        const error = validateFile(file);
+        if (error) {
+          errors.push(`${file.name}: ${error}`);
+        } else {
+          validFiles.push(file);
+        }
+      });
+
+      if (errors.length > 0) {
+        alert(`Some files were rejected:\n${errors.join('\n')}`);
+      }
+
+      if (validFiles.length > 0) {
+        console.log('🚀 Starting drag & drop upload with files:', validFiles.map(f => f.name));
+        setUploading(true);
+        setUploadProgress(validFiles.map(file => ({ fileName: file.name, progress: 0 })));
+        
+        try {
+          console.log('📞 Calling uploadBatchTracks...');
+          const result = await uploadBatchTracks(validFiles);
+          console.log('📥 uploadBatchTracks result:', result);
+          
+          if (result) {
+            console.log(`✅ Drag & drop upload completed: ${result.successful} successful, ${result.failedCount} failed`);
+            
+            if (result.successful > 0) {
+              fetchTracks();
+            }
+            
+            if (result.failed.length > 0) {
+              alert(`Some uploads failed:\n${result.failed.map((f: { fileName: string; error: string }) => `${f.fileName}: ${f.error}`).join('\n')}`);
+            }
+          } else {
+            console.error('❌ uploadBatchTracks returned undefined');
+          }
+        } catch (error) {
+          console.error('❌ Error during drag & drop upload:', error);
+          alert('Upload failed');
+        } finally {
+          setUploading(false);
+          setUploadProgress([]);
+        }
+      }
+    }
+  }, [validateFile, uploadBatchTracks, fetchTracks]);
+
   // Auto-show comments panel when a comment is selected via marker click
   useEffect(() => {
     console.log('=== AUTO-SHOW EFFECT ===');
@@ -282,15 +367,112 @@ export default function TracksManager() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 overflow-auto p-4">
+      <div 
+        className={`flex-1 overflow-auto p-4 transition-colors ${
+          isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-400' : ''
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {fetchError && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
             {fetchError}
           </div>
         )}
 
+        {/* Drag & Drop Overlay */}
+        {isDragOver && (
+          <div className="fixed inset-0 bg-blue-50 bg-opacity-90 flex items-center justify-center z-50 pointer-events-none">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🎵</div>
+              <div className="text-2xl font-bold text-blue-600">Drop audio files here</div>
+              <div className="text-lg text-blue-500">Release to upload to your library</div>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Progress */}
+        {uploading && uploadProgress.length > 0 && (
+          <div className="mb-4 bg-white rounded-lg shadow p-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Uploading Files...</h3>
+            <div className="space-y-3">
+              {uploadProgress.map((item, index) => (
+                <div key={index} className="bg-gray-50 rounded-md p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-900">{item.fileName}</span>
+                    <span className="text-sm text-gray-500">{item.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${item.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Simple Upload Button for Testing */}
         <div className="mb-4">
-          <FileUpload onUploadSuccess={fetchTracks} />
+          <input
+            type="file"
+            multiple
+            accept="audio/*"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                const files = Array.from(e.target.files);
+                console.log('🚀 Testing file upload with files:', files.map(f => f.name));
+                setUploading(true);
+                setUploadProgress(files.map(file => ({ fileName: file.name, progress: 0 })));
+                
+                uploadBatchTracks(files).then(result => {
+                  console.log('📥 Test upload result:', result);
+                  if (result && result.successful > 0) {
+                    fetchTracks();
+                  }
+                  setUploading(false);
+                  setUploadProgress([]);
+                }).catch(error => {
+                  console.error('❌ Test upload error:', error);
+                  setUploading(false);
+                  setUploadProgress([]);
+                });
+              }
+            }}
+            className="hidden"
+            id="file-upload-input"
+          />
+          <label
+            htmlFor="file-upload-input"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer mr-2"
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+            Upload Audio Files
+          </label>
+          
+          {/* Debug IPC Test Button */}
+          <button
+            onClick={async () => {
+              console.log('🔧 Testing IPC communication...');
+              try {
+                const { apiService } = await import('@/services/electronApiService');
+                const result = await apiService.debugTest({ test: 'data', timestamp: Date.now() });
+                console.log('🔧 IPC test result:', result);
+                alert(`IPC Test: ${result.success ? 'SUCCESS' : 'FAILED'}\n${result.message}`);
+              } catch (error) {
+                console.error('🔧 IPC test error:', error);
+                alert(`IPC Test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              }
+            }}
+            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 cursor-pointer"
+          >
+            🔧 Test IPC
+          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">

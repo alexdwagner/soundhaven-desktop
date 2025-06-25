@@ -170,22 +170,44 @@ async function ensureTestTrack() {
 
 app.whenReady().then(async () => {
   try {
+    console.log('🚀 Electron app starting...');
+    
     // Start audio HTTP server
     startAudioServer();
+    console.log('🎵 Audio server started');
     
     // Initialize database
     await setupDatabase();
+    console.log('🗄️ Database initialized');
     
     // Create test user
     await ensureTestUser();
+    console.log('👤 Test user ensured');
     
     // Create test track
     await ensureTestTrack();
+    console.log('🎵 Test track ensured');
     
     // Create main window
     createMainWindow();
+    console.log('🪟 Main window created');
+    
+    // Log registered IPC handlers
+    console.log('📡 Registered IPC handlers:');
+    console.log('  - debug:test');
+    console.log('  - upload:single-track');
+    console.log('  - upload:batch-tracks');
+    console.log('  - getTracks');
+    console.log('  - getUser');
+    console.log('  - auth:login');
+    console.log('  - auth:register');
+    console.log('  - auth:refresh-token');
+    console.log('  - auth:logout');
+    console.log('  - api-request');
+    
+    console.log('✅ Electron app startup complete!');
   } catch (error) {
-    console.error('Error during app initialization:', error);
+    console.error('❌ Error during app initialization:', error);
   }
 });
 
@@ -942,6 +964,232 @@ ipcMain.handle('auth:logout', async () => {
   return { success: true };
 });
 
+// File Upload Handlers
+async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, userId: number) {
+  try {
+    console.log(`[UPLOAD] Processing single track: ${fileName}`);
+    console.log(`[UPLOAD] File buffer length: ${fileBuffer.length}`);
+    console.log(`[UPLOAD] User ID: ${userId}`);
+    
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    console.log(`[UPLOAD] Uploads directory: ${uploadsDir}`);
+    await fs.promises.mkdir(uploadsDir, { recursive: true });
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uniqueFileName = `${timestamp}-${safeFileName}`;
+    const filePath = path.join(uploadsDir, uniqueFileName);
+    
+    console.log(`[UPLOAD] Writing file to: ${filePath}`);
+    // Write file to disk
+    await fs.promises.writeFile(filePath, Buffer.from(fileBuffer));
+    console.log(`[UPLOAD] File saved successfully to: ${filePath}`);
+    
+    // Extract metadata
+    let metadata = {
+      duration: 0,
+      artist: null,
+      album: null,
+      title: fileName.replace(/\.[^/.]+$/, ''), // Remove extension for title
+      bitrate: 0,
+      sampleRate: 0,
+      channels: 0
+    };
+    
+    // TODO: Add music-metadata extraction when package is installed
+    // For now, use basic filename parsing
+    console.log(`[UPLOAD] Using basic metadata extraction for ${fileName}`);
+    console.log(`[UPLOAD] Extracted title: ${metadata.title}`);
+    
+    // Find or create artist
+    let artistId = null;
+    if (metadata.artist) {
+      console.log(`[UPLOAD] Processing artist: ${metadata.artist}`);
+      const existingArtist = await dbAsync.get(
+        'SELECT id FROM artists WHERE name = ?',
+        [metadata.artist]
+      );
+      
+      if (existingArtist) {
+        artistId = existingArtist.id;
+        console.log(`[UPLOAD] Found existing artist with ID: ${artistId}`);
+      } else {
+        const artistResult = await dbAsync.run(
+          'INSERT INTO artists (name, created_at, updated_at) VALUES (?, ?, ?)',
+          [metadata.artist, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]
+        );
+        artistId = artistResult.lastID;
+        console.log(`[UPLOAD] Created new artist with ID: ${artistId}`);
+      }
+    }
+    
+    // Find or create album
+    let albumId = null;
+    if (metadata.album && artistId) {
+      console.log(`[UPLOAD] Processing album: ${metadata.album}`);
+      const existingAlbum = await dbAsync.get(
+        'SELECT id FROM albums WHERE name = ? AND artist_id = ?',
+        [metadata.album, artistId]
+      );
+      
+      if (existingAlbum) {
+        albumId = existingAlbum.id;
+        console.log(`[UPLOAD] Found existing album with ID: ${albumId}`);
+      } else {
+        const albumResult = await dbAsync.run(
+          'INSERT INTO albums (name, release_date, artist_id) VALUES (?, ?, ?)',
+          [metadata.album, Math.floor(Date.now() / 1000), artistId]
+        );
+        albumId = albumResult.lastID;
+        console.log(`[UPLOAD] Created new album with ID: ${albumId}`);
+      }
+    }
+    
+    console.log(`[UPLOAD] Inserting track into database...`);
+    // Insert track into database
+    const trackResult = await dbAsync.run(
+      `INSERT INTO tracks (
+        name, duration, artist_id, album_id, user_id, file_path, 
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        metadata.title,
+        metadata.duration,
+        artistId,
+        albumId,
+        userId,
+        `/uploads/${uniqueFileName}`,
+        Math.floor(Date.now() / 1000),
+        Math.floor(Date.now() / 1000)
+      ]
+    );
+    
+    const trackId = trackResult.lastID;
+    console.log(`[UPLOAD] Track saved with ID: ${trackId}`);
+    
+    // Fetch the complete track data
+    const track = await dbAsync.get(
+      `SELECT t.*, a.name as artist_name, al.name as album_name 
+       FROM tracks t 
+       LEFT JOIN artists a ON t.artist_id = a.id 
+       LEFT JOIN albums al ON t.album_id = al.id 
+       WHERE t.id = ?`,
+      [trackId]
+    );
+    
+    console.log(`[UPLOAD] Fetched track data:`, track);
+    
+    return {
+      success: true,
+      data: {
+        id: track.id,
+        name: track.name,
+        duration: track.duration,
+        artistId: track.artist_id,
+        artist: track.artist_name ? { name: track.artist_name } : null,
+        albumId: track.album_id,
+        album: track.album_name ? { name: track.album_name } : null,
+        userId: track.user_id,
+        filePath: track.file_path,
+        createdAt: track.created_at,
+        updatedAt: track.updated_at
+      }
+    };
+    
+  } catch (error) {
+    console.error(`[UPLOAD] Error uploading track ${fileName}:`, error);
+    console.error(`[UPLOAD] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Upload failed'
+    };
+  }
+}
+
+// Debug IPC handler to test communication
+ipcMain.handle('debug:test', async (event, data) => {
+  console.log('[DEBUG] Test IPC handler called with data:', data);
+  return { success: true, message: 'IPC communication working', data };
+});
+
+ipcMain.handle('upload:single-track', async (event, { fileBuffer, fileName, userId }) => {
+  console.log('[IPC] upload:single-track handler called');
+  console.log('[IPC] Parameters:', { fileName, userId, bufferLength: fileBuffer?.length });
+  
+  try {
+    const result = await processSingleTrackUpload(fileBuffer, fileName, userId);
+    console.log('[IPC] upload:single-track result:', result);
+    return result;
+  } catch (error) {
+    console.error('[IPC] upload:single-track error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'IPC handler error'
+    };
+  }
+});
+
+ipcMain.handle('upload:batch-tracks', async (event, { files, userId }) => {
+  console.log('[IPC] upload:batch-tracks handler called');
+  console.log('[IPC] Parameters:', { 
+    filesCount: files?.length, 
+    userId,
+    fileNames: files?.map((f: { fileName: string }) => f.fileName)
+  });
+  
+  try {
+    console.log(`[BATCH UPLOAD] Processing ${files.length} files`);
+    
+    const results = [];
+    const errors = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`[BATCH UPLOAD] Processing file ${i + 1}/${files.length}: ${file.fileName}`);
+      
+      try {
+        const result = await processSingleTrackUpload(file.fileBuffer, file.fileName, userId);
+        
+        if (result.success) {
+          results.push(result.data);
+          console.log(`[BATCH UPLOAD] File ${file.fileName} uploaded successfully`);
+        } else {
+          errors.push({ fileName: file.fileName, error: result.error });
+          console.log(`[BATCH UPLOAD] File ${file.fileName} failed: ${result.error}`);
+        }
+      } catch (uploadError) {
+        const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown error';
+        errors.push({ fileName: file.fileName, error: errorMessage });
+        console.error(`[BATCH UPLOAD] File ${file.fileName} error:`, uploadError);
+      }
+    }
+    
+    const response = {
+      success: true,
+      data: {
+        uploaded: results,
+        failed: errors,
+        total: files.length,
+        successful: results.length,
+        failedCount: errors.length
+      }
+    };
+    
+    console.log('[BATCH UPLOAD] Final response:', response);
+    return response;
+    
+  } catch (error) {
+    console.error('[BATCH UPLOAD] Error processing batch:', error);
+    console.error('[BATCH UPLOAD] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Batch upload failed'
+    };
+  }
+});
+
 // Function to stop audio HTTP server
 function stopAudioServer() {
   if (audioServer) {
@@ -950,4 +1198,23 @@ function stopAudioServer() {
     console.log('Audio server stopped');
   }
 }
+
+// Log IPC handler registration
+console.log('📡 Registering IPC handlers...');
+console.log('✅ IPC handlers registered successfully');
+
+// IPC handlers for file operations
+ipcMain.handle('get-file-url', async (_, filePath: string) => {
+  try {
+    const path = require('path');
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const absolutePath = path.resolve(uploadsDir, filePath.replace('uploads/', ''));
+    const fileUrl = `file://${absolutePath}`;
+    console.log('[IPC] Converted filePath to file URL:', { filePath, fileUrl });
+    return fileUrl;
+  } catch (error) {
+    console.error('[IPC] Error converting file path to URL:', error);
+    throw error;
+  }
+});
 

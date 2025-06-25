@@ -142,6 +142,24 @@ const makeRequest = async <T = any>(
 
 // Main service object
 export const apiService = {
+  // Debug function to test IPC communication
+  async debugTest(data: any) {
+    if (isElectron) {
+      console.log('[DEBUG] Testing IPC communication...');
+      try {
+        const response = await window.electron!.ipcRenderer.invoke('debug:test', data);
+        console.log('[DEBUG] IPC test response:', response);
+        return response;
+      } catch (error) {
+        console.error('[DEBUG] IPC test error:', error);
+        throw error;
+      }
+    } else {
+      console.log('[DEBUG] Not in Electron environment');
+      return { success: false, message: 'Not in Electron environment' };
+    }
+  },
+
   // ===== Auth Methods =====
   async login(credentials: { email: string; password: string }) {
     const { data, error } = await makeRequest<{ user: User; accessToken: string; refreshToken: string }>(
@@ -469,32 +487,183 @@ export const apiService = {
 
   async uploadTrack(formData: FormData): Promise<ApiResponse<Track>> {
     try {
-      const response = await makeRequest<Track>('/tracks', {
-        method: 'POST',
-        body: formData
-      });
-      if (response.error) {
-        return { error: response.error, status: response.status };
+      console.log('[UPLOAD] uploadTrack called');
+      
+      // Check if we're in Electron environment
+      if (isElectron) {
+        console.log('[UPLOAD] Running in Electron environment');
+        
+        // Get the file from FormData
+        const file = formData.get('file') as File;
+        const name = formData.get('name') as string;
+        
+        console.log('[UPLOAD] File from FormData:', { 
+          fileName: file?.name, 
+          fileSize: file?.size, 
+          fileType: file?.type,
+          name 
+        });
+        
+        if (!file) {
+          console.error('[UPLOAD] No file provided');
+          return { error: 'No file provided', status: 400 };
+        }
+        
+        // Convert file to buffer
+        console.log('[UPLOAD] Converting file to buffer...');
+        const arrayBuffer = await file.arrayBuffer();
+        const fileBuffer = Array.from(new Uint8Array(arrayBuffer));
+        console.log('[UPLOAD] File converted to buffer, length:', fileBuffer.length);
+        
+        // Get current user ID (for now, use 1 as default test user)
+        const userId = 1; // TODO: Get from auth context
+        
+        console.log(`[UPLOAD] Uploading file: ${file.name} (${file.size} bytes) to user ${userId}`);
+        
+        // Use IPC for single file upload
+        console.log('[UPLOAD] Calling IPC upload:single-track...');
+        const response = await window.electron!.ipcRenderer.invoke('upload:single-track', {
+          fileBuffer,
+          fileName: file.name,
+          userId
+        });
+        
+        console.log('[UPLOAD] IPC response:', response);
+        
+        if (response.success) {
+          console.log('[UPLOAD] Upload successful, returning data');
+          return { data: response.data, status: 200 };
+        } else {
+          console.error('[UPLOAD] Upload failed:', response.error);
+          return { error: response.error, status: 500 };
+        }
+      } else {
+        console.log('[UPLOAD] Running in web environment, using fallback API');
+        // Fallback to web API
+        const response = await makeRequest<Track>('/tracks', {
+          method: 'POST',
+          body: formData
+        });
+        if (response.error) {
+          return { error: response.error, status: response.status };
+        }
+        // Ensure the response data matches the Track interface
+        const track = {
+          id: response.data.id,
+          name: response.data.name,
+          duration: response.data.duration,
+          artistId: response.data.artistId,
+          artist: response.data.artist,
+          albumId: response.data.albumId,
+          album: response.data.album,
+          createdAt: response.data.createdAt,
+          updatedAt: response.data.updatedAt,
+          playlists: response.data.playlists || [],
+          genres: response.data.genres || [],
+          filePath: response.data.filePath
+        };
+        return { data: track, error: null, status: 200 };
       }
-      // Ensure the response data matches the Track interface
-      const track = {
-        id: response.data.id,
-        name: response.data.name,
-        duration: response.data.duration,
-        artistId: response.data.artistId,
-        artist: response.data.artist,
-        albumId: response.data.albumId,
-        album: response.data.album,
-        createdAt: response.data.createdAt,
-        updatedAt: response.data.updatedAt,
-        playlists: response.data.playlists || [],
-        genres: response.data.genres || [],
-        filePath: response.data.filePath
-      };
-      return { data: track, error: null, status: 200 };
     } catch (error) {
-      console.error('Error uploading track:', error);
+      console.error('[UPLOAD] Error uploading track:', error);
+      console.error('[UPLOAD] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
       return { error: 'Failed to upload track', status: 500 };
+    }
+  },
+
+  async uploadBatchTracks(files: File[]): Promise<ApiResponse<{ uploaded: Track[], failed: any[], total: number, successful: number, failed: number }>> {
+    try {
+      console.log('[BATCH UPLOAD] uploadBatchTracks called with', files.length, 'files');
+      console.log('[BATCH UPLOAD] File names:', files.map(f => f.name));
+      
+      if (isElectron) {
+        console.log('[BATCH UPLOAD] Running in Electron environment');
+        
+        // Get current user ID (for now, use 1 as default test user)
+        const userId = 1; // TODO: Get from auth context
+        
+        console.log(`[BATCH UPLOAD] Processing ${files.length} files for user ${userId}`);
+        
+        // Convert files to buffers
+        console.log('[BATCH UPLOAD] Converting files to buffers...');
+        const fileData = await Promise.all(
+          files.map(async (file, index) => {
+            console.log(`[BATCH UPLOAD] Converting file ${index + 1}/${files.length}: ${file.name}`);
+            const arrayBuffer = await file.arrayBuffer();
+            const fileBuffer = Array.from(new Uint8Array(arrayBuffer));
+            console.log(`[BATCH UPLOAD] File ${file.name} converted, buffer length: ${fileBuffer.length}`);
+            return {
+              fileBuffer,
+              fileName: file.name
+            };
+          })
+        );
+        
+        console.log('[BATCH UPLOAD] All files converted, calling IPC...');
+        
+        // Use IPC for batch upload
+        const response = await window.electron!.ipcRenderer.invoke('upload:batch-tracks', {
+          files: fileData,
+          userId
+        });
+        
+        console.log('[BATCH UPLOAD] IPC response:', response);
+        
+        if (response.success) {
+          console.log('[BATCH UPLOAD] Batch upload successful');
+          return { data: response.data, status: 200 };
+        } else {
+          console.error('[BATCH UPLOAD] Batch upload failed:', response.error);
+          return { error: response.error, status: 500 };
+        }
+      } else {
+        console.log('[BATCH UPLOAD] Running in web environment, using fallback API');
+        // Fallback to web API - upload files one by one
+        const results = [];
+        const errors = [];
+        
+        for (const file of files) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+            
+            const response = await makeRequest<Track>('/tracks', {
+              method: 'POST',
+              body: formData
+            });
+            
+            if (response.error) {
+              errors.push({ fileName: file.name, error: response.error });
+            } else {
+              results.push(response.data);
+            }
+          } catch (error) {
+            errors.push({ fileName: file.name, error: error instanceof Error ? error.message : 'Upload failed' });
+          }
+        }
+        
+        return {
+          data: {
+            uploaded: results,
+            failed: errors,
+            total: files.length,
+            successful: results.length,
+            failed: errors.length
+          },
+          status: 200
+        };
+      }
+    } catch (error) {
+      console.error('[BATCH UPLOAD] Error uploading batch tracks:', error);
+      console.error('[BATCH UPLOAD] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
+      return { error: 'Failed to upload batch tracks', status: 500 };
     }
   },
 

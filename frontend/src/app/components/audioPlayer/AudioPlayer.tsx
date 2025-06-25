@@ -158,134 +158,154 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       return;
     }
     
-    // Check if the file path is accessible
-    if (!track.filePath.startsWith('http') && !track.filePath.startsWith('file://') && !track.filePath.startsWith('/')) {
-      console.error('AudioPlayer: Invalid file path format:', track.filePath);
-      return;
+    // Convert relative file path to absolute file URL for local-first app
+    let audioUrl = track.filePath;
+    if (!track.filePath.startsWith('http') && !track.filePath.startsWith('file://')) {
+      // For local-first app, use IPC to get the file URL from main process
+      (async () => {
+        try {
+          audioUrl = await window.electron.ipcRenderer.invoke('get-file-url', track.filePath);
+          console.log('AudioPlayer: Got file URL from IPC:', audioUrl);
+          
+          // Now create WaveSurfer with the proper file URL
+          createWaveSurfer(audioUrl);
+        } catch (error) {
+          console.error('AudioPlayer: Error getting file URL from IPC:', error);
+          // Fallback to original path
+          createWaveSurfer(track.filePath);
+        }
+      })();
+      return; // Exit early, WaveSurfer will be created in the async callback
     }
     
-    // Validate container element
-    if (!waveformRef.current || !waveformRef.current.offsetWidth || !waveformRef.current.offsetHeight) {
-      console.error('AudioPlayer: Container element is not properly initialized');
-      return;
-    }
+    // If we already have a proper URL, create WaveSurfer directly
+    createWaveSurfer(audioUrl);
     
-    try {
-      // Create WaveSurfer instance without regions plugin first
-      console.log('AudioPlayer: About to create WaveSurfer with config:', {
-        container: waveformRef.current,
-        waveColor: '#e5e7eb',
-        progressColor: '#3b82f6',
-        height: 120,
-        normalize: true,
-        url: track.filePath,
-      });
+    // Helper function to create WaveSurfer instance
+    function createWaveSurfer(url: string) {
+      // Validate container element
+      if (!waveformRef.current || !waveformRef.current.offsetWidth || !waveformRef.current.offsetHeight) {
+        console.error('AudioPlayer: Container element is not properly initialized');
+        return;
+      }
       
-      let ws;
       try {
-        ws = WaveSurfer.create({
+        // Create WaveSurfer instance without regions plugin first
+        console.log('AudioPlayer: About to create WaveSurfer with config:', {
           container: waveformRef.current,
           waveColor: '#e5e7eb',
           progressColor: '#3b82f6',
           height: 120,
           normalize: true,
-          url: track.filePath,
-        }) as any;
-        console.log('AudioPlayer: WaveSurfer.create() completed successfully');
-      } catch (createError) {
-        console.error('AudioPlayer: Error in WaveSurfer.create():', createError);
-        throw createError; // Re-throw to be caught by outer try-catch
-      }
-
-      console.log('AudioPlayer: WaveSurfer instance created successfully:', ws);
-
-      // Set up event listeners
-      (ws as any).on('error', (error: any) => {
-        console.error('AudioPlayer: WaveSurfer error:', error);
-        // Set a fallback state if WaveSurfer fails
-        setIsReady(false);
-        setDuration(0);
-        setCurrentTime(0);
-      });
-
-      (ws as any).on('ready', () => {
-        console.log('AudioPlayer: WaveSurfer is ready!');
-        waveSurferRef.current = ws;
-        setDuration(ws.getDuration());
-        setIsReady(true);
+          url: url,
+        });
         
-        // Set initial volume and playback rate
-        ws.setVolume(volume);
-        ws.setPlaybackRate(playbackSpeed);
-
-        // Now create and initialize the regions plugin manually
+        let ws;
         try {
-          console.log('AudioPlayer: Creating regions plugin...');
-          // Create regions plugin
-          const regionsPlugin = RegionsPlugin.create();
-          console.log('AudioPlayer: Regions plugin created successfully');
-          
-          // Add plugin to wavesurfer
-          console.log('AudioPlayer: Registering regions plugin...');
-          ws.registerPlugin(regionsPlugin);
-          console.log('AudioPlayer: Regions plugin registered successfully');
-          
-          // Store reference to regions plugin
-          regionsRef.current = regionsPlugin;
-          
-          console.log('Regions plugin initialized successfully');
-          
-          // Add event listeners for regions
-          regionsPlugin.on('region-clicked', (region: any, e: MouseEvent) => {
-            e.stopPropagation();
-            console.log('Region clicked:', region);
-          });
-          
-          // Don't create regions here - they will be created in the markers effect
-          console.log('Regions plugin ready - regions will be created when markers are available');
-          
-        } catch (error) {
-          console.error('Error initializing regions plugin:', error);
-          // Don't fail the entire initialization if regions plugin fails
-          regionsRef.current = null;
+          ws = WaveSurfer.create({
+            container: waveformRef.current,
+            waveColor: '#e5e7eb',
+            progressColor: '#3b82f6',
+            height: 120,
+            normalize: true,
+            url: url,
+          }) as any;
+          console.log('AudioPlayer: WaveSurfer.create() completed successfully');
+        } catch (createError) {
+          console.error('AudioPlayer: Error in WaveSurfer.create():', createError);
+          throw createError; // Re-throw to be caught by outer try-catch
         }
-      });
 
-      (ws as any).on('audioprocess', () => {
-        if ((ws as any).isPlaying()) {
-          const currentTime = (ws as any).getCurrentTime();
-          setCurrentTime(currentTime);
-          onSeek(currentTime);
-        }
-      });
+        console.log('AudioPlayer: WaveSurfer instance created successfully:', ws);
 
-      (ws as any).on('seek', (time: number) => {
-        setCurrentTime(time);
-        onSeek(time);
-      });
+        // Set up event listeners
+        (ws as any).on('error', (error: any) => {
+          console.error('AudioPlayer: WaveSurfer error:', error);
+          // Set a fallback state if WaveSurfer fails
+          setIsReady(false);
+          setDuration(0);
+          setCurrentTime(0);
+        });
 
-      // Cleanup
-      return () => {
-        console.log('AudioPlayer: Cleaning up WaveSurfer instance');
-        if (ws) {
+        (ws as any).on('ready', () => {
+          console.log('AudioPlayer: WaveSurfer is ready!');
+          waveSurferRef.current = ws;
+          setDuration(ws.getDuration());
+          setIsReady(true);
+          
+          // Set initial volume and playback rate
+          ws.setVolume(volume);
+          ws.setPlaybackRate(playbackSpeed);
+
+          // Now create and initialize the regions plugin manually
           try {
-            // Prevent AbortError by removing all event listeners first
-            try {
-              (ws as any).unAll(); // Remove all event listeners
-            } catch (error) {
-              console.error('Error removing event listeners:', error);
-            }
+            console.log('AudioPlayer: Creating regions plugin...');
+            // Create regions plugin
+            const regionsPlugin = RegionsPlugin.create();
+            console.log('AudioPlayer: Regions plugin created successfully');
             
-            // Don't use setTimeout as it's still causing issues
-            // Just set the reference to null and let garbage collection handle it
-            waveSurferRef.current = null;
+            // Add plugin to wavesurfer
+            console.log('AudioPlayer: Registering regions plugin...');
+            ws.registerPlugin(regionsPlugin);
+            console.log('AudioPlayer: Regions plugin registered successfully');
+            
+            // Store reference to regions plugin
+            regionsRef.current = regionsPlugin;
+            
+            console.log('Regions plugin initialized successfully');
+            
+            // Add event listeners for regions
+            regionsPlugin.on('region-clicked', (region: any, e: MouseEvent) => {
+              e.stopPropagation();
+              console.log('Region clicked:', region);
+            });
+            
+            // Don't create regions here - they will be created in the markers effect
+            console.log('Regions plugin ready - regions will be created when markers are available');
+            
           } catch (error) {
-            console.error('Error during WaveSurfer cleanup:', error);
+            console.error('Error initializing regions plugin:', error);
+            // Don't fail the entire initialization if regions plugin fails
+            regionsRef.current = null;
           }
-        }
-      };
-    } catch (error) {
-      console.error('Error creating WaveSurfer instance:', error);
+        });
+
+        (ws as any).on('audioprocess', () => {
+          if ((ws as any).isPlaying()) {
+            const currentTime = (ws as any).getCurrentTime();
+            setCurrentTime(currentTime);
+            onSeek(currentTime);
+          }
+        });
+
+        (ws as any).on('seek', (time: number) => {
+          setCurrentTime(time);
+          onSeek(time);
+        });
+
+        // Cleanup
+        return () => {
+          console.log('AudioPlayer: Cleaning up WaveSurfer instance');
+          if (ws) {
+            try {
+              // Prevent AbortError by removing all event listeners first
+              try {
+                (ws as any).unAll(); // Remove all event listeners
+              } catch (error) {
+                console.error('Error removing event listeners:', error);
+              }
+              
+              // Don't use setTimeout as it's still causing issues
+              // Just set the reference to null and let garbage collection handle it
+              waveSurferRef.current = null;
+            } catch (error) {
+              console.error('Error during WaveSurfer cleanup:', error);
+            }
+          }
+        };
+      } catch (error) {
+        console.error('Error creating WaveSurfer instance:', error);
+      }
     }
   }, [track?.filePath, volume, playbackSpeed]);
 
