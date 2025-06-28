@@ -1,16 +1,16 @@
 {
-  "compilerOptions": {
-    "module": "CommonJS",
-    "target": "ESNext",
-    "outDir": "./dist",
-    "strict": true,
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "allowJs": true,
-    "allowSyntheticDefaultImports": true,
+    "compilerOptions": {
+      "module": "CommonJS",
+      "target": "ESNext",
+      "outDir": "./dist",
+      "strict": true,
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "allowJs": true,
+      "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
-    "paths": {
+      "paths": {
       "@shared/*": ["../shared/*"]
     },
     "sourceMap": true,
@@ -18,8 +18,8 @@
   },
   "ts-node": {
     "require": ["tsconfig-paths/register"]
-  },
+    },
   "include": ["src/**/*", "../shared/**/*"],
   "exclude": ["node_modules", "dist"]
-}
+  }
   

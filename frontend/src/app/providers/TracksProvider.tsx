@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useState, useCallback, useEffect, useMemo, useContext } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Track } from '../../../../shared/types';
 import { useAuth } from '../hooks/UseAuth';
 import { apiService } from '../../services/electronApiService';
@@ -62,6 +62,12 @@ const defaultContextValue: TracksContextType = {
 };
 
 export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
+  // console.log('🎯 TracksProvider component rendering...');
+  console.log('🎯 TracksProvider component mounted/rendered at:', new Date().toISOString());
+  
+  // TEST: Simple test to see if component is mounting
+  console.log('🎯 TracksProvider: Component is mounting...');
+  
   // State
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
@@ -71,8 +77,20 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Auth
+  // TEST: Simple test state to see if state changes work
+  const [testState, setTestState] = useState<number>(0);
+  
+  // Auth (optional for local-first app)
   const { token, refreshToken, setToken } = useAuth();
+  
+  console.log('🎯 TracksProvider state:', { 
+    tracksLength: tracks.length, 
+    isLoading, 
+    error,
+    token: token ? 'present' : 'null',
+    tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+    testState
+  });
   
   // Derived state
   const currentTrack = useMemo(() => 
@@ -80,23 +98,68 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     [currentTrackIndex, tracks]
   );
   
-  // Fetch tracks when token is available
-  useEffect(() => {
-    if (token) {
-      fetchTracks().catch(err => {
-        console.error("Error in fetchTracks effect:", err);
-        setError("Failed to load tracks");
-      });
-    }
-  }, [token]);
+  // FIXED: Use a ref to track if the component is mounted
+  const isMountedRef = useRef(false);
   
+  useEffect(() => {
+    // Set mounted flag
+    isMountedRef.current = true;
+    
+    console.log('🎯 TracksProvider: Initial useEffect FIRED at:', new Date().toISOString());
+    
+    const loadTracks = async () => {
+      if (!isMountedRef.current) return;
+      
+      try {
+        console.log('🎯 TracksProvider: Starting to load tracks...');
+        setIsLoading(true);
+        
+        const response = await apiService.getTracks();
+        console.log('🎯 TracksProvider: API response:', response);
+        
+        if (!isMountedRef.current) return;
+        
+        if (response.data && Array.isArray(response.data)) {
+          console.log('🎯 TracksProvider: Setting tracks:', response.data);
+          setTracks(response.data);
+          
+          if (response.data.length > 0) {
+            setCurrentTrackIndex(0); // Auto-select first track
+          }
+          
+          console.log('🎯 TracksProvider: Tracks loaded successfully!');
+        } else {
+          console.log('🎯 TracksProvider: No tracks found in response or invalid format');
+          setTracks([]);
+        }
+      } catch (error) {
+        if (!isMountedRef.current) return;
+        console.error('🎯 TracksProvider: Error loading tracks:', error);
+        setError('Failed to load tracks');
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    // Load tracks immediately
+    loadTracks();
+    
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);  // Empty dependency array - run once on mount
+
+  // TEST: Simple useEffect to see if any useEffect fires
+  useEffect(() => {
+    console.log('🎯 TracksProvider: TEST useEffect FIRED at:', new Date().toISOString());
+    setTestState(prev => prev + 1);
+  }, []);
+
   // Fetch a single track by ID
   const fetchTrack = useCallback(async (id: number): Promise<Track | undefined> => {
-    if (!token) {
-      setError("Authentication required");
-      return undefined;
-    }
-
     try {
       setIsLoading(true);
       const track = await apiService.getTrackById(id);
@@ -108,22 +171,32 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, []); // Remove token dependency for local-first app
   
   // Fetch all tracks with retry logic
   const fetchTracks = useCallback(async () => {
+    console.log('🎯 TracksProvider fetchTracks called...');
     try {
       setIsLoading(true);
+      console.log('🎯 TracksProvider calling apiService.getTracks()...');
       const response = await apiService.getTracks();
+      console.log('🎯 TracksProvider getTracks response:', response);
+      
       if (response.error) {
+        console.error('🎯 TracksProvider API returned error:', response.error);
         throw new Error(response.error);
       }
-      setTracks(response.data || []);
+      
+      const tracksToSet = response.data || [];
+      console.log('🎯 TracksProvider setting tracks:', tracksToSet);
+      setTracks(tracksToSet);
+      console.log('🎯 TracksProvider tracks set successfully, new length should be:', tracksToSet.length);
     } catch (error) {
-      console.error('Error fetching tracks:', error);
+      console.error('🎯 TracksProvider Error fetching tracks:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch tracks');
     } finally {
       setIsLoading(false);
+      console.log('🎯 TracksProvider fetchTracks completed');
     }
   }, []);
   
@@ -132,11 +205,6 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     trackId: number, 
     updates: Partial<Omit<Track, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<Track | undefined> => {
-    if (!token) {
-      setError("Authentication required");
-      return undefined;
-    }
-
     try {
       setIsLoading(true);
       const updatedTrack = await apiService.updateTrackMetadata(trackId, updates);
@@ -156,7 +224,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, []); // Remove token dependency for local-first app
   
   // Update a single field of a track
   const updateTrackField = useCallback(async (

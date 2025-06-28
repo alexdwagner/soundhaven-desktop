@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import type { WaveSurfer as WaveSurferType } from 'wavesurfer.js';
 import type { Region } from 'wavesurfer.js/dist/plugins/regions';
-import RegionsPlugin from "wavesurfer.js/dist/plugins/regions";
+import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { useComments } from "@/app/hooks/useComments";
 import { Marker as MarkerType } from "../../../../../shared/types";
 
@@ -24,6 +24,7 @@ declare module 'wavesurfer.js' {
     setTime: (time: number) => void;
     setVolume: (volume: number) => void;
     setPlaybackRate: (rate: number) => void;
+    load: (url: string) => Promise<void>;
     on: (event: string, callback: (...args: any[]) => void) => void;
     destroy: () => void;
   }
@@ -122,7 +123,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  
+  const [audioUrl, setAudioUrl] = useState<string>('');
+  const [isPlayingState, setIsPlaying] = useState(isPlaying);
+  const [volumeState, setVolume] = useState(volume);
+  const [playbackSpeedState, setPlaybackSpeed] = useState(playbackSpeed);
+
+  // Sync internal isPlayingState with external isPlaying prop
+  useEffect(() => {
+    console.log('🎵 AudioPlayer: isPlaying prop changed:', isPlaying);
+    setIsPlaying(isPlaying);
+    
+    // If we should be playing and WaveSurfer is ready, start playback
+    if (isPlaying && waveSurferRef.current && isReady) {
+      console.log('🎵 AudioPlayer: Auto-starting playback from prop change');
+      try {
+        waveSurferRef.current.play();
+      } catch (error) {
+        console.error('❌ AudioPlayer: Error auto-starting playback:', error);
+      }
+    } else if (!isPlaying && waveSurferRef.current) {
+      console.log('🎵 AudioPlayer: Auto-pausing playback from prop change');
+      try {
+        waveSurferRef.current.pause();
+      } catch (error) {
+        console.error('❌ AudioPlayer: Error auto-pausing playback:', error);
+      }
+    }
+  }, [isPlaying, isReady]);
+
   // Get markers from comments context
   const { markers, setSelectedCommentId, regionCommentMap, setRegionCommentMap } = useComments(waveSurferRef as any, regionsRef as any);
 
@@ -134,301 +162,307 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('markers type:', typeof markers);
   }, [markers]);
 
-  // Initialize WaveSurfer
-  useEffect(() => {
-    // Early return if no track is provided
-    if (!track) {
-      console.log('AudioPlayer: No track provided, skipping WaveSurfer initialization');
-      return;
-    }
-    
-    console.log('AudioPlayer: Initializing WaveSurfer with track:', track);
-    console.log('AudioPlayer: filePath:', track?.filePath);
-    
-    if (!waveformRef.current || !track?.filePath) {
-      console.log('AudioPlayer: Missing waveformRef or filePath, returning early');
-      return;
-    }
+  // Enhanced error handling and logging for WaveSurfer
+  const handleWaveSurferError = useCallback((error: any, url: string) => {
+    console.error('🎵 AudioPlayer: WaveSurfer error occurred:', {
+      errorType: error.constructor.name,
+      message: error.message,
+      stack: error.stack,
+      url: url,
+      trackId: track?.id,
+      trackName: track?.name,
+      timestamp: new Date().toISOString()
+    });
 
-    console.log('AudioPlayer: Creating WaveSurfer instance...');
-    
-    // Validate the audio file path
-    if (!track.filePath || typeof track.filePath !== 'string') {
-      console.error('AudioPlayer: Invalid filePath:', track.filePath);
-      return;
-    }
-    
-    // Convert relative file path to absolute file URL for local-first app
-    let audioUrl = track.filePath;
-    if (!track.filePath.startsWith('http') && !track.filePath.startsWith('file://')) {
-      // For local-first app, use IPC to get the file URL from main process
-      (async () => {
-        try {
-          audioUrl = await window.electron.ipcRenderer.invoke('get-file-url', track.filePath);
-          console.log('AudioPlayer: Got file URL from IPC:', audioUrl);
-          
-          // Now create WaveSurfer with the proper file URL
-          createWaveSurfer(audioUrl);
-        } catch (error) {
-          console.error('AudioPlayer: Error getting file URL from IPC:', error);
-          // Fallback to original path
-          createWaveSurfer(track.filePath);
-        }
-      })();
-      return; // Exit early, WaveSurfer will be created in the async callback
-    }
-    
-    // If we already have a proper URL, create WaveSurfer directly
-    createWaveSurfer(audioUrl);
-    
-    // Helper function to create WaveSurfer instance
-    function createWaveSurfer(url: string) {
-      // Validate container element
-      if (!waveformRef.current || !waveformRef.current.offsetWidth || !waveformRef.current.offsetHeight) {
-        console.error('AudioPlayer: Container element is not properly initialized');
-        return;
-      }
+    // Check if it's a local file access error
+    if (url.startsWith('file://') && error.message.includes('Failed to fetch')) {
+      console.log('🔄 AudioPlayer: Local file access failed, attempting audio server fallback...');
       
-      try {
-        // Create WaveSurfer instance without regions plugin first
-        console.log('AudioPlayer: About to create WaveSurfer with config:', {
-          container: waveformRef.current,
-          waveColor: '#e5e7eb',
-          progressColor: '#3b82f6',
-          height: 120,
-          normalize: true,
-          url: url,
-        });
-        
-        let ws;
-        try {
-          ws = WaveSurfer.create({
-            container: waveformRef.current,
-            waveColor: '#e5e7eb',
-            progressColor: '#3b82f6',
-            height: 120,
-            normalize: true,
-            url: url,
-          }) as any;
-          console.log('AudioPlayer: WaveSurfer.create() completed successfully');
-        } catch (createError) {
-          console.error('AudioPlayer: Error in WaveSurfer.create():', createError);
-          throw createError; // Re-throw to be caught by outer try-catch
-        }
-
-        console.log('AudioPlayer: WaveSurfer instance created successfully:', ws);
-
-        // Set up event listeners
-        (ws as any).on('error', (error: any) => {
-          console.error('AudioPlayer: WaveSurfer error:', error);
-          // Set a fallback state if WaveSurfer fails
-          setIsReady(false);
-          setDuration(0);
-          setCurrentTime(0);
-        });
-
-        (ws as any).on('ready', () => {
-          console.log('AudioPlayer: WaveSurfer is ready!');
-          waveSurferRef.current = ws;
-          setDuration(ws.getDuration());
-          setIsReady(true);
-          
-          // Set initial volume and playback rate
-          ws.setVolume(volume);
-          ws.setPlaybackRate(playbackSpeed);
-
-          // Now create and initialize the regions plugin manually
-          try {
-            console.log('AudioPlayer: Creating regions plugin...');
-            // Create regions plugin
-            const regionsPlugin = RegionsPlugin.create();
-            console.log('AudioPlayer: Regions plugin created successfully');
-            
-            // Add plugin to wavesurfer
-            console.log('AudioPlayer: Registering regions plugin...');
-            ws.registerPlugin(regionsPlugin);
-            console.log('AudioPlayer: Regions plugin registered successfully');
-            
-            // Store reference to regions plugin
-            regionsRef.current = regionsPlugin;
-            
-            console.log('Regions plugin initialized successfully');
-            
-            // Add event listeners for regions
-            regionsPlugin.on('region-clicked', (region: any, e: MouseEvent) => {
-              e.stopPropagation();
-              console.log('Region clicked:', region);
-            });
-            
-            // Don't create regions here - they will be created in the markers effect
-            console.log('Regions plugin ready - regions will be created when markers are available');
-            
-          } catch (error) {
-            console.error('Error initializing regions plugin:', error);
-            // Don't fail the entire initialization if regions plugin fails
-            regionsRef.current = null;
-          }
-        });
-
-        (ws as any).on('audioprocess', () => {
-          if ((ws as any).isPlaying()) {
-            const currentTime = (ws as any).getCurrentTime();
-            setCurrentTime(currentTime);
-            onSeek(currentTime);
-          }
-        });
-
-        (ws as any).on('seek', (time: number) => {
-          setCurrentTime(time);
-          onSeek(time);
-        });
-
-        // Cleanup
-        return () => {
-          console.log('AudioPlayer: Cleaning up WaveSurfer instance');
-          if (ws) {
-            try {
-              // Prevent AbortError by removing all event listeners first
-              try {
-                (ws as any).unAll(); // Remove all event listeners
-              } catch (error) {
-                console.error('Error removing event listeners:', error);
-              }
-              
-              // Don't use setTimeout as it's still causing issues
-              // Just set the reference to null and let garbage collection handle it
-              waveSurferRef.current = null;
-            } catch (error) {
-              console.error('Error during WaveSurfer cleanup:', error);
-            }
-          }
-        };
-      } catch (error) {
-        console.error('Error creating WaveSurfer instance:', error);
-      }
-    }
-  }, [track?.filePath, volume, playbackSpeed]);
-
-  // Handle play/pause
-  useEffect(() => {
-    if (!waveSurferRef.current || !isReady) return;
-
-    if (isPlaying) {
-      // @ts-ignore - The play method exists
-      waveSurferRef.current.play().catch(console.error);
-    } else {
-      // @ts-ignore - The pause method exists
-      waveSurferRef.current.pause();
-    }
-  }, [isPlaying, isReady]);
-
-  // Handle seek
-  const handleSeek = useCallback((time: number) => {
-    if (waveSurferRef.current) {
-      const seekTime = Math.min(Math.max(0, time), duration || 0);
-      waveSurferRef.current.setTime(seekTime);
-      setCurrentTime(seekTime);
-      onSeek(seekTime);
-    }
-  }, [duration, onSeek]);
-
-  // Handle volume change
-  useEffect(() => {
-    if (waveSurferRef.current) {
-      waveSurferRef.current.setVolume(volume);
-    }
-  }, [volume]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
+      // Convert file:// URL to audio server URL
+      const fileName = url.split('/').pop();
+      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+      
+      console.log('🔄 AudioPlayer: Fallback URL:', {
+        originalUrl: url,
+        fallbackUrl: audioServerUrl,
+        fileName: fileName
+      });
+      
+      // Try loading with audio server URL
       if (waveSurferRef.current) {
-        waveSurferRef.current.destroy();
-        waveSurferRef.current = null;
+        try {
+          console.log('🔄 AudioPlayer: Loading audio with fallback URL...');
+          waveSurferRef.current.load(audioServerUrl);
+        } catch (fallbackError) {
+          console.error('❌ AudioPlayer: Fallback loading also failed:', {
+            error: fallbackError,
+            fallbackUrl: audioServerUrl
+          });
+        }
       }
-    };
+    } else {
+      console.error('❌ AudioPlayer: Non-local file error, cannot use fallback:', {
+        error: error,
+        url: url
+      });
+    }
+  }, [track]);
+
+  // Enhanced getFileUrl function with better error handling
+  const getFileUrl = useCallback(async (filePath: string): Promise<string> => {
+    console.log('🎵 AudioPlayer: Getting file URL for:', filePath);
+    
+    try {
+      // For Electron, always use audio server for better compatibility
+      const fileName = filePath.replace('/uploads/', '');
+      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+      
+      console.log('🎵 AudioPlayer: Using audio server URL for better compatibility:', {
+        originalPath: filePath,
+        fileName: fileName,
+        audioServerUrl: audioServerUrl
+      });
+      
+      return audioServerUrl;
+      
+    } catch (error) {
+      console.warn('⚠️ AudioPlayer: Error getting file URL, using fallback:', {
+        error: error,
+        filePath: filePath
+      });
+      
+      // Fallback to audio server
+      const fileName = filePath.replace('/uploads/', '');
+      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+      
+      console.log('🎵 AudioPlayer: Using audio server fallback:', {
+        originalPath: filePath,
+        fileName: fileName,
+        fallbackUrl: audioServerUrl
+      });
+      
+      return audioServerUrl;
+    }
   }, []);
 
-  // Handle playback speed change
-  useEffect(() => {
-    if (waveSurferRef.current) {
-      waveSurferRef.current.setPlaybackRate(playbackSpeed);
+  // Enhanced WaveSurfer initialization with better error handling and singleton enforcement
+  const initializeWaveSurfer = useCallback(async () => {
+    if (!track || !waveformRef.current) {
+      console.log('🎵 AudioPlayer: Cannot initialize WaveSurfer - missing track or container');
+      return;
     }
-  }, [playbackSpeed]);
 
-  // Add regions for markers from comments context
-  useEffect(() => {
-    console.log('🎯 MARKERS EFFECT TRIGGERED - markers:', markers?.length || 0);
-    console.log('🎯 Dependencies - markers:', markers);
-    console.log('🎯 Dependencies - markers?.length:', markers?.length);
-    console.log('🎯 Dependencies - setRegionCommentMap:', !!setRegionCommentMap);
-    console.log('🎯 Dependencies - isReady:', isReady);
-    
-    // Check if we have a valid track loaded
-    if (!track) {
-      console.log('❌ No track loaded, skipping marker regions');
+    // Destroy any existing instance before creating a new one
+    if (waveSurferRef.current) {
+      try {
+        console.log('🧹 AudioPlayer: Destroying previous WaveSurfer instance...');
+        
+        // Properly pause and stop the audio first
+        if (waveSurferRef.current.isPlaying()) {
+          waveSurferRef.current.pause();
+        }
+        
+        // Clear all event listeners
+        waveSurferRef.current.unAll();
+        
+        // Destroy the instance
+        waveSurferRef.current.destroy();
+        waveSurferRef.current = null;
+        setIsReady(false);
+        
+        // Add a small delay to ensure proper cleanup
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (destroyError) {
+        console.error('❌ AudioPlayer: Error destroying previous instance:', destroyError);
+      }
+    }
+
+    try {
+      console.log('🎵 AudioPlayer: Creating new WaveSurfer instance...');
+      
+      // Get the file URL
+      const fileUrl = await getFileUrl(track.filePath);
+      
+      // Type check to ensure we have a string URL
+      if (typeof fileUrl !== 'string') {
+        throw new Error(`Invalid file URL type: ${typeof fileUrl}, expected string`);
+      }
+      
+      console.log('🎵 AudioPlayer: File URL resolved:', {
+        originalPath: track.filePath,
+        resolvedUrl: fileUrl,
+        urlType: typeof fileUrl
+      });
+
+      // Create WaveSurfer instance
+      console.log('🎵 AudioPlayer: Creating WaveSurfer instance...');
+      const wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: '#4F46E5',
+        progressColor: '#7C3AED',
+        cursorColor: '#1F2937',
+        barWidth: 2,
+        barRadius: 3,
+        cursorWidth: 1,
+        height: 128,
+        barGap: 3,
+        responsive: true,
+        normalize: true,
+        backend: 'WebAudio',
+        plugins: [
+          RegionsPlugin.create({
+            dragSelection: {
+              slop: 5
+            }
+          })
+        ]
+      });
+
+      waveSurferRef.current = wavesurfer;
+      
+      // Get the regions plugin instance - use the correct API for WaveSurfer v7
+      let regionsPlugin = null;
+      try {
+        // Try multiple ways to access the regions plugin
+        console.log('🔍 Debugging regions plugin access...');
+        console.log('wavesurfer object keys:', Object.keys(wavesurfer));
+        console.log('wavesurfer.regions:', wavesurfer.regions);
+        
+        if (wavesurfer.regions) {
+          regionsPlugin = wavesurfer.regions;
+          regionsRef.current = regionsPlugin;
+          console.log('✅ Regions plugin found via wavesurfer.regions');
+        } else if (wavesurfer.plugins && Array.isArray(wavesurfer.plugins)) {
+          regionsPlugin = wavesurfer.plugins.find(plugin => 
+            plugin && typeof plugin === 'object' && 'addRegion' in plugin
+          );
+          if (regionsPlugin) {
+            regionsRef.current = regionsPlugin;
+            console.log('✅ Regions plugin found via wavesurfer.plugins array');
+          }
+        }
+        
+        if (regionsPlugin) {
+          // Add markers if they exist
+          if (markers && markers.length > 0) {
+            console.log('🎯 Adding markers after regions plugin ready:', markers.length);
+            addMarkersToWaveform();
+          }
+        } else {
+          console.warn('⚠️ Regions plugin not found, trying delayed access');
+          // Try again after a short delay
+          setTimeout(() => {
+            if (wavesurfer.regions) {
+              regionsRef.current = wavesurfer.regions;
+              console.log('✅ Regions plugin found via delayed access');
+              
+              if (markers && markers.length > 0) {
+                console.log('🎯 Adding markers after delayed regions plugin ready:', markers.length);
+                addMarkersToWaveform();
+              }
+            } else {
+              console.warn('⚠️ Regions plugin still not found after delay');
+            }
+          }, 200);
+        }
+      } catch (error) {
+        console.error('❌ Error accessing regions plugin:', error);
+      }
+      
+      console.log('🎵 AudioPlayer: WaveSurfer instance created successfully:', {
+        container: waveformRef.current,
+        hasRegions: !!wavesurfer.regions,
+        regionsPlugin: !!regionsPlugin
+      });
+
+      // Set up event listeners
+      wavesurfer.on('ready', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer ready event');
+        setIsReady(true);
+        setDuration(wavesurfer.getDuration());
+        
+        // Add markers after WaveSurfer is ready
+        if (markers && markers.length > 0) {
+          console.log('🎯 Adding markers after WaveSurfer ready:', markers.length);
+          addMarkersToWaveform();
+        }
+      });
+
+      wavesurfer.on('play', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer play event');
+        setIsPlaying(true);
+      });
+
+      wavesurfer.on('pause', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer pause event');
+        setIsPlaying(false);
+      });
+
+      wavesurfer.on('finish', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer finish event');
+        setIsPlaying(false);
+        onNext();
+      });
+
+      wavesurfer.on('timeupdate', (currentTime: number) => {
+        setCurrentTime(currentTime);
+      });
+
+      wavesurfer.on('loading', (progress: number) => {
+        // console.log('🎵 AudioPlayer: WaveSurfer loading progress:', {
+        //   progress: progress,
+        //   trackId: track.id
+        // });
+      });
+
+      wavesurfer.on('error', (error: any) => {
+        console.error('🎵 AudioPlayer: WaveSurfer error event triggered:', error);
+      });
+
+      // Load the audio file
+      console.log('🎵 AudioPlayer: Loading audio file...');
+      try {
+        await wavesurfer.load(fileUrl);
+        console.log('🎵 AudioPlayer: Audio file loaded successfully');
+      } catch (loadError) {
+        console.error('❌ AudioPlayer: Failed to load audio file:', loadError);
+        throw loadError;
+      }
+
+      console.log('🎵 AudioPlayer: WaveSurfer initialization completed successfully');
+
+    } catch (error) {
+      console.error('🎵 AudioPlayer: WaveSurfer error occurred:', error);
+      
+      // Check if it's a CORS or network error
+      if (error.message && error.message.includes('CORS')) {
+        console.error('❌ AudioPlayer: CORS error detected, cannot use fallback');
+      } else if (error.message && error.message.includes('fetch')) {
+        console.error('❌ AudioPlayer: Network error detected');
+      } else {
+        console.error('❌ AudioPlayer: Non-local file error, cannot use fallback:', error);
+      }
+      
+      console.error('❌ AudioPlayer: Failed to load audio file:', error);
+    }
+  }, [track?.id, track?.filePath]);
+
+  // Function to add markers to waveform
+  const addMarkersToWaveform = useCallback(() => {
+    if (!regionsRef.current || !markers || markers.length === 0) {
+      console.log('🎯 Cannot add markers - missing regions plugin or no markers');
       return;
     }
-    
-    console.log('=== MARKERS EFFECT TRIGGERED ===');
-    console.log('waveSurferRef.current:', !!waveSurferRef.current);
-    console.log('regionsRef.current:', !!regionsRef.current);
-    console.log('markers:', markers);
-    console.log('markers length:', markers?.length);
-    console.log('markers type:', typeof markers);
-    console.log('markers is array:', Array.isArray(markers));
-    console.log('isReady:', isReady);
-    
-    // More robust check for WaveSurfer initialization
-    if (!waveSurferRef.current || typeof waveSurferRef.current.getDuration !== 'function') {
-      console.log('❌ waveSurferRef.current is null or not properly initialized, skipping marker regions');
-      return;
-    }
-    
-    if (!regionsRef.current || typeof regionsRef.current.addRegion !== 'function') {
-      console.log('❌ regionsRef.current is null or not properly initialized, skipping marker regions');
-      console.log('This is normal if regions plugin failed to initialize - markers will not be shown');
-      return;
-    }
-    
-    if (!isReady) {
-      console.log('❌ WaveSurfer not ready yet, skipping marker regions');
-      return;
-    }
-    
-    // if (!markers?.length) {
-    //   console.log('❌ No markers available, skipping marker regions');
-    //   console.log('markers value:', markers);
-    //   return;
-    // }
-    
-    console.log('✅ All conditions met, adding marker regions to waveform');
-    console.log('Markers to add:', markers);
+
+    console.log('🎯 Adding markers to waveform:', markers.length);
     
     try {
       // Clear existing regions
-      console.log('Clearing existing regions');
       regionsRef.current.clearRegions();
-      
-      // Verify regions plugin is working by adding a test region
-      console.log('Adding test region at 20 seconds');
-      try {
-        const testRegion = regionsRef.current.addRegion({
-          id: 'test-region-' + Date.now(),
-          start: 20,
-          end: 20.5,
-          color: 'rgba(0, 0, 255, 0.7)', // Blue for visibility
-          drag: false,
-          resize: false,
-        });
-        console.log('✅ Test region created successfully:', testRegion);
-      } catch (testError) {
-        console.error('❌ Error creating test region:', testError);
-      }
       
       // Add new regions for each marker
       markers.forEach((marker: any, index: number) => {
-        console.log(`Adding region for marker ${index + 1}:`, marker);
+        console.log(`🎯 Adding region for marker ${index + 1}:`, marker);
         try {
           // Check if the marker has all required properties
           if (!marker.time && marker.time !== 0) {
@@ -449,29 +483,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             },
           });
           
-          // Add custom styling to make the region more visible
-          const regionElement = document.querySelector(`[data-id="${regionId}"]`) as HTMLElement;
-          if (regionElement) {
-            regionElement.style.border = '2px solid #ff0000';
-            regionElement.style.borderRadius = '4px';
-            regionElement.style.cursor = 'pointer';
-            regionElement.style.minHeight = '20px';
-            regionElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-          } else {
-            // If element not found immediately, try again after a short delay
-            setTimeout(() => {
-              const delayedElement = document.querySelector(`[data-id="${regionId}"]`) as HTMLElement;
-              if (delayedElement) {
-                delayedElement.style.border = '2px solid #ff0000';
-                delayedElement.style.borderRadius = '4px';
-                delayedElement.style.cursor = 'pointer';
-                delayedElement.style.minHeight = '20px';
-                delayedElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-                console.log(`✅ Applied custom styling to region ${regionId}`);
-              }
-            }, 100);
-          }
-          
           console.log(`✅ Region ${index + 1} created successfully:`, region);
           
           // Update the regionCommentMap
@@ -485,18 +496,137 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         }
       });
       
-      // Log all regions after creation
-      const allRegions = regionsRef.current.getRegions();
-      console.log('All regions after creation:', allRegions);
-      console.log('Number of regions:', allRegions.length);
-      
-      // Check if the regions are visible
-      console.log('WaveSurfer current time:', waveSurferRef.current.getCurrentTime());
-      console.log('WaveSurfer duration:', waveSurferRef.current.getDuration());
+      console.log('🎯 All markers added successfully');
     } catch (error) {
-      console.error('❌ Error handling marker regions:', error);
+      console.error('❌ Error adding markers to waveform:', error);
     }
-  }, [markers, setRegionCommentMap, markers?.length, isReady]);
+  }, [markers, setRegionCommentMap]);
+
+  // Initialize WaveSurfer
+  useEffect(() => {
+    // Early return if no track is provided
+    if (!track) {
+      console.log('AudioPlayer: No track provided, skipping WaveSurfer initialization');
+      // Clear regions if no track
+      if (regionsRef.current) {
+        console.log('AudioPlayer: Clearing regions - no track');
+        regionsRef.current.clearRegions();
+        setRegionCommentMap({});
+      }
+      return;
+    }
+    
+    console.log('AudioPlayer: Initializing WaveSurfer with track:', track);
+    console.log('AudioPlayer: filePath:', track?.filePath);
+    
+    // Clear existing regions immediately when track changes
+    if (regionsRef.current) {
+      console.log('AudioPlayer: Clearing existing regions for track change');
+      regionsRef.current.clearRegions();
+      setRegionCommentMap({});
+    }
+    
+    if (!waveformRef.current || !track?.filePath) {
+      console.log('AudioPlayer: Missing waveformRef or filePath, returning early');
+      return;
+    }
+
+    console.log('AudioPlayer: Creating WaveSurfer instance...');
+    
+    // Validate the audio file path
+    if (!track.filePath || typeof track.filePath !== 'string') {
+      console.error('AudioPlayer: Invalid filePath:', track.filePath);
+      return;
+    }
+    
+    // Always use audio server URL for better compatibility
+    const fileName = track.filePath.replace('/uploads/', '');
+    const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+    
+    console.log('AudioPlayer: Setting audioUrl to audio server URL:', audioServerUrl);
+    setAudioUrl(audioServerUrl);
+  }, [track?.filePath]);
+
+  // Create WaveSurfer when audioUrl is available
+  useEffect(() => {
+    if (audioUrl && waveformRef.current) {
+      // Type check to ensure audioUrl is a string
+      if (typeof audioUrl !== 'string') {
+        console.error('AudioPlayer: audioUrl is not a string!', audioUrl);
+        return;
+      }
+      
+      console.log('AudioPlayer: Creating WaveSurfer with audioUrl string:', audioUrl);
+      initializeWaveSurfer();
+    }
+  }, [audioUrl]);
+
+  // Handle play/pause
+  const handlePlayPause = useCallback(() => {
+    if (!waveSurferRef.current) {
+      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for play/pause');
+      return;
+    }
+
+    try {
+      if (isPlayingState) {
+        console.log('🎵 AudioPlayer: Pausing audio');
+        waveSurferRef.current.pause();
+      } else {
+        console.log('🎵 AudioPlayer: Playing audio');
+        waveSurferRef.current.play();
+      }
+    } catch (error) {
+      console.error('❌ AudioPlayer: Error during play/pause:', error);
+    }
+  }, [isPlayingState]);
+
+  // Handle seek
+  const handleSeek = useCallback((time: number) => {
+    if (!waveSurferRef.current) {
+      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for seek');
+      return;
+    }
+
+    try {
+      console.log('🎵 AudioPlayer: Seeking to time:', time);
+      waveSurferRef.current.seekTo(time / duration);
+    } catch (error) {
+      console.error('❌ AudioPlayer: Error during seek:', error);
+    }
+  }, [duration]);
+
+  // Handle volume change
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    if (!waveSurferRef.current) {
+      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for volume change');
+      return;
+    }
+
+    try {
+      console.log('🎵 AudioPlayer: Setting volume to:', newVolume);
+      waveSurferRef.current.setVolume(newVolume / 100);
+      setVolume(newVolume);
+    } catch (error) {
+      console.error('❌ AudioPlayer: Error during volume change:', error);
+    }
+  }, []);
+
+  // Handle playback speed change
+  const handleSpeedChange = useCallback((newSpeed: number) => {
+    if (!waveSurferRef.current) {
+      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for speed change');
+      return;
+    }
+
+    try {
+      console.log('🎵 AudioPlayer: Setting playback speed to:', newSpeed);
+      waveSurferRef.current.setPlaybackRate(newSpeed);
+      setPlaybackSpeed(newSpeed);
+    } catch (error) {
+      console.error('❌ AudioPlayer: Error during speed change:', error);
+    }
+  }, []);
 
   // Add click handler for regions
   useEffect(() => {
@@ -538,6 +668,52 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     };
   }, [regionsRef.current, setSelectedCommentId, regionCommentMap]);
 
+  // Handle markers updates when they change
+  useEffect(() => {
+    if (isReady && regionsRef.current) {
+      if (markers && markers.length > 0) {
+        console.log('🎯 Markers updated, refreshing regions:', markers.length);
+        addMarkersToWaveform();
+      } else {
+        console.log('🎯 No markers or empty markers array, clearing regions');
+        regionsRef.current.clearRegions();
+        setRegionCommentMap({});
+      }
+    } else if (markers && markers.length > 0 && !regionsRef.current) {
+      console.log('🎯 Markers available but regions plugin not ready, will add when ready');
+    }
+  }, [markers, isReady, addMarkersToWaveform]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (waveSurferRef.current) {
+        try {
+          console.log('🧹 AudioPlayer: Destroying WaveSurfer instance on unmount...');
+          
+          // Properly pause and stop the audio first
+          if (waveSurferRef.current.isPlaying()) {
+            waveSurferRef.current.pause();
+          }
+          
+          // Clear all event listeners
+          waveSurferRef.current.unAll();
+          
+          // Destroy the instance
+          waveSurferRef.current.destroy();
+          waveSurferRef.current = null;
+          
+          // Clear refs
+          regionsRef.current = null;
+          
+          console.log('✅ AudioPlayer: WaveSurfer instance destroyed successfully');
+        } catch (destroyError) {
+          console.error('❌ AudioPlayer: Error destroying WaveSurfer instance on unmount:', destroyError);
+        }
+      }
+    };
+  }, []);
+
   if (!track) {
     return (
       <div className="flex items-center justify-center h-32 bg-gray-100 rounded-lg">
@@ -547,7 +723,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   // Debug markers
-  console.log('AudioPlayer render - markers:', markers);
+  // console.log('AudioPlayer render - markers:', markers);
 
   return (
     <div className="flex flex-col space-y-4">
@@ -619,11 +795,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </button>
           
           <button
-            onClick={onPlayPause}
+            onClick={handlePlayPause}
             className="p-3 text-white bg-gray-800 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            aria-label={isPlayingState ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {isPlayingState ? (
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
               </svg>
@@ -664,10 +840,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             <input
               type="range"
               min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+              max="100"
+              step="1"
+              value={volumeState}
+              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
               className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer slider"
             />
           </div>
@@ -675,8 +851,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <div className="flex items-center space-x-3">
             <span className="text-sm text-gray-500 font-medium">Speed:</span>
             <select
-              value={playbackSpeed}
-              onChange={(e) => onPlaybackSpeedChange(parseFloat(e.target.value))}
+              value={playbackSpeedState}
+              onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
               className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
             >
               <option value="0.5">0.5x</option>

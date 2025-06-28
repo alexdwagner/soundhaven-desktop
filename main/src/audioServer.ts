@@ -1,29 +1,63 @@
 import express from 'express';
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs';
 import { config } from './config';
 
-export function startAudioServer() {
-  const port = config.audioServerPort;
   const app = express();
+const PORT = config.audioServerPort;
 
-  // Serve audio files from main/public at /audio/:filename
-  // @ts-ignore - express 5 type definitions issue with handler overload
-  app.get('/audio/:filename', (req, res) => {
+// Add CORS headers for frontend requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3001');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Helper function to get content type based on file extension
+function getContentType(fileName: string): string {
+  const ext = path.extname(fileName).toLowerCase();
+  switch (ext) {
+    case '.mp3':
+      return 'audio/mpeg';
+    case '.wav':
+      return 'audio/wav';
+    case '.flac':
+      return 'audio/flac';
+    case '.m4a':
+      return 'audio/mp4';
+    case '.aac':
+      return 'audio/aac';
+    case '.ogg':
+      return 'audio/ogg';
+    default:
+      return 'audio/mpeg'; // fallback
+  }
+}
+
+// Serve audio files from main/uploads at /audio/:filename
+// @ts-ignore - express 5 type definitions issue with handler overload
+app.get('/audio/:filename', (req, res) => {
     try {
       const fileName = req.params.filename;
-      
-      // Get the public directory relative to the current working directory
-      // When running from main directory, public is a direct child
-      const publicDir = path.join(process.cwd(), 'public');
-      const filePath = path.join(publicDir, fileName);
+    
+    // Serve files from uploads directory only
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.join(uploadsDir, fileName);
 
-      console.log('[AUDIO DEBUG] File paths:', {
-        cwd: process.cwd(),
-        publicDir,
-        filePath,
+    console.log('[AUDIO DEBUG] File paths:', {
+      cwd: process.cwd(),
+      uploadsDir,
+      filePath,
         fileName,
-        exists: fs.existsSync(filePath)
+      exists: fs.existsSync(filePath)
       });
 
       if (!fs.existsSync(filePath)) {
@@ -31,9 +65,13 @@ export function startAudioServer() {
         return res.status(404).send('File not found');
       }
 
-      res.setHeader('Content-Type', 'audio/mpeg');
-      const stream = fs.createReadStream(filePath);
-      console.log('[AUDIO DEBUG] Streaming file:', filePath);
+    // Set appropriate content type based on file extension
+    const contentType = getContentType(fileName);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    
+    const stream = fs.createReadStream(filePath);
+    console.log('[AUDIO DEBUG] Streaming file:', filePath, 'with content type:', contentType);
 
       stream.on('error', (err) => {
         console.error('[AUDIO DEBUG] Stream error:', err);
@@ -59,7 +97,19 @@ export function startAudioServer() {
     }
   });
 
-  app.listen(port, () => {
-    console.log(`[AUDIO DEBUG] Audio server running on port ${port}`);
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+export function startAudioServer() {
+  app.listen(PORT, () => {
+    console.log('🎵 Audio server started');
+    console.log(`[AUDIO DEBUG] Audio server running on port ${PORT}`);
   });
+}
+
+export function stopAudioServer() {
+  // This would need to be implemented with the actual server instance
+  console.log('🎵 Audio server stopped');
 } 

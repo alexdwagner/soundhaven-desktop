@@ -276,7 +276,16 @@ export const apiService = {
   // ===== Track Management =====
   async getTracks(): Promise<ApiResponse<Track[]>> {
     try {
-      const response = await makeRequest<Track[]>('/tracks');
+      const user = this.getStoredUser();
+      const headers: Record<string, string> = {};
+      if (user?.id) {
+        headers['x-user-id'] = user.id.toString();
+      }
+      
+      const response = await makeRequest<Track[]>('/tracks', {
+        method: 'GET',
+        headers
+      });
       if (response.error) {
         return { error: response.error, status: response.status };
       }
@@ -313,6 +322,70 @@ export const apiService = {
     const { data, error } = await makeRequest<Array<{ id: number; name: string }>>('/playlists');
     if (error) throw new Error(error);
     return data || [];
+  },
+
+  async getPlaylistById(id: number) {
+    const { data, error } = await makeRequest<Playlist>(`/playlists/${id}`);
+    if (error) throw new Error(error);
+    return data;
+  },
+
+  async createPlaylist(playlistData: { name: string; description?: string }) {
+    const { data, error } = await makeRequest<Playlist>('/playlists', {
+      method: 'POST',
+      body: JSON.stringify(playlistData),
+    });
+    if (error) throw new Error(error);
+    return data;
+  },
+
+  async deletePlaylist(id: number) {
+    const { error } = await makeRequest(`/playlists/${id}`, {
+      method: 'DELETE',
+    });
+    if (error) throw new Error(error);
+  },
+
+  async addTrackToPlaylist(playlistId: number, trackId: number, force: boolean = false) {
+    const { data, error } = await makeRequest<any>(`/playlists/${playlistId}/tracks/${trackId}${force ? '?force=true' : ''}`, {
+      method: 'POST',
+    });
+    if (error) throw new Error(error);
+    return data;
+  },
+
+  async removeTrackFromPlaylist(playlistId: number, trackId: number) {
+    const { error } = await makeRequest(`/playlists/${playlistId}/tracks/${trackId}`, {
+      method: 'DELETE',
+    });
+    if (error) throw new Error(error);
+  },
+
+  async updatePlaylistMetadata(playlistId: number, updates: { name?: string; description?: string }) {
+    const { data, error } = await makeRequest<Playlist>(`/playlists/${playlistId}/metadata`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    if (error) throw new Error(error);
+    return data;
+  },
+
+  async reorderPlaylists(playlistIds: number[]) {
+    const { data, error } = await makeRequest<Playlist[]>('/playlists/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ playlistIds }),
+    });
+    if (error) throw new Error(error);
+    return data;
+  },
+
+  async reorderPlaylistTracks(playlistId: number, trackIds: number[]) {
+    const { data, error } = await makeRequest<Playlist>(`/playlists/${playlistId}/track-order`, {
+      method: 'PATCH',
+      body: JSON.stringify({ trackIds }),
+    });
+    if (error) throw new Error(error);
+    return data;
   },
 
   // ===== Marker Management =====
@@ -398,23 +471,17 @@ export const apiService = {
       this.setToken(null);
       this.setRefreshToken(null);
       
-      // If in Electron, notify the main process
-      if (isElectron) {
+      // Call logout endpoint if we have a refresh token
+      if (refreshToken) {
         try {
-          await window.electron!.ipcRenderer.invoke('auth:logout');
-        } catch (error) {
-          console.error('Error during Electron logout:', error);
-        }
-      } else if (refreshToken) {
-        // For web, call the logout endpoint if we have a refresh token
-        try {
-          await makeRequest('/auth/logout', {
+          await makeRequest('/api/auth/logout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken })
           });
         } catch (error) {
-          console.error('Error during API logout:', error);
+          console.error('Error during logout API call:', error);
+          // Continue with logout even if API call fails
         }
       }
       
@@ -423,8 +490,8 @@ export const apiService = {
       sessionStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       
-      // Redirect to login page
-      if (typeof window !== 'undefined') {
+      // Don't redirect in Electron app - just let the AuthProvider handle the state
+      if (typeof window !== 'undefined' && !isElectron) {
         window.location.href = '/login';
       }
       
@@ -436,7 +503,7 @@ export const apiService = {
       this.setToken(null);
       this.setRefreshToken(null);
       
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !isElectron) {
         window.location.href = '/login';
       }
       
@@ -540,29 +607,29 @@ export const apiService = {
       } else {
         console.log('[UPLOAD] Running in web environment, using fallback API');
         // Fallback to web API
-        const response = await makeRequest<Track>('/tracks', {
-          method: 'POST',
-          body: formData
-        });
-        if (response.error) {
-          return { error: response.error, status: response.status };
-        }
-        // Ensure the response data matches the Track interface
-        const track = {
-          id: response.data.id,
-          name: response.data.name,
-          duration: response.data.duration,
-          artistId: response.data.artistId,
-          artist: response.data.artist,
-          albumId: response.data.albumId,
-          album: response.data.album,
-          createdAt: response.data.createdAt,
-          updatedAt: response.data.updatedAt,
-          playlists: response.data.playlists || [],
-          genres: response.data.genres || [],
-          filePath: response.data.filePath
-        };
-        return { data: track, error: null, status: 200 };
+      const response = await makeRequest<Track>('/tracks', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.error) {
+        return { error: response.error, status: response.status };
+      }
+      // Ensure the response data matches the Track interface
+      const track = {
+        id: response.data.id,
+        name: response.data.name,
+        duration: response.data.duration,
+        artistId: response.data.artistId,
+        artist: response.data.artist,
+        albumId: response.data.albumId,
+        album: response.data.album,
+        createdAt: response.data.createdAt,
+        updatedAt: response.data.updatedAt,
+        playlists: response.data.playlists || [],
+        genres: response.data.genres || [],
+        filePath: response.data.filePath
+      };
+      return { data: track, error: null, status: 200 };
       }
     } catch (error) {
       console.error('[UPLOAD] Error uploading track:', error);
@@ -671,13 +738,13 @@ export const apiService = {
     console.log('Adding marker and comment:', dto);
     try {
       const response = await makeRequest<{ comment: Comment }>('/api/comments/with-marker', {
-        method: 'POST',
+      method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.getToken()}`
         },
-        body: JSON.stringify(dto),
-      });
+      body: JSON.stringify(dto),
+    });
       
       console.log('Add marker and comment response:', response);
       
@@ -694,14 +761,85 @@ export const apiService = {
   },
 
   async fetchCommentsAndMarkers(trackId: number, page: number = 1, limit: number = 10): Promise<ApiResponse<Comment[]>> {
-    console.log('Fetching comments and markers for track:', trackId);
+    console.log('🌐 [ApiService] Fetching comments and markers for track:', trackId);
     try {
-      const response = await makeRequest<Comment[]>(`/api/comments?trackId=${trackId}&page=${page}&limit=${limit}`);
+      const url = `/api/comments?trackId=${trackId}&page=${page}&limit=${limit}`;
+      console.log('🌐 [ApiService] Request URL:', url);
       
-      console.log('Comments API response:', response);
+      const response = await makeRequest<Comment[]>(url);
+      
+      console.log('🌐 [ApiService] Raw API response:', response);
+      console.log('🌐 [ApiService] Response data type:', typeof response.data);
+      console.log('🌐 [ApiService] Response data length:', response.data?.length);
+      
+      if (response.data && Array.isArray(response.data)) {
+        response.data.forEach((comment, index) => {
+          console.log(`🌐 [ApiService] Comment ${index + 1}:`, {
+            id: comment.id,
+            content: comment.content?.substring(0, 20) + '...',
+            hasMarker: !!comment.marker,
+            markerData: comment.marker
+          });
+        });
+      }
+      
       return response;
     } catch (error) {
-      console.error('Error fetching comments and markers:', error);
+      console.error('❌ [ApiService] Error fetching comments and markers:', error);
+      return { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 500
+      };
+    }
+  },
+
+  async editComment(commentId: number, content: string): Promise<ApiResponse<Comment>> {
+    console.log('🌐 [ApiService] Editing comment:', commentId, content);
+    try {
+      const response = await makeRequest<Comment>(`/api/comments/${commentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.getToken()}`
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (response.error) {
+        console.error('❌ [ApiService] Failed to edit comment:', response.error);
+        throw new Error(response.error);
+      }
+
+      console.log('✅ [ApiService] Comment edited successfully:', response.data);
+      return response;
+    } catch (error) {
+      console.error('❌ [ApiService] Error editing comment:', error);
+      return { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 500
+      };
+    }
+  },
+
+  async deleteComment(commentId: number): Promise<ApiResponse<void>> {
+    console.log('🌐 [ApiService] Deleting comment:', commentId);
+    try {
+      const response = await makeRequest<void>(`/api/comments/${commentId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${this.getToken()}`
+        }
+      });
+
+      if (response.error) {
+        console.error('❌ [ApiService] Failed to delete comment:', response.error);
+        throw new Error(response.error);
+      }
+
+      console.log('✅ [ApiService] Comment deleted successfully');
+      return response;
+    } catch (error) {
+      console.error('❌ [ApiService] Error deleting comment:', error);
       return { 
         error: error instanceof Error ? error.message : 'Unknown error',
         status: 500

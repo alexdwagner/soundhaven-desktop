@@ -40,7 +40,11 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   const {
     comments,
     setComments,
+    markers,
     addComment,
+    addMarkerAndComment,
+    editComment,
+    deleteComment,
     fetchCommentsAndMarkers,
     selectedCommentId,
     regionCommentMap,
@@ -52,6 +56,11 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   const [isCommentInputFocused, setIsCommentInputFocused] = useState(false); // Local state for input
   const { setIsCommentInputFocused: setIsFocusedFromContext } = usePlayback();
   const [isPostingComment, setIsPostingComment] = useState(false);
+  
+  // Edit modal state
+  const [editingComment, setEditingComment] = useState<any | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [isEditingComment, setIsEditingComment] = useState(false);
 
   // Update PlaybackContext when local state changes
   useEffect(() => {
@@ -73,16 +82,8 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   // const commentsArray = [{id: 1, userName: "Test User", content: "This is a test comment."}];
 
 
-  useEffect(() => {
-    // Skip fetching if we have hardcoded test markers
-    if (trackId > 0 && trackId !== 1) { // Skip for track ID 1 which has hardcoded markers
-      const fetchData = async () => { // Ensures `await` can be used
-        await fetchCommentsAndMarkers(trackId, 1, 10);
-      }
-
-      fetchData(); // Call the async function 
-    }
-  }, [trackId]);
+  // Comments and markers are now fetched by CommentsProvider when track changes
+  // No need to duplicate the fetch here
 
   // Temporarily disabled to prevent overwriting hardcoded test markers
   // useEffect(() => {
@@ -111,15 +112,18 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
     e.preventDefault();
     if (!newComment.trim() || !token || !user) return;
 
+    setIsPostingComment(true);
 
     try {
-      await addComment(trackId, user.id, newComment, token);
+      // Use addMarkerAndComment instead of addComment to ensure consistency
+      // Set time to 0 for comments not associated with a specific time position
+      await addMarkerAndComment(trackId, newComment.trim(), 0, '#4F46E5');
       setNewComment('');
-      console.log('Comments array after updating state:', comments);
-
-      fetchCommentsAndMarkers(trackId, 1, 10); // Refetch comments after adding a new one
+      console.log('Comment with marker posted successfully, state updated automatically');
+    } catch (error) {
+      console.error('Error posting comment:', error);
     } finally {
-      setIsPostingComment(false); // End posting regardless of result
+      setIsPostingComment(false);
     }
   };
 
@@ -151,6 +155,47 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
     onSelectComment(commentId);
   }, [regionCommentMap, onSelectComment]);
 
+  // Handle editing a comment
+  const handleEditComment = (comment: any) => {
+    setEditingComment(comment);
+    setEditCommentText(comment.content);
+  };
+
+  // Handle deleting a comment
+  const handleDeleteComment = async (commentId: number) => {
+    try {
+      await deleteComment(commentId);
+      console.log('Comment deleted successfully');
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
+  };
+
+  // Handle submitting the edited comment
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCommentText.trim() || !editingComment) return;
+
+    setIsEditingComment(true);
+
+    try {
+      await editComment(editingComment.id, editCommentText.trim());
+      setEditingComment(null);
+      setEditCommentText('');
+      console.log('Comment edited successfully');
+    } catch (error) {
+      console.error('Error editing comment:', error);
+    } finally {
+      setIsEditingComment(false);
+    }
+  };
+
+  // Handle canceling the edit
+  const handleEditCancel = () => {
+    setEditingComment(null);
+    setEditCommentText('');
+  };
+
   useEffect(() => {
     console.log('Selected Comment ID in CommentsPanel:', selectedCommentId);
   }, [selectedCommentId]);
@@ -163,12 +208,10 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
     return <div className="fixed top-0 right-0 h-full bg-red-500 w-64 shadow-lg p-4">Loading comments...</div>;
   }
 
-  if (!show) return null;
-
   console.log('CommentsPanel rendered, comments:', comments);
 
   return (
-    <div className={`fixed top-0 right-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 z-10 ${show ? 'translate-x-0 overflow-y-auto' : 'translate-x-full'}`}>
+    <div className={`fixed top-0 right-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 z-10 ${show ? 'translate-x-0 overflow-y-auto' : 'translate-x-full pointer-events-none'}`}>
       <button onClick={onClose} className="p-2">Close</button>
       <div className="p-4">
         <form onSubmit={handleSubmit} className={!user || !token ? 'opacity-50 pointer-events-none' : ''}>
@@ -194,6 +237,8 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
                   onSelectComment={handleSelectComment}
                   isSelected={comment.id === selectedCommentId}
                   handleCommentClick={handleCommentClick}
+                  onEditComment={handleEditComment}
+                  onDeleteComment={handleDeleteComment}
                   ref={(el) => setCommentBlockRef(el, comment.id)}
                   index={index}
                 />
@@ -203,6 +248,43 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
           <p>No comments yet.</p>
         )}
       </div>
+
+      {/* Edit Comment Modal */}
+      {editingComment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium mb-4">Edit Comment</h3>
+            <form onSubmit={handleEditSubmit}>
+              <textarea
+                value={editCommentText}
+                onChange={(e) => setEditCommentText(e.target.value)}
+                placeholder="Edit your comment..."
+                className="w-full p-3 border border-gray-300 rounded-md mb-4 resize-none"
+                rows={3}
+                autoFocus
+                disabled={isEditingComment}
+              />
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={handleEditCancel}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  disabled={isEditingComment}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editCommentText.trim() || isEditingComment}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isEditingComment ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

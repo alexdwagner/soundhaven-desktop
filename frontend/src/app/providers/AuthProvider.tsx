@@ -35,7 +35,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   const { clearTracks } = useTracks();
   const { clearPlaylists } = usePlaylists();
 
-  // Initialize auth state from Electron secure storage
+  // Initialize auth state from Electron secure storage or auto-login test user
   useEffect(() => {
     const initializeAuthState = async () => {
       try {
@@ -62,6 +62,33 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
           };
           setUser(fullUser);
           setToken(storedToken);
+        } else {
+          // Auto-login test user for desktop app convenience
+          console.log('🔐 No stored auth found, attempting auto-login for test user...');
+          try {
+            const response = await electronApiService.login({
+              email: 'test@example.com',
+              password: 'testpassword'
+            });
+            
+            if (!response?.data) {
+              throw new Error('No response from server during auto-login');
+            }
+
+            const { user, accessToken, refreshToken } = response.data;
+
+            await Promise.all([
+              electronApiService.setUser(user),
+              electronApiService.setToken(accessToken),
+              refreshToken ? electronApiService.setRefreshToken(refreshToken) : Promise.resolve()
+            ]);
+
+            setUser(user);
+            setToken(accessToken);
+            console.log('✅ Auto-login successful for user:', user.name);
+          } catch (error) {
+            console.log('❌ Auto-login failed:', error);
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);

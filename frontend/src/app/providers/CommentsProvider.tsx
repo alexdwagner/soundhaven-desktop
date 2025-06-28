@@ -40,20 +40,6 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
 
   const [error, setError] = useState<string | null>(null);
 
-  // useEffect(() => {
-  //   if (commentAddedFlag && currentTrack?.id) {
-  //     fetchCommentsAndMarkers(currentTrack.id)
-  //       .then(() => {
-  //         console.log("Comments re-fetched after adding a new comment");
-  //         setCommentAddedFlag(false);
-  //       })
-  //       .catch(error => {
-  //         console.error("Failed to fetch comments after adding new one:", error);
-  //         setCommentAddedFlag(false);
-  //       });
-  //   }
-  // }, [commentAddedFlag, currentTrack?.id]);
-
   const fetchComments = useCallback(async (trackId: number, page: number = 1, limit: number = 10) => {
     if (!trackId || trackId <= 0) {
       console.error("Invalid trackId, skipping fetchComments");
@@ -97,24 +83,26 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         return;
       }
 
+      console.log('🔍 [CommentsProvider] Starting fetchCommentsAndMarkers for track:', trackId);
       setIsLoadingMarkers(true);
 
       try {
-        console.log('Fetching comments and markers for track:', trackId);
-        
+        console.log('📡 [CommentsProvider] Calling apiService.fetchCommentsAndMarkers...');
         const response = await apiService.fetchCommentsAndMarkers(trackId, page, limit);
-        
+        console.log('📡 [CommentsProvider] API Response received:', response);
+
         if (response.error) {
-          console.error('Error fetching comments:', response.error);
+          console.error('❌ [CommentsProvider] API Error:', response.error);
           throw new Error(`Failed to fetch comments: ${response.error}`);
         }
-        
+
         const fetchedComments = response.data;
-        console.log('Fetched comments:', fetchedComments);
+        console.log('📋 [CommentsProvider] Fetched comments:', fetchedComments);
+        console.log('📋 [CommentsProvider] Comments count:', fetchedComments?.length);
 
         if (!Array.isArray(fetchedComments)) {
           console.error(
-            "Expected an array of comments, received:",
+            "❌ [CommentsProvider] Expected an array of comments, received:",
             typeof fetchedComments,
             fetchedComments
           );
@@ -123,45 +111,96 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
           return;
         }
 
+        // Debug each comment's marker
+        fetchedComments.forEach((comment, index) => {
+          console.log(`🔍 [CommentsProvider] Comment ${index + 1}:`, {
+            id: comment.id,
+            content: comment.content?.substring(0, 30) + '...',
+            hasMarker: !!comment.marker,
+            marker: comment.marker
+          });
+        });
+
         setComments(fetchedComments);
+        console.log('✅ [CommentsProvider] Comments set in state');
 
         const extractedMarkers = fetchedComments
-          .filter((comment) => comment.marker)
-          .map((comment) => ({
-            id: comment.marker?.id || 0,
-            commentId: comment.id,
-            time: comment.marker?.time || 0,
-            trackId: comment.marker?.trackId ?? 0,
-            createdAt: comment.marker?.createdAt ?? '',
-            waveSurferRegionID: comment.marker?.waveSurferRegionID ?? "",
-            data: {
-              customColor: comment.marker?.data?.customColor || "#FF0000",
-              isVisible: true,
-              isDraggable: true,
-              isResizable: false
-            }
-          }));
+          .filter((comment) => {
+            const hasMarker = !!comment.marker;
+            console.log(`🎯 [CommentsProvider] Comment ${comment.id} has marker:`, hasMarker);
+            return hasMarker;
+          })
+          .map((comment, index) => {
+            const marker = {
+              id: comment.marker?.id || 0,
+              commentId: comment.id,
+              time: comment.marker?.time || 0,
+              trackId: comment.marker?.trackId ?? 0,
+              createdAt: comment.marker?.createdAt ?? '',
+              waveSurferRegionID: comment.marker?.waveSurferRegionID ?? "",
+              data: {
+                customColor: comment.marker?.data?.customColor || "#FF0000",
+                isVisible: true,
+                isDraggable: true,
+                isResizable: false
+              }
+            };
+            console.log(`🎯 [CommentsProvider] Extracted marker ${index + 1}:`, marker);
+            return marker;
+          });
 
-        console.log('Extracted markers:', extractedMarkers);
+        console.log('🎯 [CommentsProvider] Total extracted markers:', extractedMarkers.length);
+        console.log('🎯 [CommentsProvider] All extracted markers:', extractedMarkers);
+        
         setMarkers(extractedMarkers);
+        console.log('✅ [CommentsProvider] Markers set in state');
 
         const newRegionCommentMap: Record<string, number> =
           extractedMarkers.reduce((map: Record<string, number>, marker) => {
             if (marker.waveSurferRegionID && marker.commentId) {
               map[marker.waveSurferRegionID] = marker.commentId;
+              console.log(`🗺️ [CommentsProvider] Added to region map: ${marker.waveSurferRegionID} -> ${marker.commentId}`);
             }
             return map;
           }, {});
+        
+        console.log('🗺️ [CommentsProvider] Final region comment map:', newRegionCommentMap);
         setRegionCommentMap(newRegionCommentMap);
         setIsLoadingMarkers(false);
+        console.log('✅ [CommentsProvider] fetchCommentsAndMarkers completed successfully');
       } catch (error) {
-        console.error("Error fetching comments and markers:", error);
+        console.error("❌ [CommentsProvider] Error fetching comments and markers:", error);
         setError(`Failed to fetch comments and markers: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setIsLoadingMarkers(false);
       }
     },
     [setComments, setMarkers, setRegionCommentMap, setError]
   );
+
+  // Add useEffect to fetch comments when currentTrack changes
+  useEffect(() => {
+    console.log('🎯 [CommentsProvider] currentTrack changed:', currentTrack);
+    
+    // Always clear existing markers/comments first when track changes
+    console.log('🎯 [CommentsProvider] Clearing existing markers and comments');
+    setComments([]);
+    setMarkers([]);
+    setRegionCommentMap({});
+    
+    if (currentTrack?.id) {
+      console.log('🎯 [CommentsProvider] Fetching comments for track:', currentTrack.id);
+      fetchCommentsAndMarkers(currentTrack.id)
+        .then(() => {
+          console.log('🎯 [CommentsProvider] Comments fetched successfully');
+        })
+        .catch(error => {
+          console.error('🎯 [CommentsProvider] Error fetching comments:', error);
+          setError(`Failed to fetch comments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        });
+    } else {
+      console.log('🎯 [CommentsProvider] No currentTrack, staying cleared');
+    }
+  }, [currentTrack, fetchCommentsAndMarkers]);
 
   const addMarkerAndComment = async (
     trackId: number,
@@ -180,22 +219,29 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
       }
       
       const commentData = {
-        trackId,
-        content,
-        time,
-        color,
+          trackId,
+          content,
+          time,
+          color,
         userId: user.id,
       };
       
       const comment = await apiService.addMarkerAndComment(commentData);
       console.log('Comment added successfully:', comment);
-      
+
       if (!comment) {
         console.error('Invalid response format from API');
         throw new Error('Invalid response format from server');
       }
 
-      setComments((prev) => [comment, ...prev]);
+      // Add the new comment without overwriting existing ones
+      setComments((prev) => {
+        console.log('Adding new comment to existing comments:', {
+          newComment: comment,
+          existingCommentsCount: prev.length
+        });
+        return [comment, ...prev];
+      });
 
       if (comment.marker) {
         console.log('Marker data received:', comment.marker);
@@ -217,7 +263,13 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         };
         
         console.log('Adding new marker to state:', newMarker);
-        setMarkers((prev) => [newMarker, ...prev]);
+        setMarkers((prev) => {
+          console.log('Adding new marker to existing markers:', {
+            newMarker: newMarker,
+            existingMarkersCount: prev.length
+          });
+          return [newMarker, ...prev];
+        });
         
         // Update region comment map if needed
         if (comment.marker.waveSurferRegionID) {
@@ -230,10 +282,13 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
             ...prev,
             [comment.marker.waveSurferRegionID]: comment.id
           }));
-        }
+      }
       } else {
         console.warn('Comment added but no marker data was returned');
       }
+
+      // No need to refresh - we already added the comment to state above
+      console.log('Comment and marker successfully added to state');
 
       return comment;
     } catch (error) {
@@ -279,20 +334,13 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
 
   const editComment = async (commentId: number, content: string) => {
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content }),
-      });
+      const response = await apiService.editComment(commentId, content);
 
-      if (!response.ok) {
-        throw new Error(`Failed to update comment: ${response.statusText}`);
+      if (response.error) {
+        throw new Error(response.error);
       }
 
-      const updatedComment = await response.json();
+      const updatedComment = response.data;
 
       setComments((prev) =>
         prev.map((comment) =>
@@ -309,32 +357,36 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
 
   const deleteComment = async (commentId: number) => {
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await apiService.deleteComment(commentId);
 
-      if (!response.ok) {
-        throw new Error("Failed to delete comment");
+      if (response.error) {
+        throw new Error(response.error);
       }
 
+      // Remove comment from state
       setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+      
+      // Remove associated marker from state
+      setMarkers((prev) => prev.filter((marker) => marker.commentId !== commentId));
+      
+      // Remove from region comment map
+      setRegionCommentMap((prev) => {
+        const newMap = { ...prev };
+        Object.keys(newMap).forEach(regionId => {
+          if (newMap[regionId] === commentId) {
+            delete newMap[regionId];
+          }
+        });
+        return newMap;
+      });
+      
+      console.log('Comment, marker, and region mapping deleted successfully for commentId:', commentId);
       return true;
     } catch (error) {
       console.error("Error deleting comment:", error);
       throw error;
     }
   };
-
-  useEffect(() => {
-    if (currentTrack?.id) {
-      fetchComments(currentTrack.id, 1);
-    } else {
-      setComments([]);
-    }
-  }, [currentTrack?.id, fetchComments]);
 
   return (
     <CommentsContext.Provider

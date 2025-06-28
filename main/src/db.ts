@@ -7,6 +7,10 @@ const dbPath = path.isAbsolute(config.database.path)
   ? config.database.path
   : path.resolve(process.cwd(), config.database.path);
 
+console.log('🗄️ [DB INIT] Config path:', config.database.path);
+console.log('🗄️ [DB INIT] Process cwd:', process.cwd());
+console.log('🗄️ [DB INIT] Resolved DB path:', dbPath);
+
 // Create database connection
 export const db = new Database(dbPath, (err) => {
   if (err) {

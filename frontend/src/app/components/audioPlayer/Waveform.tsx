@@ -13,6 +13,20 @@ const Waveform: React.FC<WaveformProps> = ({ url, isPlaying }) => {
   
     useEffect(() => {
       if (waveformRef.current && url) {
+        // Destroy previous instance if it exists
+        if (wavesurfer) {
+          try {
+            if (wavesurfer.isPlaying()) {
+              wavesurfer.pause();
+            }
+            wavesurfer.unAll();
+            wavesurfer.destroy();
+            console.log('🧹 Waveform: Previous instance destroyed');
+          } catch (error) {
+            console.error('❌ Waveform: Error destroying previous instance:', error);
+          }
+        }
+
         const ws = WaveSurfer.create({
           container: waveformRef.current,
           waveColor: '#9370DB',
@@ -27,13 +41,22 @@ const Waveform: React.FC<WaveformProps> = ({ url, isPlaying }) => {
         });
   
         ws.on('error', (err: Error) => {
-          console.error(err);
+          console.error('Waveform error:', err);
         });
   
         setWavesurfer(ws);
   
         return () => {
-          ws.destroy();
+          try {
+            if (ws.isPlaying()) {
+              ws.pause();
+            }
+            ws.unAll();
+            ws.destroy();
+            console.log('✅ Waveform: Instance destroyed on cleanup');
+          } catch (error) {
+            console.error('❌ Waveform: Error during cleanup:', error);
+          }
         };
       }
     }, [url]);

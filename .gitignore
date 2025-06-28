@@ -34,6 +34,9 @@ main/soundhaven.db-journal
 migrations/
 main/migrations/
 
+# User uploaded audio files
+main/uploads/
+
 # Compiled TypeScript
 *.tsbuildinfo
 *.d.ts

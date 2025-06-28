@@ -11,8 +11,10 @@
     "shared"
   ],
   "scripts": {
-    "dev": "concurrently \"cd frontend && yarn dev\" \"cd main && yarn start\"",
+    "dev": "chmod +x cleanup-ports.sh && ./cleanup-ports.sh && concurrently \"cd frontend && yarn dev\" \"cd main && yarn start\"",
+    "dev:clean": "chmod +x kill-and-restart.sh && ./kill-and-restart.sh",
     "kill": "./kill-electron.sh",
+    "cleanup": "chmod +x cleanup-ports.sh && ./cleanup-ports.sh",
     "electron:start": "cd main && electron dist/main/src/main.js",
     "build": "cd main && yarn build && electron-builder",
     "postinstall": "electron-builder install-app-deps"

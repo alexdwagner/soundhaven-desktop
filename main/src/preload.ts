@@ -32,7 +32,10 @@ const validChannels = [
   'upload:single-track',
   'upload:batch-tracks',
   'get-file-url',
-  // Add other valid IPC channels here
+  'db:check-integrity',
+  'db:cleanup-orphaned',
+  'db:fix-paths',
+  'db:sync'
 ];
 
 // Helper function to safely invoke IPC methods

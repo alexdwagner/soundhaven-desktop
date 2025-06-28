@@ -12,7 +12,8 @@ export const config = {
   
   // Database
   database: {
-    path: process.env.DATABASE_PATH || path.resolve(__dirname, '../db.sqlite')
+    // Use app.getPath('userData') in production, or main directory in development
+    path: process.env.DATABASE_PATH || path.resolve(process.cwd(), 'db.sqlite')
   },
   
   // Server Ports

@@ -31,15 +31,15 @@ export default function RootLayout({
     <html lang="en" data-mode="light">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-gray-900`}>
         <AuthProvider>
-          <CommentsProvider>
-            <TracksProvider>
-              <PlaybackProvider>
+          <TracksProvider>
+            <PlaybackProvider>
+              <CommentsProvider>
                 <PlaylistsProvider>
                   <main className="min-h-screen">{children}</main>
                 </PlaylistsProvider>
-              </PlaybackProvider>
-            </TracksProvider>
-          </CommentsProvider>
+              </CommentsProvider>
+            </PlaybackProvider>
+          </TracksProvider>
         </AuthProvider>
       </body>
     </html>

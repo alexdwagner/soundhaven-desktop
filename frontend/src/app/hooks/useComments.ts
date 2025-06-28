@@ -38,8 +38,10 @@ export const useComments = (
 
   const [newCommentInput, setNewCommentInput] = useState('');
 
-  console.log("useComments hook - markers:", markers);
-  console.log("useComments hook - regionCommentMap:", regionCommentMap);
+  // console.log("🎣 [useComments] Hook called - markers:", markers);
+  // console.log("🎣 [useComments] Hook called - markers length:", markers?.length);
+  // console.log("🎣 [useComments] Hook called - regionCommentMap:", regionCommentMap);
+  // console.log("🎣 [useComments] Hook called - comments:", comments?.length, "comments");
 
   // Add debugging for waveSurfer and regions
   useEffect(() => {
@@ -97,12 +99,12 @@ export const useComments = (
       const regions = regionsRef.current.getRegions();
       regions.forEach((region: any) => {
         if (region.data?.commentId === commentId) {
-          region.update({ color: 'rgba(0, 255, 0, 0.7)' });
+        region.update({ color: 'rgba(0, 255, 0, 0.7)' });
           if (waveSurferRef.current) {
-            waveSurferRef.current.seekTo(region.start / waveSurferRef.current.getDuration());
+        waveSurferRef.current.seekTo(region.start / waveSurferRef.current.getDuration());
           }
-        }
-      });
+      }
+    });
     }
   }, [regionCommentMap, setSelectedCommentId, comments, waveSurferRef, regionsRef]);
 

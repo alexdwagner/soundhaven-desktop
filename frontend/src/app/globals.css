@@ -31,38 +31,40 @@ body {
   transform: scale(1.02) !important;
 }
 
-/* WaveSurfer waveform styling */
-.wavesurfer-container {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* WaveSurfer waveform styling - updated for WaveSurfer v7 */
+[data-wavesurfer] {
   width: 100% !important;
-  height: 100% !important;
-}
-
-.wavesurfer-container canvas {
-  max-width: 100% !important;
-  height: auto !important;
-}
-
-/* Ensure waveform bars are properly styled */
-.wavesurfer-container wave {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* Make sure the waveform is visible */
-.wavesurfer-container {
+  min-height: 128px !important;
   background: transparent !important;
-  min-height: 120px !important;
 }
 
-/* Ensure the waveform canvas is visible */
-.wavesurfer-container canvas {
+[data-wavesurfer] canvas {
   display: block !important;
   width: 100% !important;
-  height: 120px !important;
+  height: 128px !important;
+  max-width: 100% !important;
+}
+
+/* Legacy support for older WaveSurfer class names */
+.wavesurfer-container,
+.wavesurfer {
+  width: 100% !important;
+  min-height: 128px !important;
+  background: transparent !important;
+}
+
+.wavesurfer-container canvas,
+.wavesurfer canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 128px !important;
+  max-width: 100% !important;
+}
+
+/* Ensure waveform is visible and responsive */
+wave {
+  width: 100% !important;
+  height: 128px !important;
 }
 
 /* Custom slider styling */

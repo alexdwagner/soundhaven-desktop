@@ -14,8 +14,8 @@ interface UploadProgress {
     error?: string;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
-    const [uploading, setUploading] = useState(false);
+    const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
+        const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -80,7 +80,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
                 console.log(`✅ Batch upload completed: ${result.successful} successful, ${result.failedCount} failed`);
                 
                 if (result.successful > 0) {
-                    onUploadSuccess();
+                onUploadSuccess();
                 }
                 
                 if (result.failed.length > 0) {
@@ -260,7 +260,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
                 </div>
             )}
         </div>
-    );
+    );       
 };
 
 export default FileUpload;

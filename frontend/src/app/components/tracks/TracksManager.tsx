@@ -17,6 +17,8 @@ const useMockAuth = () => ({
 });
 
 export default function TracksManager() {
+  console.log('🎯 TracksManager component rendering...');
+  
   const { 
     tracks = [], 
     fetchTracks, 
@@ -30,6 +32,7 @@ export default function TracksManager() {
     isPlaying,
     currentTrack: playbackCurrentTrack,
     togglePlayback,
+    selectTrack,
     nextTrack,
     previousTrack,
     volume,
@@ -40,6 +43,13 @@ export default function TracksManager() {
   
   // Ensure tracks is always an array to prevent map errors
   const safeTracks = Array.isArray(tracks) ? tracks : [];
+  
+  console.log('🎯 TracksManager state:', {
+    tracks: tracks,
+    safeTracks: safeTracks,
+    safeTracksLength: safeTracks.length,
+    playbackCurrentTrack: playbackCurrentTrack
+  });
   
   const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
   const [showComments, setShowComments] = useState(false);
@@ -63,58 +73,43 @@ export default function TracksManager() {
   // Add comments functionality
   const { addMarkerAndComment, fetchCommentsAndMarkers, markers, setMarkers, selectedCommentId } = useComments(waveSurferRef, regionsRef);
 
-  // Add hardcoded test markers for debugging
-  useEffect(() => {
-    console.log('🎯 SETTING HARDCODED MARKERS - trackId:', playbackCurrentTrack?.id);
-    console.log('🎯 setMarkers function available:', !!setMarkers);
+  // Removed hardcoded test markers - using real comment system now
+
+  const handleSelectTrack = useCallback((trackId: number) => {
+    console.log('🎵 handleSelectTrack called with trackId:', trackId);
+    console.log('🎵 Available tracks:', tracks);
     
-    if (playbackCurrentTrack?.id) {
-      console.log('✅ Setting hardcoded test markers for track:', playbackCurrentTrack.id);
-      const testMarkers = [
-        {
-          id: 'test-marker-1',
-          time: 10,
-          commentId: 1,
-          waveSurferRegionID: 'test-region-1',
-          data: { customColor: 'rgba(255, 0, 0, 0.7)' }
-        },
-        {
-          id: 'test-marker-2', 
-          time: 30,
-          commentId: 2,
-          waveSurferRegionID: 'test-region-2',
-          data: { customColor: 'rgba(0, 255, 0, 0.7)' }
-        },
-        {
-          id: 'test-marker-3',
-          time: 60,
-          commentId: 3,
-          waveSurferRegionID: 'test-region-3',
-          data: { customColor: 'rgba(0, 0, 255, 0.7)' }
-        }
-      ];
-      console.log('Test markers to set:', testMarkers);
-      setMarkers(testMarkers);
-      console.log('✅ setMarkers called');
-    } else {
-      console.log('❌ No playbackCurrentTrack?.id, skipping marker setup');
-    }
-  }, [playbackCurrentTrack?.id, setMarkers]);
-
-  // Debug markers
-  useEffect(() => {
-    console.log('=== MARKERS UPDATED IN TRACKSMANAGER ===');
-    console.log('markers:', markers);
-    console.log('markers length:', markers?.length);
-    console.log('markers type:', typeof markers);
-  }, [markers]);
-
-  const handleSelectTrack = (trackId: number) => {
     const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    console.log('🎵 Found trackIndex:', trackIndex);
+    
     if (trackIndex !== -1) {
+      const track = tracks[trackIndex];
+      console.log('🎵 Selecting track for playback:', track);
       setCurrentTrackIndex(trackIndex);
+      selectTrack(track, trackIndex); // Also set in PlaybackContext for CommentsProvider
+      console.log('🎵 selectTrack called successfully');
+    } else {
+      console.log('❌ Track not found in tracks array');
     }
-  };
+  }, [tracks, setCurrentTrackIndex, selectTrack]);
+
+  // Auto-select first track for testing
+  useEffect(() => {
+    console.log('🎵 Auto-select useEffect triggered:', {
+      safeTracksLength: safeTracks.length,
+      playbackCurrentTrack: playbackCurrentTrack,
+      firstTrack: safeTracks[0]
+    });
+    
+    if (safeTracks.length > 0 && !playbackCurrentTrack) {
+      console.log('🎵 Auto-selecting first track for testing:', safeTracks[0]);
+      handleSelectTrack(safeTracks[0].id);
+    } else if (safeTracks.length === 0) {
+      console.log('❌ No tracks available for auto-select');
+    } else if (playbackCurrentTrack) {
+      console.log('❌ Track already selected:', playbackCurrentTrack);
+    }
+  }, [safeTracks, playbackCurrentTrack, handleSelectTrack]);
 
   const handleDeleteTrack = async () => {
     if (selectedTrackId !== null) {
@@ -207,16 +202,7 @@ export default function TracksManager() {
       setCommentContent('');
       setShowCommentModal(false);
       
-      // Refresh comments to show the new comment
-      if (fetchCommentsAndMarkers) {
-        console.log('Refreshing comments after adding new comment');
-        try {
-          await fetchCommentsAndMarkers(playbackCurrentTrack.id, 1, 10);
-        } catch (refreshError) {
-          console.error('Failed to refresh comments after adding new comment:', refreshError);
-          // Don't throw here, as the comment was already added successfully
-        }
-      }
+      // No need to refresh - addMarkerAndComment already updates the state
     } catch (error) {
       console.error('Error adding comment:', error);
       setError(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -328,6 +314,83 @@ export default function TracksManager() {
       console.log('❌ Comments panel already showing but no selected comment');
     }
   }, [selectedCommentId, showComments]);
+
+  // Test database integrity check
+  const testDatabaseIntegrity = async () => {
+    console.log('🔍 Testing database integrity check...');
+    try {
+      const response = await window.electron.ipcRenderer.invoke('db:check-integrity');
+      console.log('🔍 Database integrity check result:', response);
+      
+      if (response.success) {
+        const data = response.data;
+        console.log('📊 Integrity Summary:', {
+          filesInUploads: data.filesInUploads.length,
+          tracksInDb: data.tracksInDb.length,
+          orphanedFiles: data.orphanedFiles.length,
+          missingFiles: data.missingFiles.length,
+          invalidPaths: data.invalidPaths.length,
+          isHealthy: data.isHealthy
+        });
+        
+        if (data.orphanedFiles.length > 0) {
+          console.log('🗑️  Orphaned files:', data.orphanedFiles);
+        }
+        
+        if (data.missingFiles.length > 0) {
+          console.log('❌ Missing files:', data.missingFiles);
+        }
+        
+        if (data.invalidPaths.length > 0) {
+          console.log('⚠️  Invalid paths:', data.invalidPaths);
+        }
+        
+        alert(`Database Integrity Check Complete!\n\nFiles in uploads: ${data.filesInUploads.length}\nTracks in DB: ${data.tracksInDb.length}\nOrphaned files: ${data.orphanedFiles.length}\nMissing files: ${data.missingFiles.length}\nInvalid paths: ${data.invalidPaths.length}\n\nHealthy: ${data.isHealthy ? '✅ Yes' : '❌ No'}`);
+      } else {
+        console.error('❌ Database integrity check failed:', response.error);
+        alert(`Database integrity check failed: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error testing database integrity:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Test cleanup orphaned files
+  const testCleanupOrphaned = async () => {
+    console.log('🧹 Testing orphaned files cleanup...');
+    try {
+      const response = await window.electron.ipcRenderer.invoke('db:cleanup-orphaned');
+      console.log('🧹 Cleanup result:', response);
+      
+      if (response.success) {
+        alert('✅ Orphaned files cleanup completed successfully!');
+      } else {
+        alert(`❌ Cleanup failed: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error testing cleanup:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Test fix invalid paths
+  const testFixPaths = async () => {
+    console.log('🔧 Testing path fixes...');
+    try {
+      const response = await window.electron.ipcRenderer.invoke('db:fix-paths');
+      console.log('🔧 Path fix result:', response);
+      
+      if (response.success) {
+        alert('✅ Path fixes completed successfully!');
+      } else {
+        alert(`❌ Path fixes failed: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error testing path fixes:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -469,9 +532,33 @@ export default function TracksManager() {
                 alert(`IPC Test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
               }
             }}
-            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 cursor-pointer"
+            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 cursor-pointer mr-2"
           >
             🔧 Test IPC
+          </button>
+          
+          {/* Database Integrity Test Button */}
+          <button
+            onClick={testDatabaseIntegrity}
+            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 cursor-pointer mr-2"
+          >
+            🔍 Check DB Integrity
+          </button>
+          
+          {/* Cleanup Orphaned Files Button */}
+          <button
+            onClick={testCleanupOrphaned}
+            className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 cursor-pointer mr-2"
+          >
+            🧹 Cleanup Orphaned
+          </button>
+          
+          {/* Fix Invalid Paths Button */}
+          <button
+            onClick={testFixPaths}
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 cursor-pointer"
+          >
+            🔧 Fix Paths
           </button>
         </div>
 
