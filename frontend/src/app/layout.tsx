@@ -6,6 +6,7 @@ import { AuthProvider } from "./providers/AuthProvider";
 import { PlaybackProvider } from "./providers/PlaybackProvider";
 import { CommentsProvider } from "./providers/CommentsProvider";
 import { PlaylistsProvider } from "./providers/PlaylistsProvider";
+import { DragProvider } from "./providers/DragProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,7 +36,9 @@ export default function RootLayout({
             <PlaybackProvider>
               <CommentsProvider>
                 <PlaylistsProvider>
-                  <main className="min-h-screen">{children}</main>
+                  <DragProvider>
+                    <main className="min-h-screen">{children}</main>
+                  </DragProvider>
                 </PlaylistsProvider>
               </CommentsProvider>
             </PlaybackProvider>

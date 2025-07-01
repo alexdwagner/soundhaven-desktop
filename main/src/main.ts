@@ -561,15 +561,21 @@ const authHandlers = {
 
 // API Request Handler
 ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = null, headers = {} }) => {
-  console.log('[API DEBUG] Incoming:', { endpoint, method, body });
+  console.log('🔥 [IPC HANDLER] api-request called!');
+  console.log('🔥 [IPC HANDLER] endpoint:', endpoint);
+  console.log('🔥 [IPC HANDLER] method:', method);
+  console.log('🔥 [IPC HANDLER] body:', body);
+  console.log('🔥 [IPC HANDLER] headers:', headers);
+  
   try {
-    const url = new URL(endpoint, `http://localhost:${config.audioServerPort}`);
+    const url = new URL(endpoint, 'http://localhost:3000');
     const normalizedPath = url.pathname;
     
     console.log('API Request:', { endpoint, method, normalizedPath });
     
     // Handle authentication routes
     if (normalizedPath === '/api/auth/register' && method === 'POST') {
+      console.log('[IPC HANDLER] Handling register request');
       const { name, email, password } = body;
       if (!name || !email || !password) {
         throw new Error('Name, email, and password are required');
@@ -578,6 +584,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
     }
     
     if (normalizedPath === '/api/auth/login' && method === 'POST') {
+      console.log('[IPC HANDLER] Handling login request');
       const { email, password } = body;
       console.log('Login request received:', { email });
       if (!email || !password) {
@@ -634,6 +641,11 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
     
     // Route the request to the appropriate handler
     console.log('API Request:', { endpoint, method, apiPath });
+    console.log('[DRAG N DROP] 🔍 Backend: All incoming request debug');
+    console.log('[DRAG N DROP] 🔍 Backend: endpoint:', endpoint);
+    console.log('[DRAG N DROP] 🔍 Backend: method:', method);
+    console.log('[DRAG N DROP] 🔍 Backend: apiPath:', apiPath);
+    console.log('[DRAG N DROP] 🔍 Backend: normalizedPath:', normalizedPath);
     if (apiPath.startsWith('/api/auth/')) {
       const action = apiPath.split('/').pop();
       
@@ -655,34 +667,102 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       try {
         // For local desktop app, return all tracks since authentication is simpler
         // We can add user filtering later if needed
-        console.log('[TRACKS DEBUG] About to query database...');
-        const result = await dbAsync.all('SELECT * FROM tracks');
-        console.log('[TRACKS DEBUG] Query completed successfully');
-        console.log('Raw tracks from database:', result);
-        console.log('[TRACKS DEBUG] Number of tracks found:', result.length);
+        console.log('🔥 [TRACKS DEBUG] About to query database...');
+        console.log('🔥 [TRACKS DEBUG] Database path:', config.database.path);
         
-        // Map snake_case to camelCase
-        const mapped = result.map(track => ({
-          id: track.id,
-          name: track.name,
-          duration: track.duration,
-          artistId: track.artist_id,
-          albumId: track.album_id,
-          userId: track.user_id,
-          filePath: track.file_path,
-          createdAt: track.created_at,
-          updatedAt: track.updated_at
-        }));
-        console.log('Mapped tracks:', mapped);
-        console.log('[TRACKS DEBUG] Returning response with data length:', mapped.length);
-        return { data: mapped };
+        const result = await dbAsync.all(`
+          SELECT t.*, 
+                 a.name as artist_name,
+                 al.name as album_name
+          FROM tracks t
+          LEFT JOIN artists a ON t.artist_id = a.id
+          LEFT JOIN albums al ON t.album_id = al.id
+        `);
+        
+        console.log('🔥 [TRACKS DEBUG] Query completed successfully');
+        console.log('🔥 [TRACKS DEBUG] Raw result from database:');
+        console.log('🔥 [TRACKS DEBUG] Number of tracks found:', result.length);
+        
+        // Log first few tracks with all details
+        result.slice(0, 3).forEach((track, index) => {
+          console.log(`🔥 [TRACKS DEBUG] Track ${index + 1}:`, {
+            id: track.id,
+            name: track.name,
+            artist_id: track.artist_id,
+            artist_name: track.artist_name,
+            album_id: track.album_id,
+            album_name: track.album_name,
+            year: track.year,
+            genre: track.genre,
+            bitrate: track.bitrate,
+            duration: track.duration
+          });
+        });
+        
+        // Map snake_case to camelCase and include artist/album names
+        console.log('🔥 [TRACKS DEBUG] Starting mapping process...');
+        const mapped = result.map((track, index) => {
+          const mappedTrack = {
+            id: track.id,
+            name: track.name,
+            duration: track.duration,
+            artistId: track.artist_id,
+            artistName: track.artist_name || null,
+            albumId: track.album_id,
+            albumName: track.album_name || null,
+            userId: track.user_id,
+            filePath: track.file_path,
+            bitrate: track.bitrate,
+            sampleRate: track.sample_rate,
+            channels: track.channels,
+            year: track.year,
+            genre: track.genre,
+            trackNumber: track.track_number,
+            createdAt: track.created_at,
+            updatedAt: track.updated_at
+          };
+          
+          // Log first few mapped tracks
+          if (index < 3) {
+            console.log(`🔥 [TRACKS DEBUG] Mapped Track ${index + 1}:`, {
+              name: mappedTrack.name,
+              artistName: mappedTrack.artistName,
+              albumName: mappedTrack.albumName,
+              year: mappedTrack.year,
+              artistId: mappedTrack.artistId
+            });
+          }
+          
+          return mappedTrack;
+        });
+        
+        console.log('🔥 [TRACKS DEBUG] Mapping completed. Total mapped tracks:', mapped.length);
+        console.log('🔥 [TRACKS DEBUG] Final response data structure:');
+        console.log('🔥 [TRACKS DEBUG] Sample response (first track):', mapped[0] ? {
+          name: mapped[0].name,
+          artistName: mapped[0].artistName,
+          albumName: mapped[0].albumName,
+          year: mapped[0].year
+        } : 'No tracks');
+        
+        const response = { data: mapped };
+        console.log('🔥 [TRACKS DEBUG] About to return response with keys:', Object.keys(response));
+        return response;
       } catch (error) {
         console.error('[TRACKS DEBUG] Database query failed:', error);
         return { error: 'Database query failed', status: 500 };
       }
-    } else if (apiPath.startsWith('/api/playlists') && method === 'GET' && !apiPath.includes('/api/playlists/')) {
+    } else if (apiPath === '/api/playlists' && method === 'GET') {
       console.log('[API DEBUG] Matched GET /api/playlists');
+      console.log('🔥 LINE 2');
+      console.log('🔥 LINE 3');
+      console.log('🎵 [PLAYLISTS DEBUG] Starting playlist fetch...');
+      console.log('🔥 LINE 5');
+      console.log('🎵 [PLAYLISTS DEBUG] Database path:', path.join(process.cwd(), 'db.sqlite'));
+      console.log('🔥 LINE 7');
+      
       try {
+        console.log('🎵 [PLAYLISTS DEBUG] About to query playlists from database...');
         const playlists = await dbAsync.all(`
           SELECT p.*, u.name as user_name 
           FROM playlists p 
@@ -690,23 +770,40 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
           ORDER BY p."order" ASC
         `);
         
-        // Get tracks for each playlist
+        console.log('🎵 [PLAYLISTS DEBUG] Raw playlists from database:', playlists);
+        console.log('🎵 [PLAYLISTS DEBUG] Number of playlists found:', playlists?.length || 0);
+        
+        if (!playlists || playlists.length === 0) {
+          console.log('🎵 [PLAYLISTS DEBUG] No playlists found in database');
+          return { data: [] };
+        }
+        
+        console.log('🎵 [PLAYLISTS DEBUG] About to fetch tracks for each playlist...');
+        
         const playlistsWithTracks = await Promise.all(playlists.map(async (playlist) => {
+          console.log(`🎵 [PLAYLISTS DEBUG] Fetching tracks for playlist ${playlist.id}...`);
+          
           const tracks = await dbAsync.all(`
-            SELECT t.*, pt."order" as playlist_order
+            SELECT t.*, pt."order" as playlist_order,
+                   a.name as artist_name,
+                   al.name as album_name
             FROM tracks t
             JOIN playlist_tracks pt ON t.id = pt.track_id
+            LEFT JOIN artists a ON t.artist_id = a.id
+            LEFT JOIN albums al ON t.album_id = al.id
             WHERE pt.playlist_id = ?
             ORDER BY pt."order" ASC
           `, [playlist.id]);
           
-          return {
+          console.log(`🎵 [PLAYLISTS DEBUG] Found ${tracks?.length || 0} tracks for playlist ${playlist.id}`);
+          
+          const result = {
             id: playlist.id,
             name: playlist.name,
             description: playlist.description,
-            userId: playlist.user_id,
+            userId: String(playlist.user_id),
             user: {
-              id: playlist.user_id,
+              id: String(playlist.user_id),
               name: playlist.user_name || 'Unknown User'
             },
             tracks: tracks.map(track => ({
@@ -714,20 +811,38 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
               name: track.name,
               duration: track.duration,
               artistId: track.artist_id,
+              artistName: track.artist_name || null,
               albumId: track.album_id,
+              albumName: track.album_name || null,
               userId: track.user_id,
               filePath: track.file_path,
+              bitrate: track.bitrate,
+              sampleRate: track.sample_rate,
+              channels: track.channels,
+              year: track.year,
+              genre: track.genre,
+              trackNumber: track.track_number,
               createdAt: track.created_at,
               updatedAt: track.updated_at
             })),
             createdAt: playlist.created_at,
             updatedAt: playlist.updated_at
           };
+          
+          console.log(`🎵 [PLAYLISTS DEBUG] Processed playlist ${playlist.id}:`, result);
+          return result;
         }));
         
-        return { data: playlistsWithTracks };
+        console.log('🎵 [PLAYLISTS DEBUG] Final playlists response:', playlistsWithTracks?.length || 0, 'playlists');
+        console.log('🎵 [PLAYLISTS DEBUG] About to return data...');
+        
+        const response = { data: playlistsWithTracks };
+        console.log('🎵 [PLAYLISTS DEBUG] Final response object:', response);
+        
+        return response;
       } catch (error) {
-        console.error('[API DEBUG] Error fetching playlists:', error);
+        console.error('🎵 [PLAYLISTS DEBUG] Error fetching playlists:', error);
+        console.error('🎵 [PLAYLISTS DEBUG] Error stack:', (error as Error)?.stack);
         return { error: 'Failed to fetch playlists', status: 500 };
       }
     } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+$/) && method === 'GET') {
@@ -751,9 +866,13 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         }
         
         const tracks = await dbAsync.all(`
-          SELECT t.*, pt."order" as playlist_order
+          SELECT t.*, pt."order" as playlist_order,
+                 a.name as artist_name,
+                 al.name as album_name
           FROM tracks t
           JOIN playlist_tracks pt ON t.id = pt.track_id
+          LEFT JOIN artists a ON t.artist_id = a.id
+          LEFT JOIN albums al ON t.album_id = al.id
           WHERE pt.playlist_id = ?
           ORDER BY pt."order" ASC
         `, [playlistId]);
@@ -762,9 +881,9 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
           id: playlist.id,
           name: playlist.name,
           description: playlist.description,
-          userId: playlist.user_id,
+          userId: String(playlist.user_id),
           user: {
-            id: playlist.user_id,
+            id: String(playlist.user_id),
             name: playlist.user_name || 'Unknown User'
           },
           tracks: tracks.map(track => ({
@@ -772,9 +891,17 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
             name: track.name,
             duration: track.duration,
             artistId: track.artist_id,
+            artistName: track.artist_name || null,
             albumId: track.album_id,
+            albumName: track.album_name || null,
             userId: track.user_id,
             filePath: track.file_path,
+            bitrate: track.bitrate,
+            sampleRate: track.sample_rate,
+            channels: track.channels,
+            year: track.year,
+            genre: track.genre,
+            trackNumber: track.track_number,
             createdAt: track.created_at,
             updatedAt: track.updated_at
           })),
@@ -788,10 +915,13 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         return { error: 'Failed to fetch playlist', status: 500 };
       }
     } else if (apiPath === '/api/playlists' && method === 'POST') {
+      console.log('[IPC HANDLER] Received POST /api/playlists request');
       console.log('[API DEBUG] Matched POST /api/playlists');
+      console.log('[API DEBUG] Request body:', body);
       const { name, description } = body as { name: string; description?: string };
       
       if (!name) {
+        console.log('[API DEBUG] Playlist name is required');
         return { error: 'Playlist name is required', status: 400 };
       }
       
@@ -800,18 +930,26 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       const now = Math.floor(Date.now() / 1000);
       const playlistId = uuidv4();
       
+      console.log('[API DEBUG] Creating playlist with data:', { playlistId, name, description, userId });
+      
       try {
         const result = await dbAsync.run(
           'INSERT INTO playlists (id, name, description, user_id, "order") VALUES (?, ?, ?, ?, ?)',
           [playlistId, name, description || '', userId, 0]
         );
         
+        console.log('[API DEBUG] INSERT result:', result);
+        
         if (result.changes === 0) {
+          console.log('[API DEBUG] Failed to create playlist - no changes');
           return { error: 'Failed to create playlist', status: 500 };
         }
         
         const newPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+        console.log('[API DEBUG] Retrieved new playlist:', newPlaylist);
+        
         if (!newPlaylist) {
+          console.log('[API DEBUG] Failed to retrieve created playlist');
           return { error: 'Failed to retrieve created playlist', status: 500 };
         }
         
@@ -820,9 +958,9 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
           id: newPlaylist.id,
           name: newPlaylist.name,
           description: newPlaylist.description,
-          userId: newPlaylist.user_id,
+          userId: String(newPlaylist.user_id),
           user: {
-            id: newPlaylist.user_id,
+            id: String(newPlaylist.user_id),
             name: 'Test User' // TODO: Get actual user name
           },
           tracks: [],
@@ -830,7 +968,10 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
           updatedAt: now
         };
         
-        return { data: playlistData };
+        console.log('[API DEBUG] Returning playlist data:', playlistData);
+        const response = { data: playlistData };
+        console.log('[API DEBUG] Final response:', response);
+        return response;
       } catch (error) {
         console.error('[API DEBUG] Error creating playlist:', error);
         return { error: 'Failed to create playlist', status: 500 };
@@ -857,10 +998,19 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       }
     } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/tracks\/[\w\d_-]+$/) && method === 'POST') {
       console.log('[API DEBUG] Matched POST /api/playlists/{id}/tracks/{trackId}');
+      console.log('[DRAG N DROP] 🔥 Backend: Add track to playlist endpoint hit');
+      console.log('[DRAG N DROP] 🔥 Backend: apiPath:', apiPath);
+      console.log('[DRAG N DROP] 🔥 Backend: method:', method);
+      console.log('[DRAG N DROP] 🔥 Backend: url.searchParams:', url.searchParams.toString());
+      
       const pathParts = apiPath.split('/');
       const playlistId = pathParts[3];
       const trackId = pathParts[5];
       const force = url.searchParams.get('force') === 'true';
+      
+      console.log('[DRAG N DROP] 🔥 Backend: Extracted playlistId:', playlistId);
+      console.log('[DRAG N DROP] 🔥 Backend: Extracted trackId:', trackId);
+      console.log('[DRAG N DROP] 🔥 Backend: Force flag:', force);
       
       try {
         // Check if track already exists in playlist
@@ -896,6 +1046,171 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       } catch (error) {
         console.error('[API DEBUG] Error adding track to playlist:', error);
         return { error: 'Failed to add track to playlist', status: 500 };
+      }
+    } else if (apiPath === '/api/tracks/sync-metadata' && method === 'POST') {
+      console.log('[API DEBUG] Matched POST /api/tracks/sync-metadata');
+      
+      try {
+        console.log('🎵 [METADATA SYNC] Starting metadata sync process...');
+        
+        // Get all tracks from database
+        const tracks = await dbAsync.all('SELECT * FROM tracks');
+        console.log(`🎵 [METADATA SYNC] Found ${tracks.length} tracks to process`);
+        
+        let processed = 0;
+        let updated = 0;
+        let errors = 0;
+        const results = [];
+        
+        for (const track of tracks) {
+          processed++;
+          console.log(`🎵 [METADATA SYNC] Processing ${processed}/${tracks.length}: ${track.name}`);
+          
+          try {
+            // Check if track already has metadata
+            if (track.bitrate !== null && track.duration > 0) {
+              console.log(`🎵 [METADATA SYNC] Track already has metadata, skipping...`);
+              results.push({ trackId: track.id, status: 'skipped', reason: 'Already has metadata' });
+              continue;
+            }
+            
+            // Construct full file path
+            const fullPath = path.join(process.cwd(), track.file_path.replace(/^\/uploads\//, 'uploads/'));
+            console.log(`🎵 [METADATA SYNC] Processing file: ${fullPath}`);
+            
+            // Check if file exists
+            try {
+              await fs.promises.access(fullPath);
+            } catch (error) {
+              console.log(`❌ [METADATA SYNC] File not found: ${fullPath}`);
+              errors++;
+              results.push({ trackId: track.id, status: 'error', reason: 'File not found' });
+              continue;
+            }
+            
+            // Extract metadata from file
+            const { MetadataService } = await import('./services/metadataService');
+            const metadata = await MetadataService.extractFromFile(fullPath);
+            console.log(`🎵 [METADATA SYNC] Extracted metadata for ${track.name}:`, metadata);
+            
+            // Update database with extracted metadata
+            await dbAsync.run(`
+              UPDATE tracks 
+              SET 
+                name = ?,
+                duration = ?,
+                bitrate = ?,
+                sample_rate = ?,
+                channels = ?,
+                year = ?,
+                genre = ?,
+                track_number = ?,
+                updated_at = ?
+              WHERE id = ?
+            `, [
+              metadata.title,
+              metadata.duration,
+              metadata.bitrate,
+              metadata.sampleRate,
+              metadata.channels,
+              metadata.year,
+              metadata.genre,
+              metadata.trackNumber,
+              Math.floor(Date.now() / 1000),
+              track.id
+            ]);
+            
+            // Process artists and albums if available
+            let artistId = null;
+            let albumId = null;
+            
+            if (metadata.artist) {
+              // Find or create artist
+              let artist = await dbAsync.get('SELECT id FROM artists WHERE name = ?', [metadata.artist]);
+              
+              if (!artist) {
+                const result = await dbAsync.run(
+                  'INSERT INTO artists (name, created_at, updated_at) VALUES (?, ?, ?)',
+                  [metadata.artist, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]
+                );
+                artistId = result.lastID;
+                console.log(`✅ [METADATA SYNC] Created new artist: ${metadata.artist} (ID: ${artistId})`);
+              } else {
+                artistId = artist.id;
+                console.log(`✅ [METADATA SYNC] Found existing artist: ${metadata.artist} (ID: ${artistId})`);
+              }
+              
+              // Process album if available
+              if (metadata.album) {
+                let album = await dbAsync.get(
+                  'SELECT id FROM albums WHERE name = ? AND artist_id = ?',
+                  [metadata.album, artistId]
+                );
+                
+                if (!album) {
+                  const result = await dbAsync.run(
+                    'INSERT INTO albums (name, release_date, artist_id) VALUES (?, ?, ?)',
+                    [metadata.album, metadata.year || Math.floor(Date.now() / 1000), artistId]
+                  );
+                  albumId = result.lastID;
+                  console.log(`✅ [METADATA SYNC] Created new album: ${metadata.album} (ID: ${albumId})`);
+                } else {
+                  albumId = album.id;
+                  console.log(`✅ [METADATA SYNC] Found existing album: ${metadata.album} (ID: ${albumId})`);
+                }
+              }
+              
+              // Update track with artist and album IDs
+              await dbAsync.run(
+                'UPDATE tracks SET artist_id = ?, album_id = ? WHERE id = ?',
+                [artistId, albumId, track.id]
+              );
+            }
+            
+            console.log(`✅ [METADATA SYNC] Updated track ${track.name} with metadata`);
+            updated++;
+            results.push({ 
+              trackId: track.id, 
+              status: 'updated', 
+              metadata: {
+                title: metadata.title,
+                artist: metadata.artist,
+                album: metadata.album,
+                duration: metadata.duration,
+                year: metadata.year
+              }
+            });
+            
+          } catch (error) {
+            console.error(`❌ [METADATA SYNC] Error processing track ${track.name}:`, error);
+            errors++;
+            results.push({ 
+              trackId: track.id, 
+              status: 'error', 
+              reason: error instanceof Error ? error.message : 'Unknown error' 
+            });
+          }
+        }
+        
+        const summary = {
+          processed,
+          updated,
+          errors,
+          skipped: processed - updated - errors
+        };
+        
+        console.log(`🎉 [METADATA SYNC] Metadata sync completed!`, summary);
+        
+        return { 
+          data: { 
+            summary,
+            results 
+          } 
+        };
+        
+      } catch (error) {
+        console.error('❌ [METADATA SYNC] Fatal error:', error);
+        return { error: 'Metadata sync failed', status: 500 };
       }
     } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/tracks\/[\w\d_-]+$/) && method === 'DELETE') {
       console.log('[API DEBUG] Matched DELETE /api/playlists/{id}/tracks/{trackId}');
@@ -1301,6 +1616,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       }
     }
     
+    console.log('[IPC HANDLER] No matching handler found for:', { method, endpoint, apiPath: apiPath || 'not set' });
     throw new Error(`No handler for ${method} ${endpoint}`);
   } catch (error) {
     console.error('API request error:', error);
@@ -1439,21 +1755,12 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
     await fs.promises.writeFile(filePath, Buffer.from(fileBuffer));
     console.log(`[UPLOAD] File saved successfully to: ${filePath}`);
     
-    // Extract metadata
-    let metadata = {
-      duration: 0,
-      artist: null,
-      album: null,
-      title: fileName.replace(/\.[^/.]+$/, ''), // Remove extension for title
-      bitrate: 0,
-      sampleRate: 0,
-      channels: 0
-    };
+    // Extract metadata using music-metadata
+    console.log(`[UPLOAD] Extracting metadata for ${fileName}`);
+    const { MetadataService } = await import('./services/metadataService');
+    const metadata = await MetadataService.extractFromBuffer(fileBuffer, fileName);
     
-    // TODO: Add music-metadata extraction when package is installed
-    // For now, use basic filename parsing
-    console.log(`[UPLOAD] Using basic metadata extraction for ${fileName}`);
-    console.log(`[UPLOAD] Extracted title: ${metadata.title}`);
+    console.log(`[UPLOAD] Extracted metadata:`, metadata);
     
     // Find or create artist
     let artistId = null;
@@ -1505,8 +1812,9 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
     const trackResult = await dbAsync.run(
       `INSERT INTO tracks (
         id, name, duration, artist_id, album_id, user_id, file_path, 
+        bitrate, sample_rate, channels, year, genre, track_number,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         trackId,
         metadata.title,
@@ -1515,6 +1823,12 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
         albumId,
         userId,
         `/uploads/${uniqueFileName}`,
+        metadata.bitrate,
+        metadata.sampleRate,
+        metadata.channels,
+        metadata.year,
+        metadata.genre,
+        metadata.trackNumber,
         Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000)
       ]
@@ -1545,6 +1859,12 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
         album: track.album_name ? { name: track.album_name } : null,
         userId: track.user_id,
         filePath: track.file_path,
+        bitrate: track.bitrate,
+        sampleRate: track.sample_rate,
+        channels: track.channels,
+        year: track.year,
+        genre: track.genre,
+        trackNumber: track.track_number,
         createdAt: track.created_at,
         updatedAt: track.updated_at
       }

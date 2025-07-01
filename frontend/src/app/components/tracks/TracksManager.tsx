@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import TracksTable from "./TracksTable";
+import TracksTable, { SortColumn, SortDirection } from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
 import CommentsPanel from "../comments/CommentsPanel";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useComments } from "@/app/hooks/useComments";
-import { _Comment as Comment } from "../../../../../shared/types";
+import { _Comment as Comment, Track } from "../../../../../shared/types";
+import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 
 // Temporary mock for the auth user - replace with your actual auth context
 const useMockAuth = () => ({
@@ -16,17 +17,33 @@ const useMockAuth = () => ({
   token: 'mock-token'
 });
 
-export default function TracksManager() {
+interface TracksManagerProps {
+  selectedPlaylistTracks?: Track[];
+  selectedPlaylistId?: string | null;
+  selectedPlaylistName?: string | null;
+}
+
+export default function TracksManager({ 
+  selectedPlaylistTracks, 
+  selectedPlaylistId,
+  selectedPlaylistName 
+}: TracksManagerProps) {
   console.log('🎯 TracksManager component rendering...');
   
   const { 
-    tracks = [], 
+    tracks: allTracks = [], 
     fetchTracks, 
     deleteTrack, 
     setCurrentTrackIndex,
     uploadBatchTracks,
     error: fetchError
   } = useTracks();
+  
+  const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks } = usePlaylists();
+  
+  // Use playlist tracks if a playlist is selected, otherwise use all tracks
+  const tracks = selectedPlaylistId ? (selectedPlaylistTracks || []) : allTracks;
+  const isPlaylistView = !!selectedPlaylistId;
   
   const {
     isPlaying,
@@ -48,13 +65,19 @@ export default function TracksManager() {
     tracks: tracks,
     safeTracks: safeTracks,
     safeTracksLength: safeTracks.length,
-    playbackCurrentTrack: playbackCurrentTrack
+    playbackCurrentTrack: playbackCurrentTrack,
+    isPlaylistView: isPlaylistView,
+    selectedPlaylistId: selectedPlaylistId
   });
   
-  const [selectedTrackId, setSelectedTrackId] = useState<number | null>(null);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [doNotAskAgain, setDoNotAskAgain] = useState(false);
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const { user, token } = useMockAuth(); // Replace with your actual auth hook
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
@@ -65,17 +88,103 @@ export default function TracksManager() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number }[]>([]);
+  const [reorderingTracks, setReorderingTracks] = useState(false);
+  const [showDebugTools, setShowDebugTools] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
   const regionsRef = useRef(null);
+  const lastReorderRef = useRef<{ startIndex: number; endIndex: number; timestamp: number } | null>(null);
 
   // Add comments functionality
   const { addMarkerAndComment, fetchCommentsAndMarkers, markers, setMarkers, selectedCommentId } = useComments(waveSurferRef, regionsRef);
 
-  // Removed hardcoded test markers - using real comment system now
+  // Enhanced reorder handler with optimistic updates and debouncing
+  const handleReorderTracks = async (startIndex: number, endIndex: number) => {
+    // Prevent simultaneous reordering operations
+    if (reorderingTracks) {
+      console.log('🔄 [DRAG] Reordering already in progress, skipping...');
+      return;
+    }
 
-  const handleSelectTrack = useCallback((trackId: number) => {
+    // Debounce rapid reorder attempts
+    const now = Date.now();
+    if (lastReorderRef.current && 
+        lastReorderRef.current.startIndex === startIndex && 
+        lastReorderRef.current.endIndex === endIndex &&
+        now - lastReorderRef.current.timestamp < 1000) {
+      console.log('🔄 [DRAG] Duplicate reorder operation detected, skipping...');
+      return;
+    }
+
+    // Skip if no actual movement
+    if (startIndex === endIndex) {
+      console.log('🔄 [DRAG] No movement detected, skipping...');
+      return;
+    }
+
+    console.log('🔄 [DRAG] Starting reorder operation:', { startIndex, endIndex, isPlaylistView, selectedPlaylistId });
+
+    if (!isPlaylistView || !selectedPlaylistId) {
+      console.log('❌ [DRAG] Reordering only supported in playlist view');
+      return;
+    }
+
+    try {
+      setReorderingTracks(true);
+      lastReorderRef.current = { startIndex, endIndex, timestamp: now };
+
+      // Create optimistically reordered tracks for immediate UI update
+      const reorderedTracks = [...tracks];
+      const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
+      reorderedTracks.splice(endIndex, 0, reorderedItem);
+
+      console.log('🔄 [DRAG] Optimistic reorder:', { 
+        originalLength: tracks.length, 
+        reorderedLength: reorderedTracks.length,
+        movedTrack: reorderedItem.name,
+        from: startIndex,
+        to: endIndex
+      });
+
+      // Optimistically update the UI immediately
+      setCurrentPlaylistTracks(reorderedTracks);
+
+      // Prepare track IDs in new order for API call
+      const trackIds = reorderedTracks.map(track => track.id);
+
+      console.log('🔄 [DRAG] Calling API with track order:', trackIds);
+
+      // Call the API to persist the change
+      const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
+      
+      if (result) {
+        console.log('✅ [DRAG] Reorder operation completed successfully');
+        
+        // Refresh the playlist data to ensure consistency
+        await fetchPlaylistById(selectedPlaylistId);
+      } else {
+        console.error('❌ [DRAG] Reorder operation failed');
+        throw new Error('Failed to reorder tracks');
+      }
+
+    } catch (error) {
+      console.error('❌ [DRAG] Error during reorder operation:', error);
+      
+      // Revert optimistic update on failure
+      if (selectedPlaylistId) {
+        console.log('🔄 [DRAG] Reverting optimistic update due to error');
+        await fetchPlaylistById(selectedPlaylistId);
+      }
+      
+      setError(`Failed to reorder tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setReorderingTracks(false);
+    }
+  };
+
+  const handleSelectTrack = useCallback((trackId: string) => {
     console.log('🎵 handleSelectTrack called with trackId:', trackId);
     console.log('🎵 Available tracks:', tracks);
     
@@ -93,52 +202,193 @@ export default function TracksManager() {
     }
   }, [tracks, setCurrentTrackIndex, selectTrack]);
 
+  const handlePlayTrack = useCallback((trackId: string) => {
+    console.log('🎵 handlePlayTrack called with trackId:', trackId);
+    handleSelectTrack(trackId);
+  }, [handleSelectTrack]);
+
+  // Sorting logic
+  const handleSort = useCallback((column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  }, [sortColumn, sortDirection]);
+
+  // Apply sorting to tracks
+  const sortedTracks = useCallback(() => {
+    if (!sortColumn) return safeTracks;
+
+    return [...safeTracks].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || '';
+          bValue = b.name?.toLowerCase() || '';
+          break;
+        case 'artistName':
+          aValue = a.artistName?.toLowerCase() || '';
+          bValue = b.artistName?.toLowerCase() || '';
+          break;
+        case 'albumName':
+          aValue = a.albumName?.toLowerCase() || '';
+          bValue = b.albumName?.toLowerCase() || '';
+          break;
+        case 'year':
+          aValue = a.year || 0;
+          bValue = b.year || 0;
+          break;
+        case 'duration':
+          aValue = a.duration || 0;
+          bValue = b.duration || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [safeTracks, sortColumn, sortDirection]);
+
+  const displayTracks = sortedTracks();
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't handle shortcuts if user is typing in an input
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target as HTMLElement)?.contentEditable === 'true'
+      ) {
+        return;
+      }
+
+      switch (event.key) {
+        case ' ': // Spacebar
+          event.preventDefault();
+          togglePlayback();
+          break;
+
+        case 'Delete':
+        case 'Backspace':
+          if (selectedTrackIds.length > 0) {
+            event.preventDefault();
+            setShowDeleteModal(true);
+          }
+          break;
+
+        case 'Enter':
+          if (selectedTrackIds.length > 0) {
+            event.preventDefault();
+            handlePlayTrack(selectedTrackIds[0]);
+          }
+          break;
+
+        case 'Escape':
+          event.preventDefault();
+          setSelectedTrackIds([]);
+          break;
+
+        case 'a':
+        case 'A':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            setSelectedTrackIds(displayTracks.map(track => track.id));
+          }
+          break;
+
+        case 'ArrowDown':
+          if (displayTracks.length > 0) {
+            event.preventDefault();
+            const currentIndex = selectedTrackIds.length > 0 
+              ? displayTracks.findIndex(track => track.id === selectedTrackIds[0]) 
+              : -1;
+            const nextIndex = Math.min(currentIndex + 1, displayTracks.length - 1);
+            const nextTrack = displayTracks[nextIndex];
+            if (nextTrack) {
+              if (event.shiftKey && selectedTrackIds.length > 0) {
+                // Extend selection
+                const startIndex = displayTracks.findIndex(track => track.id === selectedTrackIds[0]);
+                const endIndex = nextIndex;
+                const rangeIds = displayTracks
+                  .slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+                  .map(track => track.id);
+                setSelectedTrackIds(rangeIds);
+              } else {
+                setSelectedTrackIds([nextTrack.id]);
+              }
+            }
+          }
+          break;
+
+        case 'ArrowUp':
+          if (displayTracks.length > 0) {
+            event.preventDefault();
+            const currentIndex = selectedTrackIds.length > 0 
+              ? displayTracks.findIndex(track => track.id === selectedTrackIds[0]) 
+              : displayTracks.length;
+            const prevIndex = Math.max(currentIndex - 1, 0);
+            const prevTrack = displayTracks[prevIndex];
+            if (prevTrack) {
+              if (event.shiftKey && selectedTrackIds.length > 0) {
+                // Extend selection
+                const startIndex = displayTracks.findIndex(track => track.id === selectedTrackIds[0]);
+                const endIndex = prevIndex;
+                const rangeIds = displayTracks
+                  .slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+                  .map(track => track.id);
+                setSelectedTrackIds(rangeIds);
+              } else {
+                setSelectedTrackIds([prevTrack.id]);
+              }
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedTrackIds, displayTracks, handlePlayTrack, togglePlayback]);
+
   // Auto-select first track for testing
   useEffect(() => {
     console.log('🎵 Auto-select useEffect triggered:', {
-      safeTracksLength: safeTracks.length,
+      displayTracksLength: displayTracks.length,
       playbackCurrentTrack: playbackCurrentTrack,
-      firstTrack: safeTracks[0]
+      firstTrack: displayTracks[0]
     });
     
-    if (safeTracks.length > 0 && !playbackCurrentTrack) {
-      console.log('🎵 Auto-selecting first track for testing:', safeTracks[0]);
-      handleSelectTrack(safeTracks[0].id);
-    } else if (safeTracks.length === 0) {
+    if (displayTracks.length > 0 && !playbackCurrentTrack) {
+      console.log('🎵 Auto-selecting first track for testing:', displayTracks[0]);
+      handleSelectTrack(displayTracks[0].id);
+    } else if (displayTracks.length === 0) {
       console.log('❌ No tracks available for auto-select');
     } else if (playbackCurrentTrack) {
       console.log('❌ Track already selected:', playbackCurrentTrack);
     }
-  }, [safeTracks, playbackCurrentTrack, handleSelectTrack]);
+  }, [displayTracks, playbackCurrentTrack, handleSelectTrack]);
 
   const handleDeleteTrack = async () => {
-    if (selectedTrackId !== null) {
+    if (selectedTrackIds.length > 0) {
       try {
-        await deleteTrack(selectedTrackId.toString());
-        setSelectedTrackId(null);
+        // Delete the first selected track for now
+        await deleteTrack(selectedTrackIds[0]);
+        setSelectedTrackIds([]);
       } catch (error) {
         console.error("Error deleting track:", error);
       }
     }
     setShowDeleteModal(false);
-  };
-
-  const handleReorderTracks = async (startIndex: number, endIndex: number) => {
-    try {
-      const reorderedTracks = [...tracks];
-      const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
-      reorderedTracks.splice(endIndex, 0, reorderedItem);
-      
-      // Update the tracks in the context
-      // Note: This is a simplified version - you might want to add a reorderTracks function to your context
-      // that handles the reordering and updates the backend
-      console.log('Reordering tracks:', { startIndex, endIndex });
-      
-      // For now, we'll just log the reorder action
-      // You should implement proper reordering logic in your TracksProvider
-    } catch (error) {
-      console.error('Error reordering tracks:', error);
-    }
   };
 
   const handleSeek = (time: number) => {
@@ -147,11 +397,11 @@ export default function TracksManager() {
   };
 
   const handleNext = () => {
-    nextTrack(safeTracks);
+    nextTrack(displayTracks);
   };
 
   const handlePrevious = () => {
-    previousTrack(safeTracks);
+    previousTrack(displayTracks);
   };
 
   // Add comments functionality
@@ -259,7 +509,7 @@ export default function TracksManager() {
       });
 
       if (errors.length > 0) {
-        alert(`Some files were rejected:\n${errors.join('\n')}`);
+        setError(`Some files were rejected:\n${errors.join('\n')}`);
       }
 
       if (validFiles.length > 0) {
@@ -392,6 +642,13 @@ export default function TracksManager() {
     }
   };
 
+  const getViewTitle = () => {
+    if (isPlaylistView && selectedPlaylistName) {
+      return `${selectedPlaylistName} (${displayTracks.length} tracks)`;
+    }
+    return `All Tracks (${displayTracks.length})`;
+  };
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Audio player at the top */}
@@ -431,7 +688,7 @@ export default function TracksManager() {
 
       {/* Main content area */}
       <div 
-        className={`flex-1 overflow-auto p-4 transition-colors ${
+        className={`flex-1 overflow-auto p-3 transition-colors ${
           isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-400' : ''
         }`}
         onDragOver={handleDragOver}
@@ -441,6 +698,19 @@ export default function TracksManager() {
         {fetchError && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
             {fetchError}
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+            {error}
+            <button
+              onClick={() => setError(null)}
+              className="absolute top-0 bottom-0 right-0 px-4 py-3"
+            >
+              <span className="sr-only">Dismiss</span>
+              ×
+            </button>
           </div>
         )}
 
@@ -457,18 +727,18 @@ export default function TracksManager() {
 
         {/* Upload Progress */}
         {uploading && uploadProgress.length > 0 && (
-          <div className="mb-4 bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Uploading Files...</h3>
-            <div className="space-y-3">
+          <div className="mb-3 bg-white rounded shadow p-3">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Uploading Files...</h3>
+            <div className="space-y-2">
               {uploadProgress.map((item, index) => (
-                <div key={index} className="bg-gray-50 rounded-md p-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-900">{item.fileName}</span>
-                    <span className="text-sm text-gray-500">{item.progress}%</span>
+                <div key={index} className="bg-gray-50 rounded p-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-medium text-gray-900 truncate mr-2">{item.fileName}</span>
+                    <span className="text-xs text-gray-500 flex-shrink-0">{item.progress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
                       style={{ width: `${item.progress}%` }}
                     ></div>
                   </div>
@@ -478,96 +748,146 @@ export default function TracksManager() {
           </div>
         )}
 
-        {/* Simple Upload Button for Testing */}
-        <div className="mb-4">
-          <input
-            type="file"
-            multiple
-            accept="audio/*"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                const files = Array.from(e.target.files);
-                console.log('🚀 Testing file upload with files:', files.map(f => f.name));
-                setUploading(true);
-                setUploadProgress(files.map(file => ({ fileName: file.name, progress: 0 })));
-                
-                uploadBatchTracks(files).then(result => {
-                  console.log('📥 Test upload result:', result);
-                  if (result && result.successful > 0) {
-                    fetchTracks();
+        {/* Compact Upload and Debug Tools */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <input
+                type="file"
+                multiple
+                accept="audio/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    const files = Array.from(e.target.files);
+                    console.log('🚀 Testing file upload with files:', files.map(f => f.name));
+                    setUploading(true);
+                    setUploadProgress(files.map(file => ({ fileName: file.name, progress: 0 })));
+                    
+                    uploadBatchTracks(files).then(result => {
+                      console.log('📥 Test upload result:', result);
+                      if (result && result.successful > 0) {
+                        fetchTracks();
+                      }
+                      setUploading(false);
+                      setUploadProgress([]);
+                    }).catch(error => {
+                      console.error('❌ Test upload error:', error);
+                      setUploading(false);
+                      setUploadProgress([]);
+                    });
                   }
-                  setUploading(false);
-                  setUploadProgress([]);
-                }).catch(error => {
-                  console.error('❌ Test upload error:', error);
-                  setUploading(false);
-                  setUploadProgress([]);
-                });
-              }
-            }}
-            className="hidden"
-            id="file-upload-input"
-          />
-          <label
-            htmlFor="file-upload-input"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer mr-2"
-          >
-            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-            </svg>
-            Upload Audio Files
-          </label>
+                }}
+                className="hidden"
+                id="file-upload-input"
+              />
+              <label
+                htmlFor="file-upload-input"
+                className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
+              >
+                <svg className="w-3 h-3 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+                Upload Files
+              </label>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
+                className="text-xs px-2 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded"
+                title="Keyboard Shortcuts"
+              >
+                ⌨️ Shortcuts
+              </button>
+              <button
+                onClick={() => setShowDebugTools(!showDebugTools)}
+                className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 border border-gray-300 rounded"
+              >
+                {showDebugTools ? 'Hide' : 'Show'} Debug Tools
+              </button>
+            </div>
+          </div>
           
-          {/* Debug IPC Test Button */}
-          <button
-            onClick={async () => {
-              console.log('🔧 Testing IPC communication...');
-              try {
-                const { apiService } = await import('@/services/electronApiService');
-                const result = await apiService.debugTest({ test: 'data', timestamp: Date.now() });
-                console.log('🔧 IPC test result:', result);
-                alert(`IPC Test: ${result.success ? 'SUCCESS' : 'FAILED'}\n${result.message}`);
-              } catch (error) {
-                console.error('🔧 IPC test error:', error);
-                alert(`IPC Test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
-              }
-            }}
-            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 cursor-pointer mr-2"
-          >
-            🔧 Test IPC
-          </button>
+          {/* Collapsible Debug Tools */}
+          {showDebugTools && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              <button
+                onClick={async () => {
+                  console.log('🔧 Testing IPC communication...');
+                  try {
+                    const { apiService } = await import('@/services/electronApiService');
+                    const result = await apiService.debugTest({ test: 'data', timestamp: Date.now() });
+                    console.log('🔧 IPC test result:', result);
+                    alert(`IPC Test: ${result.success ? 'SUCCESS' : 'FAILED'}\n${result.message}`);
+                  } catch (error) {
+                    console.error('🔧 IPC test error:', error);
+                    alert(`IPC Test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  }
+                }}
+                className="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                🔧 Test IPC
+              </button>
+              
+              <button
+                onClick={testDatabaseIntegrity}
+                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                🔍 DB Integrity
+              </button>
+              
+              <button
+                onClick={testCleanupOrphaned}
+                className="text-xs px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700"
+              >
+                🧹 Cleanup
+              </button>
+              
+              <button
+                onClick={testFixPaths}
+                className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
+              >
+                🔧 Fix Paths
+              </button>
+            </div>
+          )}
           
-          {/* Database Integrity Test Button */}
-          <button
-            onClick={testDatabaseIntegrity}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 cursor-pointer mr-2"
-          >
-            🔍 Check DB Integrity
-          </button>
-          
-          {/* Cleanup Orphaned Files Button */}
-          <button
-            onClick={testCleanupOrphaned}
-            className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 cursor-pointer mr-2"
-          >
-            🧹 Cleanup Orphaned
-          </button>
-          
-          {/* Fix Invalid Paths Button */}
-          <button
-            onClick={testFixPaths}
-            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 cursor-pointer"
-          >
-            🔧 Fix Paths
-          </button>
+          {/* Keyboard Shortcuts Help */}
+          {showKeyboardHelp && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
+              <div className="font-medium text-blue-800 mb-2">Keyboard Shortcuts:</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-blue-700">
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Space</kbd> Play/Pause (global)</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Enter</kbd> Play selected</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">↑/↓</kbd> Navigate tracks</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Shift+↑/↓</kbd> Extend selection</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Ctrl+A</kbd> Select all</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Escape</kbd> Clear selection</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Delete</kbd> Delete selected</div>
+                <div><span className="text-blue-600">Click headers to sort</span></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Header */}
+        <div className="mb-3">
+          <h1 className="text-lg font-semibold text-gray-900">
+            {getViewTitle()}
+          </h1>
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <TracksTable
-            tracks={safeTracks}
+            tracks={displayTracks}
             onSelectTrack={handleSelectTrack}
-            setSelectedTrackId={setSelectedTrackId}
+            onPlayTrack={handlePlayTrack}
+            selectedTrackIds={selectedTrackIds}
             onReorderTracks={handleReorderTracks}
+            isPlaylistView={isPlaylistView}
+            sortColumn={sortColumn}
+            sortDirection={sortDirection}
+            onSort={handleSort}
           />
         </div>
 
@@ -631,4 +951,4 @@ export default function TracksManager() {
       )}
     </div>
   );
-}
+} 

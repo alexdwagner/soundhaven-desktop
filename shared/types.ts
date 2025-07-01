@@ -7,7 +7,7 @@ export interface ElectronAPI {
   // src/types.ts - old, from webapp
 
 export interface User {
-    id: number;
+    id: string;
     email: string;
     name?: string;
     createdAt: string;
@@ -18,15 +18,15 @@ export interface User {
   }
   
   export interface RefreshToken {
-    id: number;
+    id: string;
     token: string;
-    userId: number;
+    userId: string;
     user: User;
     expiresIn: string;
   }
   
   export interface Artist {
-    id: number;
+    id: string;
     name: string;
     bio?: string;
     createdAt: string;
@@ -36,66 +36,76 @@ export interface User {
   }
   
   export interface Album {
-    id: number;
+    id: string;
     name: string;
     releaseDate: string;
-    artistId: number;
+    artistId: string;
     artist: Artist;
     tracks: Track[];
   }
   
   export interface Track {
-    id: number;
+    id: string;
     name: string;
     duration: number;
-    artistId?: number;
+    artistId?: string | number | null;
+    artistName?: string | null;
     artist?: Artist;
-    albumId?: number;
+    albumId?: string | number | null;
+    albumName?: string | null;
     album?: Album;
-    createdAt: string;
-    updatedAt: string;
-    playlists: Playlist[];
-    genres: Genre[];
+    userId?: number;
+    createdAt: string | number;
+    updatedAt: string | number;
+    playlists?: Playlist[];
+    genres?: Genre[];
     filePath: string;
+    // Audio metadata
+    bitrate?: number | null;
+    sampleRate?: number | null;
+    channels?: number | null;
+    year?: number | null;
+    genre?: string | null;
+    trackNumber?: number | null;
   }
   
   export interface Playlist {
-    id: number;
+    id: string;
     name: string;
     description?: string;
-    userId: number;
+    userId: string;
     user: User;
     tracks?: Track[];
     TracksInPlaylist?: { track: Track }[];
   }
   
   export interface PlaylistItem {
-    id: number;
-    trackId: number;
-    playlistId: number;
+    id: string;
+    trackId: string;
+    playlistId: string;
     track: Track;
     playlist: Playlist;
     position: number;
   }
   
   export interface Genre {
-    id: number;
+    id: string;
     name: string;
     tracks: Track[];
   }
   
   export interface TracksInPlaylist {
     track: Track;
-    trackId: number;
+    trackId: string;
     playlist: Playlist;
-    playlistId: number;
+    playlistId: string;
   }
   
   export interface TracksInGenre {
     track: Track;
-    trackId: number;
+    trackId: string;
     genre: Genre;
-    genreId: number;
+    genreId: string;
   }
   
   export interface AudioControlsProps {
@@ -119,15 +129,15 @@ export interface User {
   };
   
   export type _Comment = {
-    id: number;
+    id: string;
     userName: string;
     content: string;
-    trackId: number;
-    userId: number;
+    trackId: string;
+    userId: string;
     createdAt: Date;
     marker?: Marker; // marker is optional and should be of type Marker
     replies?: Comment[]; // Optional array of reply comments
-    replyToId?: number; // Optional ID of the comment being replied to
+    replyToId?: string; // Optional ID of the comment being replied to
     replyTo?: Comment; // Optional Comment being replied to
   };
   
@@ -154,17 +164,17 @@ export interface User {
   // }
   
   export interface Marker {
-    id: string | number; // Align with backend type but allow string for frontend unique identification
+    id: string; // Use string for UUID consistency
     time: number; // Time in seconds, aligns with the backend model
-    commentId: number; // ID of the associated comment
-    trackId: number; // ID of the associated track
+    commentId: string; // ID of the associated comment
+    trackId: string; // ID of the associated track
     createdAt: string | Date; // Align with backend type, allowing string for potential JSON parsing
     waveSurferRegionID: string; // ID of the associated WaveSurfer.js region 
   
     // Additional properties for frontend functionality
     end?: number; // Optional, might not be needed if markers are single points in time
     data?: {
-      userId?: number;
+      userId?: string;
       commentContent?: string;
       isVisible?: boolean;
       customColor?: string;
@@ -189,7 +199,7 @@ export interface User {
   }
   
   export interface DecodedToken {
-    userId: number; // Custom property for user ID
+    userId: string; // Custom property for user ID
     sub?: string;   // Subject - standard JWT property, often used for user ID
     exp?: number;   // Expiration time
     iat?: number;   // Issued at time

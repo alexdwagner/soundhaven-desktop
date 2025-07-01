@@ -33,7 +33,12 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   onSelectComment,
   // setIsCommentInputFocused,
 }) => {
-  console.log("CommentsPanel rendered. show:", show, "trackId:", trackId);
+  console.log("🔴 [COMMENTS PANEL] Rendered with props:", {
+    trackId,
+    show,
+    onClose: typeof onClose,
+    onCloseFunction: onClose.toString().substring(0, 100)
+  });
 
   const { user, token, loading: authLoading } = useAuth();
   // TODO: Refactor so CommentsProvider handles newComment and setNewComment.
@@ -56,6 +61,19 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   const [isCommentInputFocused, setIsCommentInputFocused] = useState(false); // Local state for input
   const { setIsCommentInputFocused: setIsFocusedFromContext } = usePlayback();
   const [isPostingComment, setIsPostingComment] = useState(false);
+  
+  // Debug: Monitor show prop changes
+  useEffect(() => {
+    console.log('🔴 [COMMENTS PANEL] show prop changed to:', show);
+  }, [show]);
+  
+  // Debug: Monitor onClose function changes
+  useEffect(() => {
+    console.log('🔴 [COMMENTS PANEL] onClose function changed:', {
+      type: typeof onClose,
+      functionString: onClose.toString().substring(0, 150)
+    });
+  }, [onClose]);
   
   // Edit modal state
   const [editingComment, setEditingComment] = useState<any | null>(null);
@@ -147,8 +165,26 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
     );
 
     if (selectedRegion) {
-      (selectedRegion as any).update({ color: 'rgba(0, 255, 0, 0.7)' });
-      waveSurferRef.current.seekTo(selectedRegion.start / waveSurferRef.current.getDuration());
+      // Seek to the region's position in the track
+      try {
+        const duration = waveSurferRef.current.getDuration();
+        if (duration > 0) {
+          const seekPosition = selectedRegion.start / duration;
+          waveSurferRef.current.seekTo(seekPosition);
+        }
+      } catch (error) {
+        console.warn('Could not seek to region position:', error);
+      }
+      
+      // Try to update region color if the method exists
+      try {
+        if (selectedRegion.element && selectedRegion.element.style) {
+          // Direct DOM manipulation as fallback
+          selectedRegion.element.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+        }
+      } catch (error) {
+        console.warn('Could not update region color:', error);
+      }
     }
 
     // Call the parent component's onSelectComment handler
@@ -212,7 +248,63 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
 
   return (
     <div className={`fixed top-0 right-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 z-10 ${show ? 'translate-x-0 overflow-y-auto' : 'translate-x-full pointer-events-none'}`}>
-      <button onClick={onClose} className="p-2">Close</button>
+      {/* Header with close button */}
+      <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 relative z-50">
+        <h3 className="text-sm font-medium text-gray-900">Comments</h3>
+        <button 
+          onClick={(e) => {
+            console.log('🔴 [CLOSE BUTTON] Click event triggered');
+            console.log('🔴 [CLOSE BUTTON] Event target:', e.target);
+            console.log('🔴 [CLOSE BUTTON] Current target:', e.currentTarget);
+            console.log('🔴 [CLOSE BUTTON] Event type:', e.type);
+            console.log('🔴 [CLOSE BUTTON] Button element:', e.currentTarget.outerHTML.substring(0, 200));
+            
+            try {
+              e.preventDefault();
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              console.log('🔴 [CLOSE BUTTON] Event handlers called successfully');
+            } catch (eventError) {
+              console.error('🔴 [CLOSE BUTTON] Error in event handling:', eventError);
+            }
+            
+            console.log('🔴 [CLOSE BUTTON] About to call onClose function');
+            console.log('🔴 [CLOSE BUTTON] onClose type:', typeof onClose);
+            console.log('🔴 [CLOSE BUTTON] Current show prop:', show);
+            
+            try {
+              const result = onClose();
+              console.log('🔴 [CLOSE BUTTON] onClose() returned:', result);
+              console.log('🔴 [CLOSE BUTTON] onClose called successfully');
+            } catch (onCloseError) {
+              console.error('🔴 [CLOSE BUTTON] Error calling onClose:', onCloseError);
+              console.error('🔴 [CLOSE BUTTON] Error stack:', onCloseError.stack);
+            }
+            
+            // Add a delay to check if state changed
+            setTimeout(() => {
+              console.log('🔴 [CLOSE BUTTON] Show prop after 100ms:', show);
+            }, 100);
+          }}
+          onMouseDown={(e) => {
+            console.log('🔴 [CLOSE BUTTON] Mouse down event');
+            e.preventDefault();
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+          }}
+          onMouseUp={(e) => {
+            console.log('🔴 [CLOSE BUTTON] Mouse up event');
+          }}
+          className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded transition-colors z-[60] relative"
+          aria-label="Close comments"
+          type="button"
+          style={{ position: 'relative', zIndex: 60, pointerEvents: 'auto', cursor: 'pointer' }}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
       <div className="p-4">
         <form onSubmit={handleSubmit} className={!user || !token ? 'opacity-50 pointer-events-none' : ''}>
           <textarea

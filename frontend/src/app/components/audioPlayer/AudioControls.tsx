@@ -1,5 +1,4 @@
-import React, { useEffect } from "react";
-import { AudioControlProps } from "../shared/types.ts"
+import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlay,
@@ -12,7 +11,22 @@ import {
   faVolumeUp,
   faTachometerAlt,
 } from "@fortawesome/free-solid-svg-icons";
-import { usePlayback } from "@/app/hooks/UsePlayback";
+
+interface AudioControlsProps {
+  isPlaying: boolean;
+  onPlayPause: () => void;
+  onSkipForward: () => void;
+  onSkipBackward: () => void;
+  onPlayNext: () => void;
+  onPlayPrevious: () => void;
+  onPlaybackSpeedChange: (speed: number) => void;
+  onToggleFavorite: () => void;
+  onVolumeChange: (volume: number) => void;
+  isFavorite: boolean;
+  playbackSpeed: number;
+  volume: number;
+  modalOpen?: boolean;
+}
 
 const AudioControls: React.FC<AudioControlsProps> = ({
   isPlaying,
@@ -27,30 +41,8 @@ const AudioControls: React.FC<AudioControlsProps> = ({
   isFavorite,
   playbackSpeed,
   volume,
-  modalOpen,
 }) => {
-  const {
-    spacebarPlaybackEnabled,
-    toggleSpacebarPlayback,
-    isCommentInputFocused,
-  } = usePlayback();
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "Space") {
-        if (!modalOpen && !isCommentInputFocused && spacebarPlaybackEnabled) {
-          event.preventDefault();
-          onPlayPause();
-        }
-        // Otherwise, allow the spacebar to work normally with the modal input
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onPlayPause, modalOpen, isCommentInputFocused, spacebarPlaybackEnabled]);
+  // Spacebar handling moved to TracksManager for global access
 
   const iconStyle = { fontSize: "1.3em" }; // Increase icon size by 30%
 

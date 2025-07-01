@@ -32,6 +32,7 @@ interface TracksContextType {
   deleteTrack: (trackId: string) => Promise<void>;
   uploadTrack: (formData: FormData) => Promise<Track | undefined>;
   uploadBatchTracks: (files: File[]) => Promise<{ uploaded: Track[], failed: any[], total: number, successful: number, failedCount: number } | undefined>;
+  syncMetadata: () => Promise<{ summary: { processed: number, updated: number, errors: number, skipped: number }, results: any[] } | undefined>;
 }
 
 export const TracksContext = createContext<TracksContextType | undefined>(undefined);
@@ -59,6 +60,7 @@ const defaultContextValue: TracksContextType = {
   deleteTrack: async () => {},
   uploadTrack: async () => undefined,
   uploadBatchTracks: async () => undefined,
+  syncMetadata: async () => undefined,
 };
 
 export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
@@ -123,9 +125,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
           console.log('🎯 TracksProvider: Setting tracks:', response.data);
           setTracks(response.data);
           
-          if (response.data.length > 0) {
-            setCurrentTrackIndex(0); // Auto-select first track
-          }
+          // Removed auto-select to prevent auto-playing audio on app start
           
           console.log('🎯 TracksProvider: Tracks loaded successfully!');
         } else {
@@ -188,7 +188,28 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
       }
       
       const tracksToSet = response.data || [];
-      console.log('🎯 TracksProvider setting tracks:', tracksToSet);
+      console.log('🎯 TracksProvider setting tracks:', tracksToSet.length, 'tracks');
+      
+      // Log detailed info about first few tracks
+      if (tracksToSet.length > 0) {
+        console.log('🎯 TracksProvider first 3 tracks structure:');
+        tracksToSet.slice(0, 3).forEach((track, index) => {
+          console.log(`🎯 TracksProvider Track ${index + 1}:`, {
+            id: track.id,
+            name: track.name,
+            artistName: track.artistName,
+            artistId: track.artistId,
+            albumName: track.albumName,
+            year: track.year,
+            hasArtistName: !!track.artistName,
+            hasArtistId: !!track.artistId,
+            allKeys: Object.keys(track)
+          });
+        });
+      } else {
+        console.log('🎯 TracksProvider No tracks to set!');
+      }
+      
       setTracks(tracksToSet);
       console.log('🎯 TracksProvider tracks set successfully, new length should be:', tracksToSet.length);
     } catch (error) {
@@ -212,7 +233,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
       // Update local state
       setTracks(prevTracks => 
         prevTracks.map(track => 
-          track.id === trackId ? { ...track, ...updatedTrack } : track
+          track.id === String(trackId) ? { ...track, ...updatedTrack } : track
         )
       );
       
@@ -242,7 +263,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
       const updatedTrack = await apiService.updateTrackMetadata(Number(trackId), metadata);
       setTracks(prevTracks => 
         prevTracks.map(track => 
-          track.id === Number(trackId) ? updatedTrack : track
+          track.id === trackId ? updatedTrack : track
         )
       );
     } catch (error) {
@@ -261,8 +282,8 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
       if (response.error) {
         throw new Error(response.error);
       }
-      setTracks(prevTracks => prevTracks.filter(track => track.id !== Number(trackId)));
-      if (currentTrackIndex !== null && tracks[currentTrackIndex]?.id === Number(trackId)) {
+      setTracks(prevTracks => prevTracks.filter(track => track.id !== trackId));
+      if (currentTrackIndex !== null && tracks[currentTrackIndex]?.id === trackId) {
         setCurrentTrackIndex(null);
       }
     } catch (error) {
@@ -294,6 +315,32 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
       setIsLoading(false);
     }
   }, []);
+
+  // Sync metadata for existing tracks
+  const syncMetadata = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      console.log('[TRACKS PROVIDER] Starting metadata sync...');
+      
+      const response = await apiService.syncMetadata();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      console.log('[TRACKS PROVIDER] Metadata sync completed:', response.data);
+      
+      // Refresh tracks list to show updated metadata
+      await fetchTracks();
+      
+      return response.data;
+    } catch (error) {
+      console.error('[TRACKS PROVIDER] Error syncing metadata:', error);
+      setError(error instanceof Error ? error.message : 'Failed to sync metadata');
+      return undefined;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchTracks]);
 
   // Upload multiple tracks
   const uploadBatchTracks = useCallback(async (files: File[]) => {
@@ -341,7 +388,8 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     updateTrackMetadata,
     deleteTrack,
     uploadTrack,
-    uploadBatchTracks
+    uploadBatchTracks,
+    syncMetadata
   }), [
     tracks,
     currentTrackIndex,
@@ -359,7 +407,8 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     updateTrackMetadata,
     deleteTrack,
     uploadTrack,
-    uploadBatchTracks
+    uploadBatchTracks,
+    syncMetadata
   ]);
 
   return (

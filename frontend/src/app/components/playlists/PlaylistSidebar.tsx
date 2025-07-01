@@ -2,18 +2,18 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Playlist, Track } from "../../../../../shared/types";
-import { usePlaylists } from "@/app/hooks/UsePlaylists";
+import { usePlaylists } from "../../providers/PlaylistsProvider";
 import { useAuth } from "@/app/hooks/UseAuth";
 import { useTracks } from "@/app/hooks/UseTracks";
 import PlaylistItem from "./PlaylistItem";
 import DuplicateTrackModal from "../modals/DuplicateTrackModal";
 import { DndContext } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 
 interface PlaylistSidebarProps {
-  onSelectPlaylist: (tracks: Track[], playlistId: number) => void;
+  onSelectPlaylist: (tracks: Track[], playlistId: string, playlistName?: string) => void;
   onViewAllTracks: () => void;
-  onDeletePlaylist: (playlistId: number) => void;
+  onDeletePlaylist: (playlistId: string) => void;
 }
 
 const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
@@ -21,32 +21,72 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   onViewAllTracks,
   onDeletePlaylist,
 }) => {
-  const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists } = usePlaylists();
+  const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists, loading, error: playlistError } = usePlaylists();
   const { user, token } = useAuth();
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
+  
+  console.log("🔍 PlaylistSidebar: Component rendering...");
+  console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
+  console.log("🔍 PlaylistSidebar: User from useAuth:", user ? user.email : 'null');
+  console.log("🔍 PlaylistSidebar: Playlists from usePlaylists:", playlists);
+  console.log("🔍 PlaylistSidebar: Playlists count:", playlists?.length || 0);
+  console.log("🔍 PlaylistSidebar: Loading state:", loading);
+  console.log("🔍 PlaylistSidebar: Error state:", playlistError);
+  console.log("🔍 PlaylistSidebar: createPlaylist function:", typeof createPlaylist);
+  
+  if (playlists && playlists.length > 0) {
+    console.log("🔍 PlaylistSidebar: First playlist:", playlists[0]);
+  }
+  
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const libraryButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (token) fetchPlaylists();
-  }, [token, fetchPlaylists]);
+    console.log("🔍 PlaylistSidebar: useEffect triggered");
+    console.log("🔍 PlaylistSidebar: fetchPlaylists function:", typeof fetchPlaylists);
+    console.log("🔍 PlaylistSidebar: About to call fetchPlaylists (local-first, no token required)");
+    fetchPlaylists();
+  }, [fetchPlaylists]);
+
+  // Additional effect to monitor playlists changes
+  useEffect(() => {
+    console.log("🔍 PlaylistSidebar: Playlists changed:", playlists?.length || 0, "playlists");
+    if (playlists && playlists.length > 0) {
+      console.log("🔍 PlaylistSidebar: Playlist names:", playlists.map(p => p.name));
+    }
+  }, [playlists]);
 
   const handleCreatePlaylist = async () => {
+    console.log("🎯 Add Playlist button clicked!");
+    console.log("🎯 User:", user);
+    console.log("🎯 Token:", token);
+    console.log("🎯 Playlists count:", playlists.length);
+    
     try {
-      if (!user) throw new Error("User not authenticated");
-      const newPlaylist = await createPlaylist({ name: `New Playlist ${playlists.length + 1}`, userId: user.id, description: "A new playlist" });
-      if (newPlaylist) setPlaylists([...playlists, newPlaylist]);
+      // For local-first app, we don't require authentication
+      console.log("🎯 Calling createPlaylist...");
+      const newPlaylist = await createPlaylist(`New Playlist ${playlists.length + 1}`, "A new playlist");
+      console.log("🎯 CreatePlaylist result:", newPlaylist);
+      
+      if (newPlaylist) {
+        console.log("✅ Playlist created successfully:", newPlaylist);
+        // The createPlaylist method in PlaylistsProvider already updates the state
+        // so we don't need to manually setPlaylists here
+      } else {
+        console.error("❌ CreatePlaylist returned null");
+        setError("Failed to create playlist - no result returned");
+      }
     } catch (error) {
-      console.error("Error creating playlist:", error);
+      console.error("❌ Error creating playlist:", error);
       setError(error instanceof Error ? error.message : "Failed to create playlist");
     }
   };
 
-  const handlePlaylistSelect = async (playlistId: number) => {
+  const handlePlaylistSelect = async (playlistId: string) => {
     try {
       const playlist = await fetchPlaylistById(playlistId);
       if (playlist?.tracks) {
-        onSelectPlaylist(playlist.tracks, playlistId);
+        onSelectPlaylist(playlist.tracks, playlistId, playlist.name);
         setSelectedPlaylistId(playlistId);
       } else {
         setError("Failed to load playlist tracks");
@@ -57,7 +97,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     }
   };
 
-  const handleDeletePlaylist = async (playlistId: number) => {
+  const handleDeletePlaylist = async (playlistId: string) => {
     try {
       await deletePlaylist(playlistId);
       setSelectedPlaylistId(null);
@@ -71,33 +111,45 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
-    if (active.id !== over.id) {
-      const oldIndex = playlists.findIndex((p) => p.id === Number(active.id));
-      const newIndex = playlists.findIndex((p) => p.id === Number(over.id));
+    console.log('🔄 [PLAYLIST SORT] Drag ended:', { activeId: active.id, overId: over?.id });
+    
+    if (active.id !== over?.id && over) {
+      const oldIndex = playlists.findIndex((p) => p.id === active.id);
+      const newIndex = playlists.findIndex((p) => p.id === over.id);
+      console.log('🔄 [PLAYLIST SORT] Moving playlist from index', oldIndex, 'to', newIndex);
+      
       const reorderedPlaylists = arrayMove(playlists, oldIndex, newIndex);
+      console.log('🔄 [PLAYLIST SORT] New order:', reorderedPlaylists.map(p => p.name));
+      
       setPlaylists(reorderedPlaylists);
       updatePlaylistOrder(reorderedPlaylists.map((p) => p.id));
     }
   };
 
-  if (!token) return null;
+  console.log("🔍 PlaylistSidebar: About to render component");
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
-      <div className="playlist-sidebar p-4 text-gray min-w-48">
-        <button className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded" onClick={handleCreatePlaylist}>
-          Add Playlist
+      <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
+        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
+          + Add Playlist
         </button>
-        <button ref={libraryButtonRef} className="w-full hover:text-blue-400 text-white font-bold py-2 mt-2 rounded my-1 text-left" onClick={onViewAllTracks}>
-          {user ? `${user.name}'s Library` : "Anon's Library"}
+        <button ref={libraryButtonRef} className="w-full hover:bg-gray-700 text-gray-100 font-medium py-1 px-2 rounded text-sm mb-2 text-left transition-colors bg-gray-900" onClick={onViewAllTracks}>
+          {user ? `${user.name}'s Library` : "My Library"}
         </button>
 
-        <h3 className="font-bold my-1 py-2 border-b border-t border-gray-600">Playlists</h3>
+        <h3 className="font-medium text-xs uppercase text-gray-400 border-b border-gray-600 pb-1 mb-2">Playlists</h3>
 
-        <SortableContext items={playlists.map((p) => p.id.toString())} strategy={verticalListSortingStrategy}>
+        <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           <ul className="px-1">
             {playlists.map((playlist) => (
-              <PlaylistItem key={playlist.id} playlist={playlist} onSelect={() => handlePlaylistSelect(playlist.id)} isSelected={playlist.id === selectedPlaylistId} onDelete={() => handleDeletePlaylist(playlist.id)} />
+              <PlaylistItem 
+                key={playlist.id} 
+                playlist={playlist} 
+                onSelect={() => handlePlaylistSelect(playlist.id)} 
+                isSelected={playlist.id === selectedPlaylistId} 
+                onDelete={() => handleDeletePlaylist(playlist.id)} 
+              />
             ))}
           </ul>
         </SortableContext>

@@ -13,6 +13,14 @@ import {
 import type { CreateCommentDto } from '@shared/dtos/create-comment.dto';
 import type { Comment } from '@shared/types/comment';
 
+// Define extended playlist type for API responses
+interface ExtendedPlaylist extends Playlist {
+  id: string;
+  userId: string;
+  user: User;
+  tracks: Track[];
+}
+
 // Define types for API responses
 interface ApiResponse<T> {
   data?: T;
@@ -40,6 +48,13 @@ declare global {
 
 const isElectron = typeof window !== 'undefined' && window.electron?.ipcRenderer;
 
+// Debug Electron detection
+console.log('🔍 [ELECTRON DETECTION] typeof window:', typeof window);
+console.log('🔍 [ELECTRON DETECTION] window !== undefined:', typeof window !== 'undefined');
+console.log('🔍 [ELECTRON DETECTION] window.electron exists:', !!(typeof window !== 'undefined' && window.electron));
+console.log('🔍 [ELECTRON DETECTION] window.electron.ipcRenderer exists:', !!(typeof window !== 'undefined' && window.electron?.ipcRenderer));
+console.log('🔍 [ELECTRON DETECTION] isElectron:', isElectron);
+
 // Base URL for API requests (only used in web mode)
 const getBaseUrl = () => {
   if (isElectron) return ''; // In Electron, we use IPC
@@ -51,37 +66,77 @@ const makeRequest = async <T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> => {
+  // Special logging for drag and drop operations
+  const isDragDropRequest = endpoint.includes('/playlists/') && endpoint.includes('/tracks/') && options.method === 'POST';
+  if (isDragDropRequest) {
+    console.log(`[DRAG N DROP] 🔌 NETWORK: makeRequest for drag and drop operation`);
+    console.log(`[DRAG N DROP] 🔌 NETWORK: endpoint="${endpoint}", method="${options.method}"`);
+  }
+  
+  console.log('🔌 [MAKE REQUEST] Starting makeRequest with:', { endpoint, method: options.method, isElectron });
+  console.log('🔌 [MAKE REQUEST] window.electron available:', !!window.electron);
+  console.log('🔌 [MAKE REQUEST] window.electron.ipcRenderer available:', !!window.electron?.ipcRenderer);
+  
   if (isElectron) {
     // Use Electron IPC
     try {
+      console.log('[MAKE REQUEST] Entering Electron IPC branch');
       // Parse the request body if it exists
       let parsedBody = null;
       if (options.body) {
         try {
           parsedBody = JSON.parse(options.body as string);
+          console.log('[MAKE REQUEST] Parsed body:', parsedBody);
         } catch (e) {
           console.warn('Failed to parse request body as JSON:', e);
           parsedBody = options.body;
         }
       }
       
-      console.log('Making IPC request:', {
-        endpoint,
-        method: options.method || 'GET',
-        body: parsedBody
-      });
-
-      const response = await window.electron!.ipcRenderer.invoke('api-request', {
+      const ipcRequestData = {
         endpoint,
         method: options.method || 'GET',
         headers: options.headers || {},
         body: parsedBody,
-      });
+      };
+      
+      console.log('🔌 [MAKE REQUEST] Making IPC request:', ipcRequestData);
+      console.log('🔌 [MAKE REQUEST] About to call window.electron.ipcRenderer.invoke...');
+      
+      if (!window.electron?.ipcRenderer) {
+        console.error('🔌 [MAKE REQUEST] ERROR: window.electron.ipcRenderer is not available!');
+        console.error('🔌 [MAKE REQUEST] window object keys:', typeof window !== 'undefined' ? Object.keys(window) : 'window undefined');
+        return {
+          error: 'Electron IPC not available',
+          status: 500
+        };
+      }
+
+      console.log('🔌 [MAKE REQUEST] Making IPC call with data:', ipcRequestData);
+      
+      let response;
+      try {
+        response = await window.electron!.ipcRenderer.invoke('api-request', ipcRequestData);
+        console.log('[MAKE REQUEST] IPC call successful');
+      } catch (ipcError) {
+        console.error('[MAKE REQUEST] IPC call failed:', ipcError);
+        console.error('[MAKE REQUEST] IPC error type:', typeof ipcError);
+        console.error('[MAKE REQUEST] IPC error message:', ipcError instanceof Error ? ipcError.message : String(ipcError));
+        return {
+          error: `IPC call failed: ${ipcError instanceof Error ? ipcError.message : String(ipcError)}`,
+          status: 500
+        };
+      }
+      
+      console.log('[MAKE REQUEST] Raw IPC response received:', response);
+      console.log('[MAKE REQUEST] Response type:', typeof response);
+      console.log('[MAKE REQUEST] Response keys:', response && typeof response === 'object' ? Object.keys(response) : 'not an object');
 
       console.log('IPC response:', response);
 
       // Handle the response structure
       if (response?.error) {
+        console.log('IPC response has error:', response.error);
         return {
           error: response.error,
           status: response.status || 500
@@ -89,7 +144,10 @@ const makeRequest = async <T = any>(
       }
 
       // If the response is already in the correct format, return it
-      if (response?.data) {
+      if (response?.data !== undefined) {
+        console.log('IPC response has data property:', response.data);
+        console.log('Data type:', typeof response.data);
+        console.log('Data keys:', response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'not an object');
         return {
           data: response.data,
           status: 200
@@ -97,14 +155,18 @@ const makeRequest = async <T = any>(
       }
 
       // Otherwise, wrap the response in a data property
+      console.log('IPC response does not have data property, wrapping response:', response);
       return {
         data: response,
         status: 200
       };
     } catch (error) {
-      console.error('Electron API request failed:', error);
+      console.error('[MAKE REQUEST] Error in Electron IPC branch:', error);
+      console.error('[MAKE REQUEST] Error type:', typeof error);
+      console.error('[MAKE REQUEST] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[MAKE REQUEST] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error in IPC communication',
         status: 500
       };
     }
@@ -276,37 +338,81 @@ export const apiService = {
   // ===== Track Management =====
   async getTracks(): Promise<ApiResponse<Track[]>> {
     try {
+      console.log('📡 [API SERVICE] Fetching tracks...');
+      
       const user = this.getStoredUser();
       const headers: Record<string, string> = {};
       if (user?.id) {
         headers['x-user-id'] = user.id.toString();
       }
       
-      const response = await makeRequest<Track[]>('/tracks', {
+      const response = await makeRequest<Track[]>('/api/tracks', {
         method: 'GET',
         headers
       });
+      
+      console.log('📡 [API SERVICE] Raw API response:', response);
+      
       if (response.error) {
+        console.error('📡 [API SERVICE] API returned error:', response.error);
         return { error: response.error, status: response.status };
       }
-      // Ensure the response data matches the Track interface
+      
+      if (response.data && response.data.length > 0) {
+        console.log('📡 [API SERVICE] First 3 tracks from API before mapping:');
+        response.data.slice(0, 3).forEach((track, index) => {
+          console.log(`📡 [API SERVICE] Track ${index + 1}:`, {
+            id: track.id,
+            name: track.name,
+            artistName: track.artistName,
+            artistId: track.artistId,
+            albumName: track.albumName,
+            year: track.year,
+            hasArtistName: !!track.artistName,
+            hasArtistId: !!track.artistId,
+            allKeys: Object.keys(track)
+          });
+        });
+      }
+      
+      // Ensure the response data matches the Track interface and includes new metadata fields
       const tracks = response.data.map(track => ({
         id: track.id,
         name: track.name,
         duration: track.duration,
         artistId: track.artistId,
+        artistName: track.artistName, // Include artistName
         artist: track.artist,
         albumId: track.albumId,
+        albumName: track.albumName, // Include albumName
         album: track.album,
+        userId: track.userId,
         createdAt: track.createdAt,
         updatedAt: track.updatedAt,
         playlists: track.playlists || [],
         genres: track.genres || [],
-        filePath: track.filePath
+        filePath: track.filePath,
+        // Include new metadata fields
+        bitrate: track.bitrate,
+        sampleRate: track.sampleRate,
+        channels: track.channels,
+        year: track.year,
+        genre: track.genre,
+        trackNumber: track.trackNumber
       }));
+      
+      console.log('📡 [API SERVICE] Tracks after mapping:', tracks.length, 'tracks');
+      if (tracks.length > 0) {
+        console.log('📡 [API SERVICE] First mapped track:', {
+          name: tracks[0].name,
+          artistName: tracks[0].artistName,
+          year: tracks[0].year
+        });
+      }
+      
       return { data: tracks, error: null, status: 200 };
     } catch (error) {
-      console.error('Error fetching tracks:', error);
+      console.error('📡 [API SERVICE] Error fetching tracks:', error);
       return { error: 'Failed to fetch tracks', status: 500 };
     }
   },
@@ -319,50 +425,103 @@ export const apiService = {
 
   // ===== Playlist Management =====
   async getPlaylists() {
-    const { data, error } = await makeRequest<Array<{ id: number; name: string }>>('/playlists');
-    if (error) throw new Error(error);
+    console.log('🎵 [ELECTRON API] getPlaylists method called');
+    const { data, error } = await makeRequest<ExtendedPlaylist[]>('/api/playlists');
+    console.log('🎵 [ELECTRON API] getPlaylists response:', { data: data?.length, error });
+    
+    if (error) {
+      console.error('🎵 [ELECTRON API] Error in getPlaylists:', error);
+      throw new Error(error);
+    }
+    
+    console.log('🎵 [ELECTRON API] Returning playlists:', data?.length || 0);
     return data || [];
   },
 
-  async getPlaylistById(id: number) {
-    const { data, error } = await makeRequest<Playlist>(`/playlists/${id}`);
+  async getPlaylistById(id: string) {
+    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${id}`);
     if (error) throw new Error(error);
     return data;
   },
 
   async createPlaylist(playlistData: { name: string; description?: string }) {
-    const { data, error } = await makeRequest<Playlist>('/playlists', {
-      method: 'POST',
-      body: JSON.stringify(playlistData),
-    });
-    if (error) throw new Error(error);
-    return data;
+    console.log('[ELECTRON API] createPlaylist method called');
+    console.log('[ELECTRON API] Creating playlist with data:', playlistData);
+    console.log('[ELECTRON API] isElectron:', isElectron);
+    console.log('[ELECTRON API] window.electron available:', !!window.electron);
+    
+    try {
+      const { data, error } = await makeRequest<Playlist>('/api/playlists', {
+        method: 'POST',
+        body: JSON.stringify(playlistData),
+      });
+      console.log('[ELECTRON API] createPlaylist response:', { data, error });
+      console.log('[ELECTRON API] Response data type:', typeof data);
+      console.log('[ELECTRON API] Response data keys:', data ? Object.keys(data) : 'null/undefined');
+      
+      if (error) {
+        console.error('[ELECTRON API] Error in createPlaylist:', error);
+        throw new Error(error);
+      }
+      
+      console.log('[ELECTRON API] Returning data:', data);
+      return data;
+    } catch (catchError) {
+      console.error('[ELECTRON API] Exception in createPlaylist:', catchError);
+      console.error('[ELECTRON API] Exception type:', typeof catchError);
+      console.error('[ELECTRON API] Exception message:', catchError instanceof Error ? catchError.message : String(catchError));
+      throw catchError;
+    }
   },
 
-  async deletePlaylist(id: number) {
-    const { error } = await makeRequest(`/playlists/${id}`, {
+  async deletePlaylist(id: string) {
+    const { error } = await makeRequest(`/api/playlists/${id}`, {
       method: 'DELETE',
     });
     if (error) throw new Error(error);
   },
 
-  async addTrackToPlaylist(playlistId: number, trackId: number, force: boolean = false) {
-    const { data, error } = await makeRequest<any>(`/playlists/${playlistId}/tracks/${trackId}${force ? '?force=true' : ''}`, {
-      method: 'POST',
-    });
-    if (error) throw new Error(error);
-    return data;
+  async addTrackToPlaylist(playlistId: string, trackId: string, force: boolean = false) {
+    console.log(`[DRAG N DROP] 🌐 ElectronAPI: addTrackToPlaylist called`);
+    console.log(`[DRAG N DROP] 🌐 ElectronAPI: playlistId="${playlistId}", trackId="${trackId}", force=${force}`);
+    
+    const endpoint = `/api/playlists/${playlistId}/tracks/${trackId}${force ? '?force=true' : ''}`;
+    console.log(`[DRAG N DROP] 🌐 ElectronAPI: Making request to endpoint: ${endpoint}`);
+    
+    try {
+      const { data, error } = await makeRequest<any>(endpoint, {
+        method: 'POST',
+      });
+      
+      console.log(`[DRAG N DROP] 🌐 ElectronAPI: makeRequest response:`, { 
+        data, 
+        error, 
+        dataType: typeof data,
+        hasData: !!data 
+      });
+      
+      if (error) {
+        console.error(`[DRAG N DROP] ❌ ElectronAPI: Request error: ${error}`);
+        throw new Error(error);
+      }
+      
+      console.log(`[DRAG N DROP] ✅ ElectronAPI: Successfully added track to playlist`);
+      return data;
+    } catch (error) {
+      console.error(`[DRAG N DROP] ❌ ElectronAPI: Exception in addTrackToPlaylist:`, error);
+      throw error;
+    }
   },
 
-  async removeTrackFromPlaylist(playlistId: number, trackId: number) {
-    const { error } = await makeRequest(`/playlists/${playlistId}/tracks/${trackId}`, {
+  async removeTrackFromPlaylist(playlistId: string, trackId: string) {
+    const { error } = await makeRequest(`/api/playlists/${playlistId}/tracks/${trackId}`, {
       method: 'DELETE',
     });
     if (error) throw new Error(error);
   },
 
-  async updatePlaylistMetadata(playlistId: number, updates: { name?: string; description?: string }) {
-    const { data, error } = await makeRequest<Playlist>(`/playlists/${playlistId}/metadata`, {
+  async updatePlaylistMetadata(playlistId: string, updates: { name?: string; description?: string }) {
+    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${playlistId}/metadata`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
@@ -370,8 +529,8 @@ export const apiService = {
     return data;
   },
 
-  async reorderPlaylists(playlistIds: number[]) {
-    const { data, error } = await makeRequest<Playlist[]>('/playlists/reorder', {
+  async reorderPlaylists(playlistIds: string[]) {
+    const { data, error } = await makeRequest<Playlist[]>('/api/playlists/reorder', {
       method: 'PATCH',
       body: JSON.stringify({ playlistIds }),
     });
@@ -379,8 +538,8 @@ export const apiService = {
     return data;
   },
 
-  async reorderPlaylistTracks(playlistId: number, trackIds: number[]) {
-    const { data, error } = await makeRequest<Playlist>(`/playlists/${playlistId}/track-order`, {
+  async reorderPlaylistTracks(playlistId: string, trackIds: string[]) {
+    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${playlistId}/track-order`, {
       method: 'PATCH',
       body: JSON.stringify({ trackIds }),
     });
@@ -515,7 +674,7 @@ export const apiService = {
   },
 
   // Track Management
-  async updateTrackMetadata(id: number, updates: Partial<Track>): Promise<Track> {
+  async updateTrackMetadata(id: string, updates: Partial<Track>): Promise<Track> {
     const response = await makeRequest<Track>(`/tracks/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)
@@ -540,7 +699,7 @@ export const apiService = {
     };
   },
 
-  async deleteTrack(id: number): Promise<ApiResponse<void>> {
+  async deleteTrack(id: string): Promise<ApiResponse<void>> {
     try {
       const response = await makeRequest<void>(`/tracks/${id}`, {
         method: 'DELETE'
@@ -731,6 +890,22 @@ export const apiService = {
         stack: error instanceof Error ? error.stack : 'No stack trace'
       });
       return { error: 'Failed to upload batch tracks', status: 500 };
+    }
+  },
+
+  async syncMetadata(): Promise<ApiResponse<{ summary: { processed: number, updated: number, errors: number, skipped: number }, results: any[] }>> {
+    try {
+      console.log('[METADATA SYNC] Starting metadata sync...');
+      
+      const response = await makeRequest<{ summary: { processed: number, updated: number, errors: number, skipped: number }, results: any[] }>('/api/tracks/sync-metadata', {
+        method: 'POST'
+      });
+      
+      console.log('[METADATA SYNC] Sync completed:', response);
+      return response;
+    } catch (error) {
+      console.error('[METADATA SYNC] Error syncing metadata:', error);
+      return { error: 'Failed to sync metadata', status: 500 };
     }
   },
 

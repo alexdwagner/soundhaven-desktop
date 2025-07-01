@@ -10,7 +10,8 @@
     "seed:test-user": "ts-node scripts/seedTestUser.ts",
     "seed:test-track": "ts-node scripts/seedTestTrack.ts",
     "setup-db": "node scripts/setup-db.js",
-    "reset-db": "node scripts/setup-db.js"
+    "reset-db": "node scripts/setup-db.js",
+    "backfill-metadata": "tsx scripts/backfillMetadata.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^3.0.0",

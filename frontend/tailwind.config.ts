@@ -13,6 +13,10 @@ export default {
         background: "#ffffff",
         foreground: "#171717",
       },
+      scale: {
+        '98': '0.98',
+        '102': '1.02',
+      },
     },
   },
   plugins: [],

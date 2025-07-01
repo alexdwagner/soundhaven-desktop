@@ -257,21 +257,85 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       try {
         console.log('🧹 AudioPlayer: Destroying previous WaveSurfer instance...');
         
-        // Properly pause and stop the audio first
-        if (waveSurferRef.current.isPlaying()) {
-          waveSurferRef.current.pause();
-        }
-        
-        // Clear all event listeners
-        waveSurferRef.current.unAll();
-        
-        // Destroy the instance
-        waveSurferRef.current.destroy();
-        waveSurferRef.current = null;
+        const oldInstance = waveSurferRef.current;
+        waveSurferRef.current = null; // Clear reference immediately to prevent race conditions
         setIsReady(false);
         
+        // Safely destroy the old instance
+        try {
+          // Try to pause and stop any ongoing operations first
+          if (typeof oldInstance.isPlaying === 'function' && oldInstance.isPlaying()) {
+            oldInstance.pause();
+          }
+          
+          // Try to unsubscribe from events to prevent further callbacks
+          if (typeof (oldInstance as any).unAll === 'function') {
+            (oldInstance as any).unAll();
+          }
+        } catch (pauseError) {
+          // Ignore pause/cleanup errors, instance might be in invalid state
+          console.log('🧹 AudioPlayer: Could not pause/cleanup old instance, continuing with destroy...');
+        }
+        
+        // Add a micro-delay to let any pending operations settle
+        await new Promise(resolve => setTimeout(resolve, 10));
+        
+        // Destroy with maximum error suppression
+        const originalConsoleError = console.error;
+        const originalConsoleWarn = console.warn;
+        const originalConsoleLog = console.log;
+        
+        // Track if we handled the destroy to prevent multiple calls
+        let destroyAttempted = false;
+        
+        try {
+          // Aggressively suppress ALL console output during destroy
+          console.error = () => {}; // Suppress all errors
+          console.warn = () => {};  // Suppress all warnings  
+          console.log = () => {};   // Suppress all logs
+          
+          // Set up a global error handler to catch unhandled errors
+          const handleGlobalError = (event: ErrorEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            return true; // Prevent default handling
+          };
+          
+          const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+          };
+          
+          // Add global error handlers
+          window.addEventListener('error', handleGlobalError, true);
+          window.addEventListener('unhandledrejection', handleUnhandledRejection, true);
+          
+          // Destroy the instance
+          if (!destroyAttempted && oldInstance && typeof oldInstance.destroy === 'function') {
+            destroyAttempted = true;
+            oldInstance.destroy();
+          }
+          
+          // Clean up global error handlers
+          setTimeout(() => {
+            window.removeEventListener('error', handleGlobalError, true);
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection, true);
+          }, 100);
+          
+        } catch (destroyError: any) {
+          // Silently ignore ALL errors during destroy
+          // AbortError is expected when destroying during audio loading
+        } finally {
+          // Always restore console methods after a delay
+          setTimeout(() => {
+            console.error = originalConsoleError;
+            console.warn = originalConsoleWarn;
+            console.log = originalConsoleLog;
+          }, 100);
+        }
+        
         // Add a small delay to ensure proper cleanup
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 20));
       } catch (destroyError) {
         console.error('❌ AudioPlayer: Error destroying previous instance:', destroyError);
       }
@@ -474,7 +538,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           const region = regionsRef.current.addRegion({
             id: regionId,
             start: marker.time,
-            end: marker.time + 2.0, // Make markers wider (2 seconds instead of 1)
+            end: marker.time + 1.0, // 1 second markers
             color: marker.data?.customColor || 'rgba(255, 0, 0, 0.8)', // More opaque for visibility
             drag: false,
             resize: false,
@@ -482,6 +546,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               commentId: marker.commentId,
             },
           });
+
+          // Add hover effects for this region
+          if (region && region.element) {
+            const originalColor = marker.data?.customColor || 'rgba(255, 0, 0, 0.8)';
+            const hoverColor = 'rgba(255, 165, 0, 0.9)'; // Orange on hover
+            
+            // Set cursor and add hover listeners
+            region.element.style.cursor = 'pointer';
+            
+            region.element.addEventListener('mouseenter', () => {
+              region.setOptions({ color: hoverColor });
+            });
+            
+            region.element.addEventListener('mouseleave', () => {
+              region.setOptions({ color: originalColor });
+            });
+          }
           
           console.log(`✅ Region ${index + 1} created successfully:`, region);
           
@@ -684,6 +765,54 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [markers, isReady, addMarkersToWaveform]);
 
+  // Add CSS for region cursor styling
+  useEffect(() => {
+    const styleId = 'wavesurfer-region-cursor-styles';
+    
+    // Remove existing style if it exists
+    const existingStyle = document.getElementById(styleId);
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+    
+    // Create new style element
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      /* WaveSurfer region cursor styling - Multiple selectors for compatibility */
+      [data-region],
+      .wavesurfer [data-region],
+      .region,
+      .ws-region,
+      [class*="region"],
+      div[style*="position: absolute"][style*="background"],
+      div[style*="position: absolute"][style*="rgba"],
+      div[style*="z-index: 3"] {
+        cursor: pointer !important;
+      }
+      
+      /* Target WaveSurfer container regions more specifically */
+      .wavesurfer > div > div[style*="position: absolute"] {
+        cursor: pointer !important;
+      }
+      
+      /* Ensure waveform itself keeps default cursor */
+      .wavesurfer canvas {
+        cursor: default !important;
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
+    // Cleanup function
+    return () => {
+      const styleToRemove = document.getElementById(styleId);
+      if (styleToRemove) {
+        styleToRemove.remove();
+      }
+    };
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -726,45 +855,30 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // console.log('AudioPlayer render - markers:', markers);
 
   return (
-    <div className="flex flex-col space-y-4">
-      {/* Debug info */}
-      {/* <div className="p-2 bg-yellow-100 rounded-lg text-xs">
-        <p>Debug: {markers?.length || 0} markers available</p>
-        <ul>
-          {markers?.map((marker: any) => (
-            <li key={marker.id || Math.random()}>
-              Marker at {marker.time}s (ID: {marker.waveSurferRegionID || 'unknown'})
-            </li>
-          ))}
-        </ul>
-      </div> */}
-
-      {/* Waveform */}
+    <div className="space-y-2">
+      {/* Full Height Waveform */}
       <div 
         ref={waveformRef} 
-        className="w-full h-32 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden cursor-pointer"
+        className="w-full h-32 bg-white rounded border border-gray-300 overflow-hidden"
         style={{ 
-          minHeight: '120px',
           position: 'relative',
-          // Add CSS to make regions more visible
-          "--region-color": "rgba(255, 0, 0, 0.3)",
-          "--region-border-color": "rgb(255, 0, 0)",
-          "--region-handle-color": "rgb(255, 0, 0)",
+          minHeight: '128px',
+          maxHeight: '128px',
+          cursor: 'default',
+          "--region-color": "rgba(59, 130, 246, 0.3)",
+          "--region-border-color": "rgb(59, 130, 246)",
+          "--region-handle-color": "rgb(59, 130, 246)",
         } as React.CSSProperties}
         onDoubleClick={(e) => {
           if (!waveSurferRef.current) return;
           
-          // Get click position relative to the waveform container
           const rect = e.currentTarget.getBoundingClientRect();
           const clickX = e.clientX - rect.left;
           const clickPercent = clickX / rect.width;
-          
-          // Convert to time based on duration
           const clickTime = clickPercent * duration;
           
           console.log('Double-click at time:', clickTime, 'seconds');
           
-          // Trigger comment creation
           if (onAddComment) {
             onAddComment(clickTime);
           }
@@ -772,39 +886,31 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         title="Double-click to add a comment"
       />
 
-      {/* Controls */}
-      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm text-gray-500 font-medium">
-            {formatTime(currentTime)}
-          </span>
-          <span className="text-sm text-gray-500 font-medium">
-            {formatTime(duration)}
-          </span>
-        </div>
-
-        <div className="flex items-center justify-center space-x-6">
+      {/* Compact Transport Controls - Single Row */}
+      <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded border">
+        {/* Left: Transport Controls */}
+        <div className="flex items-center space-x-2">
           <button
             onClick={onPrevious}
-            className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
             aria-label="Previous track"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
             </svg>
           </button>
           
           <button
             onClick={handlePlayPause}
-            className="p-3 text-white bg-gray-800 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            className="p-1.5 text-white bg-gray-800 rounded hover:bg-gray-700 transition-colors"
             aria-label={isPlayingState ? 'Pause' : 'Play'}
           >
             {isPlayingState ? (
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
               </svg>
             ) : (
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z"/>
               </svg>
             )}
@@ -812,30 +918,42 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           
           <button
             onClick={onNext}
-            className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
             aria-label="Next track"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
             </svg>
           </button>
+
+          {/* Time Display */}
+          <div className="flex items-center space-x-1 text-xs text-gray-500 ml-2">
+            <span>{formatTime(currentTime)}</span>
+            <span>/</span>
+            <span>{formatTime(duration)}</span>
+          </div>
         </div>
 
-        {/* Track info - fixed height to prevent layout shifts */}
-        <div className="mt-4 text-center h-12 flex flex-col justify-center">
-          <h2 className="text-lg font-semibold text-gray-900 truncate">
-            {track?.name || 'No track selected'}
-          </h2>
-          <p className="text-sm text-gray-600 truncate">
-            {track?.artist?.name || 'Unknown artist'}
-          </p>
+        {/* Center: Track Info */}
+        <div className="flex-1 mx-4 min-w-0">
+          <div className="text-center">
+            <div className="text-sm font-medium text-gray-900 truncate">
+              {track?.name || 'No track selected'}
+            </div>
+            {track?.artist?.name && (
+              <div className="text-xs text-gray-600 truncate">
+                {track.artist.name}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Volume and speed controls */}
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-          <div className="flex items-center space-x-3">
-            <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+        {/* Right: Volume and Speed */}
+        <div className="flex items-center space-x-3">
+          {/* Volume */}
+          <div className="flex items-center space-x-1">
+            <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
             </svg>
             <input
               type="range"
@@ -844,25 +962,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               step="1"
               value={volumeState}
               onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-              className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer slider"
+              className="w-16 h-1 bg-gray-300 rounded appearance-none cursor-pointer"
             />
           </div>
           
-          <div className="flex items-center space-x-3">
-            <span className="text-sm text-gray-500 font-medium">Speed:</span>
-            <select
-              value={playbackSpeedState}
-              onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-              className="text-sm border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-            >
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1">1x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
-            </select>
-          </div>
+          {/* Speed */}
+          <select
+            value={playbackSpeedState}
+            onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
+            className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1">1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
         </div>
       </div>
     </div>

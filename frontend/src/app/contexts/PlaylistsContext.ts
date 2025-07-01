@@ -5,19 +5,19 @@ interface PlaylistsContextType {
   playlists: Playlist[];
   setPlaylists: Dispatch<SetStateAction<Playlist[]>>;
   fetchPlaylists: () => Promise<void>;
-  fetchPlaylistById: (id: number) => Promise<Playlist | undefined>;
+  fetchPlaylistById: (id: string) => Promise<Playlist | undefined>;
   createPlaylist: (playlistData: Partial<Playlist>) => Promise<Playlist>;
-  deletePlaylist: (id: number) => Promise<void>;
-  addTrackToPlaylist: (playlistId: number, trackId: number, force?: boolean) => Promise<Playlist | { status: 'DUPLICATE', message: string, playlistId: number, trackId: number }>;
-  removeTrackFromPlaylist: (playlistId: number, trackId: number) => Promise<void>;
+  deletePlaylist: (id: string) => Promise<void>;
+  addTrackToPlaylist: (playlistId: string, trackId: string, force?: boolean) => Promise<Playlist | { status: 'DUPLICATE', message: string, playlistId: string, trackId: string }>;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<void>;
   clearPlaylists: () => void;
-  currentPlaylistId: number | null;
-  setCurrentPlaylistId: Dispatch<SetStateAction<number | null>>;
+  currentPlaylistId: string | null;
+  setCurrentPlaylistId: Dispatch<SetStateAction<string | null>>;
   currentPlaylistTracks: Track[];
   setCurrentPlaylistTracks: Dispatch<SetStateAction<Track[]>>;
-  updatePlaylistMetadata: (playlistId: number, updateData: { name?: string; description?: string }) => Promise<Playlist>;
-  updatePlaylistOrder: (playlistIds: number[]) => Promise<Playlist[]>;
-  updatePlaylistTrackOrder: (playlistId: number, trackIds: number[]) => Promise<Playlist>;
+  updatePlaylistMetadata: (playlistId: string, updateData: { name?: string; description?: string }) => Promise<Playlist>;
+  updatePlaylistOrder: (playlistIds: string[]) => Promise<Playlist[]>;
+  updatePlaylistTrackOrder: (playlistId: string, trackIds: string[]) => Promise<Playlist>;
 }
 
 const defaultContextValue: PlaylistsContextType = {
@@ -27,7 +27,7 @@ const defaultContextValue: PlaylistsContextType = {
   fetchPlaylistById: async () => undefined,
   createPlaylist: async () => ({} as Playlist),
   deletePlaylist: async () => {},
-  addTrackToPlaylist: async () => ({ status: 'DUPLICATE', message: 'Default message', playlistId: 0, trackId: 0 }),
+  addTrackToPlaylist: async () => ({ status: 'DUPLICATE', message: 'Default message', playlistId: '', trackId: '' }),
   removeTrackFromPlaylist: async () => {},
   clearPlaylists: () => {},
   currentPlaylistId: null,
