@@ -7,6 +7,7 @@ import { FaEllipsisH, FaEdit, FaTrash, FaPlus } from "react-icons/fa";
 import { useDrag } from "@/app/contexts/DragContext";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import DuplicateTrackModal from "../modals/DuplicateTrackModal";
 
 interface PlaylistItemProps {
   playlist: Playlist;
@@ -30,6 +31,11 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const [showOptions, setShowOptions] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isBeingDragged, setIsBeingDragged] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [pendingTrackInfo, setPendingTrackInfo] = useState<{
+    trackId: string;
+    trackName?: string;
+  } | null>(null);
   const { updatePlaylistMetadata, addTrackToPlaylist } = usePlaylists();
   const { dragState } = useDrag();
   const optionsRef = useRef<HTMLDivElement>(null);
@@ -102,26 +108,30 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
       }
     });
     
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    console.log(`[DRAG N DROP] 🎯 Drop event prevented and isDragOver reset`);
+    
+    // Extract trackId and trackName at function level for proper scope
+    const trackId = e.dataTransfer.getData("text/plain");
+    const trackName = e.dataTransfer.getData("text/track-name") || "Unknown Track";
+    
+    console.log(`[DRAG N DROP] 🎯 Retrieved track ID from dataTransfer: "${trackId}"`);
+    console.log(`[DRAG N DROP] 🎯 Track ID type: ${typeof trackId}, length: ${trackId.length}`);
+    console.log(`[DRAG N DROP] 🎯 Track name: "${trackName}"`);
+    
+    if (!trackId || trackId.trim() === '') {
+      console.error(`[DRAG N DROP] ❌ No track ID found in drag data`);
+      console.log(`[DRAG N DROP] ❌ DataTransfer analysis:`, {
+        items: Array.from(e.dataTransfer.items),
+        types: e.dataTransfer.types,
+        files: e.dataTransfer.files
+      });
+      return;
+    }
+    
     try {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragOver(false);
-      console.log(`[DRAG N DROP] 🎯 Drop event prevented and isDragOver reset`);
-      
-      const trackId = e.dataTransfer.getData("text/plain");
-      console.log(`[DRAG N DROP] 🎯 Retrieved track ID from dataTransfer: "${trackId}"`);
-      console.log(`[DRAG N DROP] 🎯 Track ID type: ${typeof trackId}, length: ${trackId.length}`);
-      
-      if (!trackId || trackId.trim() === '') {
-        console.error(`[DRAG N DROP] ❌ No track ID found in drag data`);
-        console.log(`[DRAG N DROP] ❌ DataTransfer analysis:`, {
-          items: Array.from(e.dataTransfer.items),
-          types: e.dataTransfer.types,
-          files: e.dataTransfer.files
-        });
-        return;
-      }
-      
       console.log(`[DRAG N DROP] 🎯 About to add track ${trackId} to playlist ${playlist.id}...`);
       console.log(`[DRAG N DROP] 🎯 Playlist object:`, playlist);
       console.log(`[DRAG N DROP] 🎯 addTrackToPlaylist function:`, typeof addTrackToPlaylist);
@@ -131,6 +141,26 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
       console.log(`[DRAG N DROP] ✅ Result:`, result);
       
     } catch (error) {
+      // Check if this is a duplicate track error (handle multiple possible error formats)
+      const isDuplicateError = (
+        (error instanceof Error && error.name === 'DuplicateTrackError') ||
+        (error instanceof Error && error.message.includes('Track already exists in playlist')) ||
+        (error instanceof Error && error.message.includes('DUPLICATE')) ||
+        (typeof error === 'object' && error !== null && 'status' in error && error.status === 'DUPLICATE')
+      );
+      
+      if (isDuplicateError) {
+        console.log(`[DRAG N DROP] 🔄 Duplicate track detected, showing confirmation modal`);
+        
+        setPendingTrackInfo({
+          trackId,
+          trackName
+        });
+        setShowDuplicateModal(true);
+        return; // Don't log as error, this is expected behavior
+      }
+      
+      // Only log as error if it's not a duplicate (unexpected error)
       console.error(`[DRAG N DROP] ❌ Failed to add track to playlist:`, error);
       console.error(`[DRAG N DROP] ❌ Error details:`, {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -193,6 +223,26 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setShowOptions(true);
+  };
+
+  const handleDuplicateModalClose = () => {
+    setShowDuplicateModal(false);
+    setPendingTrackInfo(null);
+  };
+
+  const handleDuplicateModalConfirm = async () => {
+    if (!pendingTrackInfo) return;
+    
+    try {
+      console.log(`[DRAG N DROP] 🔄 Adding duplicate track with force=true`);
+      const result = await addTrackToPlaylist(playlist.id, pendingTrackInfo.trackId, true);
+      console.log(`[DRAG N DROP] ✅ Successfully added duplicate track ${pendingTrackInfo.trackId} to playlist ${playlist.id}`);
+      console.log(`[DRAG N DROP] ✅ Result:`, result);
+    } catch (error) {
+      console.error(`[DRAG N DROP] ❌ Failed to add duplicate track to playlist:`, error);
+    } finally {
+      handleDuplicateModalClose();
+    }
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -378,6 +428,15 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
           </>
         )}
       </li>
+
+      {/* Duplicate Track Modal */}
+      <DuplicateTrackModal
+        isOpen={showDuplicateModal}
+        onClose={handleDuplicateModalClose}
+        onConfirm={handleDuplicateModalConfirm}
+        trackName={pendingTrackInfo?.trackName}
+        playlistName={playlist.name}
+      />
     </div>
   );
 };

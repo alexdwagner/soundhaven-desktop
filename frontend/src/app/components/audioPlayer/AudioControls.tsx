@@ -71,6 +71,9 @@ const AudioControls: React.FC<AudioControlsProps> = ({
             onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
             style={{ width: "80px" }} // Make slider shorter
           />
+          <span style={{ fontSize: "0.8em", color: "#666", minWidth: "30px" }}>
+            {Math.round(volume * 100)}%
+          </span>
         </div>
       </div>
 
@@ -133,6 +136,9 @@ const AudioControls: React.FC<AudioControlsProps> = ({
             onChange={(e) => onPlaybackSpeedChange(parseFloat(e.target.value))}
             style={{ width: "80px" }} // Make slider shorter
           />
+          <span style={{ fontSize: "0.8em", color: "#666", minWidth: "30px" }}>
+            {playbackSpeed.toFixed(1)}x
+          </span>
         </div>
       </div>
     </div>

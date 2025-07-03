@@ -219,6 +219,15 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
         const result = await apiService.addTrackToPlaylist(playlistId, trackId, force);
         console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTrackToPlaylist returned:`, result);
 
+        // Check if this is a duplicate response
+        if (result && typeof result === 'object' && result.status === 'DUPLICATE') {
+          console.log(`[DRAG N DROP] 🔄 PlaylistsProvider: Duplicate track detected, throwing error for modal handling`);
+          // Throw an error that our modal system can catch
+          const duplicateError = new Error(result.message || 'Track already exists in playlist');
+          duplicateError.name = 'DuplicateTrackError';
+          throw duplicateError;
+        }
+
         // Refresh the current playlist tracks if this is the current playlist
         if (currentPlaylistId === playlistId) {
           console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Refreshing current playlist tracks...`);
@@ -236,6 +245,13 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
         console.log(`[DRAG N DROP] ✅ PlaylistsProvider: Successfully added track to playlist`);
         return true;
       } catch (error) {
+        // Check if this is our expected duplicate error - don't log it as an error
+        if (error instanceof Error && error.name === 'DuplicateTrackError') {
+          console.log(`[DRAG N DROP] 🔄 PlaylistsProvider: Re-throwing duplicate error for modal handling`);
+          throw error; // Re-throw for the modal to catch
+        }
+
+        // For other errors, log and handle normally
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error adding track ${trackId} to playlist ${playlistId}:`, errorMessage);
         console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Full error object:`, error);

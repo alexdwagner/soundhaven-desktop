@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { arrayMove } from "@dnd-kit/sortable";
 import TracksTable, { SortColumn, SortDirection } from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
 import CommentsPanel from "../comments/CommentsPanel";
@@ -28,7 +29,10 @@ export default function TracksManager({
   selectedPlaylistId,
   selectedPlaylistName 
 }: TracksManagerProps) {
-  console.log('🎯 TracksManager component rendering...');
+  // Performance: Only log in development and reduce frequency
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🎯 TracksManager rendering - playlist:', selectedPlaylistId);
+  }
   
   const { 
     tracks: allTracks = [], 
@@ -39,10 +43,29 @@ export default function TracksManager({
     error: fetchError
   } = useTracks();
   
-  const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks } = usePlaylists();
+  const { 
+    removeTrackFromPlaylist, 
+    updatePlaylistTrackOrder, 
+    fetchPlaylistById, 
+    setCurrentPlaylistTracks,
+    currentPlaylistTracks,
+    currentPlaylistId,
+    setCurrentPlaylistId,
+    addTrackToPlaylist 
+  } = usePlaylists();
   
-  // Use playlist tracks if a playlist is selected, otherwise use all tracks
-  const tracks = selectedPlaylistId ? (selectedPlaylistTracks || []) : allTracks;
+  // Sync playlist selection with provider
+  useEffect(() => {
+    if (selectedPlaylistId !== currentPlaylistId) {
+      setCurrentPlaylistId(selectedPlaylistId || null);
+      if (selectedPlaylistTracks) {
+        setCurrentPlaylistTracks(selectedPlaylistTracks);
+      }
+    }
+  }, [selectedPlaylistId, selectedPlaylistTracks, currentPlaylistId, setCurrentPlaylistId, setCurrentPlaylistTracks]);
+  
+  // Use provider tracks for playlist view, all tracks for library view
+  const tracks = selectedPlaylistId ? currentPlaylistTracks : allTracks;
   const isPlaylistView = !!selectedPlaylistId;
   
   const {
@@ -61,23 +84,40 @@ export default function TracksManager({
   // Ensure tracks is always an array to prevent map errors
   const safeTracks = Array.isArray(tracks) ? tracks : [];
   
-  console.log('🎯 TracksManager state:', {
-    tracks: tracks,
-    safeTracks: safeTracks,
-    safeTracksLength: safeTracks.length,
-    playbackCurrentTrack: playbackCurrentTrack,
-    isPlaylistView: isPlaylistView,
-    selectedPlaylistId: selectedPlaylistId
-  });
+  // Performance: Reduce logging frequency
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+    console.log('🎯 TracksManager state sample:', {
+      tracksCount: safeTracks.length,
+      hasCurrentTrack: !!playbackCurrentTrack,
+      isPlaylistView: isPlaylistView,
+      selectedPlaylistId: selectedPlaylistId
+    });
+  }
   
   const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [doNotAskAgain, setDoNotAskAgain] = useState(false);
+  const [copiedTrackIds, setCopiedTrackIds] = useState<string[]>([]);
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  
+  // Playlist sorting state (separate from column header sorting)
+  const [playlistSortMode, setPlaylistSortMode] = useState<'manual' | SortColumn>('manual');
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState({
+    title: true,
+    artist: true,
+    album: true,
+    year: true,
+    duration: true,
+  });
   const { user, token } = useMockAuth(); // Replace with your actual auth hook
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
@@ -91,6 +131,7 @@ export default function TracksManager({
   const [reorderingTracks, setReorderingTracks] = useState(false);
   const [showDebugTools, setShowDebugTools] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [showColumnOptions, setShowColumnOptions] = useState(false);
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
@@ -100,16 +141,120 @@ export default function TracksManager({
   // Add comments functionality
   const { addMarkerAndComment, fetchCommentsAndMarkers, markers, setMarkers, selectedCommentId } = useComments(waveSurferRef, regionsRef);
 
+  // Copy/Paste functionality
+  const handlePasteTracks = useCallback(async () => {
+    console.log('🎵 [PASTE] handlePasteTracks called!');
+    console.log('🎵 [PASTE] Parameters:', {
+      isPlaylistView,
+      selectedPlaylistId,
+      copiedTrackIds,
+      copiedCount: copiedTrackIds.length
+    });
+
+    if (!isPlaylistView || !selectedPlaylistId || copiedTrackIds.length === 0) {
+      console.error('🎵 [PASTE] Cannot paste tracks: missing requirements', {
+        isPlaylistView,
+        selectedPlaylistId,
+        copiedCount: copiedTrackIds.length
+      });
+      return;
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    try {
+      console.log('🎵 [PASTE] Starting paste operation for tracks:', copiedTrackIds);
+      console.log('🎵 [PASTE] Target playlist:', selectedPlaylistId);
+      
+      // Add each copied track to the playlist (with force=true to allow duplicates)
+      for (const trackId of copiedTrackIds) {
+        try {
+          console.log(`🎵 [PASTE] Pasting track ${trackId} with force=true`);
+          const result = await addTrackToPlaylist(selectedPlaylistId, trackId, true); // force=true allows duplicates
+          console.log(`🎵 [PASTE] Successfully pasted track ${trackId}:`, result);
+          successCount++;
+        } catch (error) {
+          console.error(`🎵 [PASTE] Failed to paste track ${trackId}:`, error);
+          failureCount++;
+        }
+      }
+
+      console.log('🎵 [PASTE] Paste operation completed:', { successCount, failureCount });
+
+      if (successCount > 0) {
+        setError(`Pasted ${successCount} track${successCount > 1 ? 's' : ''} to playlist`);
+      }
+      if (failureCount > 0) {
+        setError(`Failed to paste ${failureCount} track${failureCount > 1 ? 's' : ''} (might already exist)`);
+      }
+      
+      setTimeout(() => setError(null), 3000);
+    } catch (error) {
+      console.error('🎵 [PASTE] Error pasting tracks:', error);
+      setError('Failed to paste tracks');
+      setTimeout(() => setError(null), 2000);
+    }
+  }, [isPlaylistView, selectedPlaylistId, copiedTrackIds, addTrackToPlaylist]);
+
   // Enhanced reorder handler with optimistic updates and debouncing
-  const handleReorderTracks = async (startIndex: number, endIndex: number) => {
+  const handleReorderTracks = useCallback(async (startIndex: number, endIndex: number) => {
+    console.log('🚀🚀🚀 [DRAG] handleReorderTracks ENTRY POINT - FUNCTION CALLED!', { startIndex, endIndex });
+    console.log('🚀 [DRAG] handleReorderTracks called:', {
+      startIndex,
+      endIndex,
+      isPlaylistView,
+      selectedPlaylistId,
+      playlistSortMode,
+      reorderingTracks,
+      tracksLength: safeTracks.length,
+      currentTracks: tracks.map(t => t.name).slice(0, 5)
+    });
+
+    // Check if we're in the right mode for reordering
+    console.log('🔍 [DRAG] Validation check - isPlaylistView:', isPlaylistView);
+    if (!isPlaylistView) {
+      console.error('❌ [DRAG] Not in playlist view, cannot reorder');
+      setError('Cannot reorder tracks: Not in playlist view');
+      return;
+    }
+
+    console.log('🔍 [DRAG] Validation check - selectedPlaylistId:', selectedPlaylistId);
+    if (!selectedPlaylistId) {
+      console.error('❌ [DRAG] No playlist selected for reordering');
+      setError('Cannot reorder tracks: No playlist selected');
+      return;
+    }
+
+    console.log('🔍 [DRAG] Validation check - playlistSortMode:', playlistSortMode);
+    if (playlistSortMode !== 'manual') {
+      console.error('❌ [DRAG] Playlist is not in manual order mode, cannot reorder. Current mode:', playlistSortMode);
+      setError(`Cannot reorder tracks: Playlist is sorted by ${playlistSortMode}. Switch to "Manual Order" to enable reordering.`);
+      return;
+    }
+
     // Prevent simultaneous reordering operations
+    console.log('🔍 [DRAG] Validation check - reorderingTracks:', reorderingTracks);
     if (reorderingTracks) {
       console.log('🔄 [DRAG] Reordering already in progress, skipping...');
       return;
     }
 
+    // Validate indices
+    console.log('🔍 [DRAG] Validation check - indices:', { startIndex, endIndex, tracksLength: tracks.length });
+    if (startIndex < 0 || endIndex < 0 || startIndex >= tracks.length || endIndex >= tracks.length) {
+      console.error('❌ [DRAG] Invalid indices:', { startIndex, endIndex, tracksLength: tracks.length });
+      setError(`Cannot reorder tracks: Invalid positions (${startIndex} -> ${endIndex})`);
+      return;
+    }
+
     // Debounce rapid reorder attempts
     const now = Date.now();
+    console.log('🔍 [DRAG] Debounce check:', {
+      now,
+      lastReorder: lastReorderRef.current,
+      timeDiff: lastReorderRef.current ? now - lastReorderRef.current.timestamp : 'N/A'
+    });
     if (lastReorderRef.current && 
         lastReorderRef.current.startIndex === startIndex && 
         lastReorderRef.current.endIndex === endIndex &&
@@ -119,72 +264,85 @@ export default function TracksManager({
     }
 
     // Skip if no actual movement
+    console.log('🔍 [DRAG] Movement check:', { startIndex, endIndex, samePosition: startIndex === endIndex });
     if (startIndex === endIndex) {
       console.log('🔄 [DRAG] No movement detected, skipping...');
       return;
     }
 
-    console.log('🔄 [DRAG] Starting reorder operation:', { startIndex, endIndex, isPlaylistView, selectedPlaylistId });
+    console.log('🔄 [DRAG] Starting reorder operation:', { 
+      startIndex, 
+      endIndex, 
+      isPlaylistView, 
+      selectedPlaylistId,
+      trackBeingMoved: tracks[startIndex]?.name,
+      targetPosition: tracks[endIndex]?.name 
+    });
 
-    if (!isPlaylistView || !selectedPlaylistId) {
-      console.log('❌ [DRAG] Reordering only supported in playlist view');
-      return;
-    }
+          try {
+        setReorderingTracks(true);
+        lastReorderRef.current = { startIndex, endIndex, timestamp: now };
 
-    try {
-      setReorderingTracks(true);
-      lastReorderRef.current = { startIndex, endIndex, timestamp: now };
-
-      // Create optimistically reordered tracks for immediate UI update
-      const reorderedTracks = [...tracks];
-      const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
-      reorderedTracks.splice(endIndex, 0, reorderedItem);
-
-      console.log('🔄 [DRAG] Optimistic reorder:', { 
-        originalLength: tracks.length, 
-        reorderedLength: reorderedTracks.length,
-        movedTrack: reorderedItem.name,
-        from: startIndex,
-        to: endIndex
-      });
-
-      // Optimistically update the UI immediately
-      setCurrentPlaylistTracks(reorderedTracks);
-
-      // Prepare track IDs in new order for API call
-      const trackIds = reorderedTracks.map(track => track.id);
-
-      console.log('🔄 [DRAG] Calling API with track order:', trackIds);
-
-      // Call the API to persist the change
-      const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
-      
-      if (result) {
-        console.log('✅ [DRAG] Reorder operation completed successfully');
+        // Use arrayMove for reliable reordering (same as playlists)
+        const reorderedTracks = arrayMove(tracks, startIndex, endIndex);
         
-        // Refresh the playlist data to ensure consistency
-        await fetchPlaylistById(selectedPlaylistId);
-      } else {
-        console.error('❌ [DRAG] Reorder operation failed');
-        throw new Error('Failed to reorder tracks');
-      }
+        console.log('🔄 [DRAG] Optimistic reorder using arrayMove:', { 
+          originalLength: tracks.length, 
+          reorderedLength: reorderedTracks.length,
+          movedTrack: tracks[startIndex]?.name,
+          from: startIndex,
+          to: endIndex,
+          newOrder: reorderedTracks.map((t, i) => `${i}: ${t.name}`).slice(0, 10)
+        });
 
-    } catch (error) {
-      console.error('❌ [DRAG] Error during reorder operation:', error);
-      
-      // Revert optimistic update on failure
-      if (selectedPlaylistId) {
-        console.log('🔄 [DRAG] Reverting optimistic update due to error');
-        await fetchPlaylistById(selectedPlaylistId);
-      }
-      
-      setError(`Failed to reorder tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setReorderingTracks(false);
-    }
-  };
+        // Apply optimistic update immediately (same as playlists)
+        console.log('🔄 [DRAG] BEFORE setCurrentPlaylistTracks - current tracks:', tracks.map(t => t.name));
+        setCurrentPlaylistTracks(reorderedTracks);
+        console.log('🔄 [DRAG] AFTER setCurrentPlaylistTracks - should update to:', reorderedTracks.map(t => t.name));
 
-  const handleSelectTrack = useCallback((trackId: string) => {
+        // Prepare track IDs in new order for API call
+        const trackIds = reorderedTracks.map(track => track.id);
+        console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder API with track IDs:', trackIds.slice(0, 10));
+        
+        const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
+        
+        console.log('🔄 [DRAG] API response:', result);
+        
+        if (result) {
+          console.log('✅ [DRAG] Reorder operation completed successfully - trusting optimistic update');
+          // NO REFRESH - trust the optimistic update like playlists do
+        } else {
+          console.error('❌ [DRAG] Reorder operation failed, API returned:', result);
+          throw new Error('Failed to update track order on server');
+        }
+
+      } catch (error) {
+        console.error('❌ [DRAG] Error during reorder operation:', error);
+        
+        // Revert optimistic update on failure by refreshing
+        if (selectedPlaylistId) {
+          console.log('🔄 [DRAG] Reverting optimistic update due to error');
+          await fetchPlaylistById(selectedPlaylistId);
+        }
+        
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setError(`Failed to reorder tracks: ${errorMessage}`);
+      } finally {
+        setReorderingTracks(false);
+      }
+  }, [
+    isPlaylistView,
+    selectedPlaylistId,
+    playlistSortMode,
+    currentPlaylistTracks,
+    reorderingTracks,
+    setCurrentPlaylistTracks,
+    updatePlaylistTrackOrder,
+    fetchPlaylistById,
+    setError
+  ]);
+
+  const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
     console.log('🎵 handleSelectTrack called with trackId:', trackId);
     console.log('🎵 Available tracks:', tracks);
     
@@ -193,19 +351,60 @@ export default function TracksManager({
     
     if (trackIndex !== -1) {
       const track = tracks[trackIndex];
-      console.log('🎵 Selecting track for playback:', track);
+      console.log('🎵 Selecting track (visual selection only, no waveform loading):', track);
+      
+      // Handle multi-selection with Ctrl/Cmd or Shift
+      if (event?.ctrlKey || event?.metaKey) {
+        // Toggle selection for Ctrl/Cmd+click
+        setSelectedTrackIds(prev => 
+          prev.includes(trackId) 
+            ? prev.filter(id => id !== trackId)
+            : [...prev, trackId]
+        );
+      } else if (event?.shiftKey && selectedTrackIds.length > 0) {
+        // Range selection for Shift+click
+        const lastSelectedIndex = tracks.findIndex(t => t.id === selectedTrackIds[selectedTrackIds.length - 1]);
+        if (lastSelectedIndex !== -1) {
+          const startIndex = Math.min(lastSelectedIndex, trackIndex);
+          const endIndex = Math.max(lastSelectedIndex, trackIndex);
+          const rangeIds = tracks.slice(startIndex, endIndex + 1).map(t => t.id);
+          setSelectedTrackIds(rangeIds);
+        } else {
+          setSelectedTrackIds([trackId]);
+        }
+      } else {
+        // Single selection for normal click - ONLY update visual selection
+        setSelectedTrackIds([trackId]);
+      }
+      
+      // DO NOT call selectTrack or setCurrentTrackIndex for single-click
+      // This keeps the waveform from loading until the user double-clicks
+      console.log('🎵 Track visually selected, no waveform loaded');
+    } else {
+      console.log('❌ Track not found in tracks array');
+    }
+  }, [tracks, selectedTrackIds]);
+
+  const handlePlayTrack = useCallback((trackId: string) => {
+    console.log('🎵 handlePlayTrack called with trackId:', trackId);
+    console.log('🎵 Available tracks:', tracks);
+    
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    console.log('🎵 Found trackIndex:', trackIndex);
+    
+    if (trackIndex !== -1) {
+      const track = tracks[trackIndex];
+      console.log('🎵 Loading and playing track with waveform:', track);
+      
+      // Select the track visually AND load for playback
+      setSelectedTrackIds([trackId]);
       setCurrentTrackIndex(trackIndex);
-      selectTrack(track, trackIndex); // Also set in PlaybackContext for CommentsProvider
-      console.log('🎵 selectTrack called successfully');
+      selectTrack(track, trackIndex, true); // Load waveform and start playback
+      console.log('🎵 Track loaded with waveform and playback started');
     } else {
       console.log('❌ Track not found in tracks array');
     }
   }, [tracks, setCurrentTrackIndex, selectTrack]);
-
-  const handlePlayTrack = useCallback((trackId: string) => {
-    console.log('🎵 handlePlayTrack called with trackId:', trackId);
-    handleSelectTrack(trackId);
-  }, [handleSelectTrack]);
 
   // Sorting logic
   const handleSort = useCallback((column: SortColumn) => {
@@ -217,46 +416,114 @@ export default function TracksManager({
     }
   }, [sortColumn, sortDirection]);
 
-  // Apply sorting to tracks
-  const sortedTracks = useCallback(() => {
-    if (!sortColumn) return safeTracks;
-
-    return [...safeTracks].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortColumn) {
-        case 'name':
-          aValue = a.name?.toLowerCase() || '';
-          bValue = b.name?.toLowerCase() || '';
-          break;
-        case 'artistName':
-          aValue = a.artistName?.toLowerCase() || '';
-          bValue = b.artistName?.toLowerCase() || '';
-          break;
-        case 'albumName':
-          aValue = a.albumName?.toLowerCase() || '';
-          bValue = b.albumName?.toLowerCase() || '';
-          break;
-        case 'year':
-          aValue = a.year || 0;
-          bValue = b.year || 0;
-          break;
-        case 'duration':
-          aValue = a.duration || 0;
-          bValue = b.duration || 0;
-          break;
-        default:
-          return 0;
+  // Performance: Memoized track processing to prevent unnecessary re-computations
+  const processedTracks = useMemo(() => {
+    let tracks = [...safeTracks];
+    
+    // Apply search filter first
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      tracks = tracks.filter(track => 
+        (track.name?.toLowerCase().includes(query)) ||
+        (track.artistName?.toLowerCase().includes(query)) ||
+        (track.albumName?.toLowerCase().includes(query))
+      );
+    }
+    
+    // Apply sorting
+    let sortCol: SortColumn | null = null;
+    let sortDir = sortDirection;
+    
+    if (isPlaylistView) {
+      // In playlist view, use dropdown sorting
+      if (playlistSortMode !== 'manual') {
+        sortCol = playlistSortMode;
+        sortDir = 'asc'; // Always ascending for playlist dropdown sorting
       }
+    } else {
+      // In library view, use column header sorting
+      sortCol = sortColumn;
+    }
+    
+    if (sortCol) {
+      tracks.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
 
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+        switch (sortCol) {
+          case 'name':
+            aValue = a.name?.toLowerCase() || '';
+            bValue = b.name?.toLowerCase() || '';
+            break;
+          case 'artistName':
+            aValue = a.artistName?.toLowerCase() || '';
+            bValue = b.artistName?.toLowerCase() || '';
+            break;
+          case 'albumName':
+            aValue = a.albumName?.toLowerCase() || '';
+            bValue = b.albumName?.toLowerCase() || '';
+            break;
+          case 'year':
+            aValue = a.year || 0;
+            bValue = b.year || 0;
+            break;
+          case 'duration':
+            aValue = a.duration || 0;
+            bValue = b.duration || 0;
+            break;
+          default:
+            return 0;
+        }
+
+        if (aValue < bValue) return sortDir === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    return tracks;
+  }, [safeTracks, searchQuery, sortColumn, sortDirection, isPlaylistView, playlistSortMode]);
+
+  // Debug logging for drag-to-reorder state
+  useEffect(() => {
+    console.log('🎯 [DRAG DEBUG] Current state:', {
+      isPlaylistView,
+      selectedPlaylistId,
+      currentPlaylistId,
+      playlistSortMode,
+      dragToReorderEnabled: isPlaylistView && playlistSortMode === 'manual',
+      tracksCount: tracks.length,
+      reorderingTracks,
+      firstFewTracks: tracks.slice(0, 3).map(t => ({ id: t.id, name: t.name })),
+      usingProviderTracks: !!selectedPlaylistId
     });
-  }, [safeTracks, sortColumn, sortDirection]);
+  }, [isPlaylistView, selectedPlaylistId, currentPlaylistId, playlistSortMode, tracks.length, reorderingTracks]);
 
-  const displayTracks = sortedTracks();
+  // Log when handleReorderTracks function is recreated
+  useEffect(() => {
+    console.log('🔄 [DRAG] handleReorderTracks function recreated/initialized');
+  }, [handleReorderTracks]);
+
+  const displayTracks = processedTracks;
+
+  // Clear sorting when entering playlist view
+  useEffect(() => {
+    if (isPlaylistView && sortColumn) {
+      setSortColumn(null);
+    }
+  }, [isPlaylistView, sortColumn]);
+
+  // Close column options dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showColumnOptions && !(event.target as Element)?.closest('.column-options-dropdown')) {
+        setShowColumnOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showColumnOptions]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -293,7 +560,12 @@ export default function TracksManager({
 
         case 'Escape':
           event.preventDefault();
-          setSelectedTrackIds([]);
+          // Clear search first if it's active, otherwise clear selection
+          if (searchQuery.trim()) {
+            setSearchQuery('');
+          } else {
+            setSelectedTrackIds([]);
+          }
           break;
 
         case 'a':
@@ -301,6 +573,54 @@ export default function TracksManager({
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
             setSelectedTrackIds(displayTracks.map(track => track.id));
+          }
+          break;
+
+        case 'c':
+        case 'C':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            if (selectedTrackIds.length > 0) {
+              setCopiedTrackIds([...selectedTrackIds]);
+              console.log('🎵 [COPY] Copied tracks:', selectedTrackIds);
+              console.log('🎵 [COPY] copiedTrackIds state updated');
+              // Optional: Show a brief notification
+              setError(`Copied ${selectedTrackIds.length} track${selectedTrackIds.length > 1 ? 's' : ''}`);
+              setTimeout(() => setError(null), 2000);
+            } else {
+              console.log('🎵 [COPY] No tracks selected to copy');
+            }
+          }
+          break;
+
+        case 'v':
+        case 'V':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            console.log('🎵 [PASTE] Paste key detected!');
+            console.log('🎵 [PASTE] Current state:', {
+              copiedTrackIds: copiedTrackIds,
+              copiedCount: copiedTrackIds.length,
+              isPlaylistView: isPlaylistView,
+              selectedPlaylistId: selectedPlaylistId
+            });
+            
+            if (copiedTrackIds.length > 0 && isPlaylistView && selectedPlaylistId) {
+              console.log('🎵 [PASTE] Conditions met, calling handlePasteTracks');
+              handlePasteTracks();
+            } else if (copiedTrackIds.length === 0) {
+              console.log('🎵 [PASTE] No tracks copied to paste');
+              setError('No tracks copied to paste');
+              setTimeout(() => setError(null), 2000);
+            } else if (!isPlaylistView) {
+              console.log('🎵 [PASTE] Not in playlist view');
+              setError('Can only paste tracks into playlists');
+              setTimeout(() => setError(null), 2000);
+            } else {
+              console.log('🎵 [PASTE] No playlist selected');
+              setError('No playlist selected');
+              setTimeout(() => setError(null), 2000);
+            }
           }
           break;
 
@@ -358,25 +678,22 @@ export default function TracksManager({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedTrackIds, displayTracks, handlePlayTrack, togglePlayback]);
+  }, [selectedTrackIds, displayTracks, handlePlayTrack, togglePlayback, copiedTrackIds, isPlaylistView, selectedPlaylistId, handlePasteTracks, searchQuery]);
 
-  // Auto-select first track for testing
+  // Performance: Optimized auto-selection with proper dependencies
+  const autoSelectRef = useRef(false);
   useEffect(() => {
-    console.log('🎵 Auto-select useEffect triggered:', {
-      displayTracksLength: displayTracks.length,
-      playbackCurrentTrack: playbackCurrentTrack,
-      firstTrack: displayTracks[0]
-    });
-    
-    if (displayTracks.length > 0 && !playbackCurrentTrack) {
-      console.log('🎵 Auto-selecting first track for testing:', displayTracks[0]);
-      handleSelectTrack(displayTracks[0].id);
+    // Only auto-select once per track list change and when no track is playing
+    if (displayTracks.length > 0 && !playbackCurrentTrack && !autoSelectRef.current) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎵 Auto-selecting first track:', displayTracks[0]);
+      }
+      setSelectedTrackIds([displayTracks[0].id]);
+      autoSelectRef.current = true;
     } else if (displayTracks.length === 0) {
-      console.log('❌ No tracks available for auto-select');
-    } else if (playbackCurrentTrack) {
-      console.log('❌ Track already selected:', playbackCurrentTrack);
+      autoSelectRef.current = false;
     }
-  }, [displayTracks, playbackCurrentTrack, handleSelectTrack]);
+  }, [displayTracks.length, playbackCurrentTrack?.id]); // Only track count and current track ID
 
   const handleDeleteTrack = async () => {
     if (selectedTrackIds.length > 0) {
@@ -643,10 +960,22 @@ export default function TracksManager({
   };
 
   const getViewTitle = () => {
+    const totalTracks = safeTracks.length;
+    const displayedTracks = displayTracks.length;
+    const hasFilter = searchQuery.trim() || (isPlaylistView && playlistSortMode !== 'manual');
+    
+    let title = '';
     if (isPlaylistView && selectedPlaylistName) {
-      return `${selectedPlaylistName} (${displayTracks.length} tracks)`;
+      title = selectedPlaylistName;
+    } else {
+      title = 'All Tracks';
     }
-    return `All Tracks (${displayTracks.length})`;
+    
+    if (hasFilter && displayedTracks !== totalTracks) {
+      return `${title} (${displayedTracks} of ${totalTracks} tracks)`;
+    } else {
+      return `${title} (${displayedTracks} tracks)`;
+    }
   };
 
   return (
@@ -862,9 +1191,9 @@ export default function TracksManager({
                 <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">↑/↓</kbd> Navigate tracks</div>
                 <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Shift+↑/↓</kbd> Extend selection</div>
                 <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Ctrl+A</kbd> Select all</div>
-                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Escape</kbd> Clear selection</div>
+                <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Escape</kbd> Clear search/selection</div>
                 <div><kbd className="px-1 py-0.5 bg-blue-100 rounded text-xs">Delete</kbd> Delete selected</div>
-                <div><span className="text-blue-600">Click headers to sort</span></div>
+                <div><span className="text-blue-600">Click headers to sort (library only)</span></div>
               </div>
             </div>
           )}
@@ -872,9 +1201,92 @@ export default function TracksManager({
 
         {/* Header */}
         <div className="mb-3">
-          <h1 className="text-lg font-semibold text-gray-900">
-            {getViewTitle()}
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-lg font-semibold text-gray-900">
+              {getViewTitle()}
+            </h1>
+            
+            {/* Controls Section */}
+            <div className="flex items-center space-x-3">
+              {/* Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search tracks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
+                />
+                <svg 
+                  className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              
+              {/* Playlist Sort Dropdown (only in playlist view) */}
+              {isPlaylistView && (
+                <select
+                  value={playlistSortMode}
+                  onChange={(e) => {
+                    const newMode = e.target.value as 'manual' | SortColumn;
+                    console.log('🔄 [SORT] Playlist sort mode changed:', {
+                      from: playlistSortMode,
+                      to: newMode,
+                      dragToReorderEnabled: newMode === 'manual'
+                    });
+                    setPlaylistSortMode(newMode);
+                  }}
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  title={`Current: ${playlistSortMode}. Drag-to-reorder ${playlistSortMode === 'manual' ? 'enabled' : 'disabled'}.`}
+                >
+                  <option value="manual">Manual Order {playlistSortMode === 'manual' ? '✓' : ''}</option>
+                  <option value="name">Sort by Title {playlistSortMode === 'name' ? '✓' : ''}</option>
+                  <option value="artistName">Sort by Artist {playlistSortMode === 'artistName' ? '✓' : ''}</option>
+                  <option value="albumName">Sort by Album {playlistSortMode === 'albumName' ? '✓' : ''}</option>
+                  <option value="year">Sort by Year {playlistSortMode === 'year' ? '✓' : ''}</option>
+                  <option value="duration">Sort by Duration {playlistSortMode === 'duration' ? '✓' : ''}</option>
+                </select>
+              )}
+              
+              {/* Column Visibility Dropdown */}
+              <div className="relative column-options-dropdown">
+                <button
+                  onClick={() => setShowColumnOptions(!showColumnOptions)}
+                  className="text-sm px-2 py-1.5 border border-gray-300 rounded hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                >
+                  Columns ▼
+                </button>
+                {showColumnOptions && (
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 min-w-32">
+                    <div className="p-2 space-y-1">
+                      {Object.entries(visibleColumns).map(([column, visible]) => (
+                        <label key={column} className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={visible}
+                            onChange={(e) => setVisibleColumns(prev => ({
+                              ...prev,
+                              [column]: e.target.checked
+                            }))}
+                            disabled={column === 'title'} // Title column is always required
+                            className="rounded"
+                          />
+                          <span className={`capitalize ${column === 'title' ? 'text-gray-500' : ''}`}>
+                            {column}
+                            {column === 'title' && <span className="text-xs ml-1">(required)</span>}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -885,9 +1297,10 @@ export default function TracksManager({
             selectedTrackIds={selectedTrackIds}
             onReorderTracks={handleReorderTracks}
             isPlaylistView={isPlaylistView}
-            sortColumn={sortColumn}
+            sortColumn={isPlaylistView ? null : sortColumn}
             sortDirection={sortDirection}
-            onSort={handleSort}
+            onSort={isPlaylistView ? undefined : handleSort}
+            visibleColumns={visibleColumns}
           />
         </div>
 

@@ -501,7 +501,20 @@ export const apiService = {
       });
       
       if (error) {
-        console.error(`[DRAG N DROP] ❌ ElectronAPI: Request error: ${error}`);
+        // Check if this is a duplicate track error, but only return DUPLICATE status if force=false
+        if ((error.includes('Track already exists in playlist') || error.includes('already exists')) && !force) {
+          console.log(`[DRAG N DROP] 🔄 ElectronAPI: Duplicate track detected: ${error}`);
+          // Return a structured duplicate response instead of throwing
+          return {
+            status: 'DUPLICATE',
+            message: error,
+            playlistId,
+            trackId
+          };
+        }
+        
+        // For other errors, or duplicate errors when force=true, throw the error
+        console.error(`[DRAG N DROP] ❌ ElectronAPI: Request error: ${error}${force ? ' (force=true)' : ''}`);
         throw new Error(error);
       }
       

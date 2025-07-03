@@ -8,6 +8,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { FaTrash } from "react-icons/fa";
 import { useDrag } from "@/app/contexts/DragContext";
 
+interface VisibleColumns {
+  title: boolean;
+  artist: boolean;
+  album: boolean;
+  year: boolean;
+  duration: boolean;
+}
+
 interface TrackItemProps {
   track: Track;
   index: number;
@@ -17,6 +25,7 @@ interface TrackItemProps {
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
   onContextMenu?: (trackId: string, x: number, y: number) => void;
+  visibleColumns?: VisibleColumns;
 }
 
 const TrackItem: React.FC<TrackItemProps> = ({
@@ -28,6 +37,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
   onRemoveFromPlaylist,
   isPlaylistView = false,
   onContextMenu,
+  visibleColumns = { title: true, artist: true, album: true, year: true, duration: true },
 }) => {
   const { dragState, startDrag, endDrag } = useDrag();
   const [isBeingDragged, setIsBeingDragged] = useState(false);
@@ -44,6 +54,18 @@ const TrackItem: React.FC<TrackItemProps> = ({
     disabled: !isPlaylistView // Only enable sortable in playlist view
   });
 
+  // Log sortable state for debugging
+  useEffect(() => {
+    console.log(`🎵 [TRACK ITEM] ${track.name} sortable state:`, {
+      id: track.id,
+      isPlaylistView,
+      disabled: !isPlaylistView,
+      isDragging,
+      hasListeners: !!listeners,
+      hasAttributes: !!attributes
+    });
+  }, [track.id, track.name, isPlaylistView, isDragging, listeners, attributes]);
+
   // Apply transform for playlist reordering, disable for cross-component drag
   const style = {
     transform: isPlaylistView ? CSS.Transform.toString(transform) : 'none',
@@ -52,6 +74,12 @@ const TrackItem: React.FC<TrackItemProps> = ({
   };
 
   const handleClick = (event: React.MouseEvent) => {
+    console.log('🎵 [TRACK ITEM] Click event triggered:', {
+      trackId: track.id,
+      trackName: track.name,
+      isPlaylistView,
+      event: event.type
+    });
     onSelectTrack(track.id, event);
   };
 
@@ -80,8 +108,9 @@ const TrackItem: React.FC<TrackItemProps> = ({
     
     try {
       e.dataTransfer.setData("text/plain", track.id.toString());
+      e.dataTransfer.setData("text/track-name", track.name || "Unknown Track");
       e.dataTransfer.effectAllowed = "copy";
-      console.log(`[DRAG N DROP] 🎵 DataTransfer set with track ID: ${track.id}`);
+      console.log(`[DRAG N DROP] 🎵 DataTransfer set with track ID: ${track.id} and name: ${track.name}`);
       
       // Create an invisible drag image to hide the default one
       const dragImage = document.createElement('div');
@@ -150,6 +179,20 @@ const TrackItem: React.FC<TrackItemProps> = ({
     });
   }, [track]);
 
+  // Enhanced click handler that works with sortable in playlist view
+  const handleEnhancedClick = (event: React.MouseEvent) => {
+    console.log('🎵 [TRACK ITEM] Enhanced click handler:', {
+      trackId: track.id,
+      isPlaylistView,
+      isDragging,
+      eventType: event.type
+    });
+    
+    // Always handle click events, but in playlist view we need to be careful
+    // The sortable library should allow clicks when not dragging
+    handleClick(event);
+  };
+
   return (
     <tr
       ref={setNodeRef}
@@ -157,11 +200,15 @@ const TrackItem: React.FC<TrackItemProps> = ({
       {...(isPlaylistView ? attributes : {})}
       {...(isPlaylistView ? listeners : {})}
       draggable={!isPlaylistView} // Only draggable in library view for playlist drops
-      onClick={handleClick}
+      onClick={handleEnhancedClick} // Always use onClick, but with enhanced logic
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onDragStart={!isPlaylistView ? handleDragStart : undefined}
       onDragEnd={!isPlaylistView ? handleDragEnd : undefined}
+      data-track-id={track.id}
+      data-track-name={track.name}
+      data-is-playlist-view={isPlaylistView}
+      data-sortable-enabled={isPlaylistView}
       className={`transition-all duration-200 select-none ${
         isPlaylistView && isDragging 
           ? "cursor-grabbing" // Grabbing cursor when dragging in playlist
@@ -178,11 +225,21 @@ const TrackItem: React.FC<TrackItemProps> = ({
           : ""
       }`}
     >
-      <td className="px-3 py-1">{track.name}</td>
-      <td className="px-3 py-1">{track.artistName ?? track.artist?.name ?? "Unknown Artist"}</td>
-      <td className="px-3 py-1">{track.albumName ?? track.album?.name ?? "No Album"}</td>
-      <td className="px-3 py-1">{track.year ?? "—"}</td>
-      <td className="px-3 py-1">{track.duration}</td>
+      {visibleColumns.title && (
+        <td className="px-3 py-1">{track.name}</td>
+      )}
+      {visibleColumns.artist && (
+        <td className="px-3 py-1">{track.artistName ?? track.artist?.name ?? "Unknown Artist"}</td>
+      )}
+      {visibleColumns.album && (
+        <td className="px-3 py-1">{track.albumName ?? track.album?.name ?? "No Album"}</td>
+      )}
+      {visibleColumns.year && (
+        <td className="px-3 py-1">{track.year ?? "—"}</td>
+      )}
+      {visibleColumns.duration && (
+        <td className="px-3 py-1">{track.duration}</td>
+      )}
       {isPlaylistView && (
         <td className="px-3 py-1">
           <button

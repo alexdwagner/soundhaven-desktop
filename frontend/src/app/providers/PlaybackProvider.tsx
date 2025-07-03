@@ -17,7 +17,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     const [spacebarPlaybackEnabled, setSpacebarPlaybackEnabled] = useState(true);
     const [isCommentInputFocused, setIsCommentInputFocused] = useState(false); 
     const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-    const [volume, setVolume] = useState(1.0);
+    const [volume, setVolume] = useState(0.75); // Default to 75% volume
 
     // Utility function to create shuffled queue
     const createShuffleQueue = useCallback((tracks: Track[], currentIndex?: number) => {

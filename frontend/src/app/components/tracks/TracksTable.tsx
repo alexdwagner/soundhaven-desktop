@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useRef } from 'react';
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { 
+  DndContext, 
+  closestCenter, 
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors 
+} from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import TrackItem from "./TrackItem";
@@ -9,6 +16,14 @@ import { Track } from "../../../../../shared/types";
 
 export type SortColumn = 'name' | 'artistName' | 'albumName' | 'year' | 'duration';
 export type SortDirection = 'asc' | 'desc';
+
+interface VisibleColumns {
+  title: boolean;
+  artist: boolean;
+  album: boolean;
+  year: boolean;
+  duration: boolean;
+}
 
 interface TracksTableProps {
   tracks: Track[];
@@ -22,6 +37,7 @@ interface TracksTableProps {
   sortColumn?: SortColumn | null;
   sortDirection?: SortDirection;
   onSort?: (column: SortColumn) => void;
+  visibleColumns?: VisibleColumns;
 }
 
 const TracksTable: React.FC<TracksTableProps> = ({
@@ -36,22 +52,57 @@ const TracksTable: React.FC<TracksTableProps> = ({
   sortColumn,
   sortDirection = 'asc',
   onSort,
+  visibleColumns = { title: true, artist: true, album: true, year: true, duration: true },
 }) => {
   // Add ref to track the last drag operation and prevent duplicates
   const lastDragRef = useRef<{ activeId: any; overId: any; timestamp: number } | null>(null);
 
-  const handleDragStart = (event) => {
+  // Configure sensors to allow both clicking and dragging
+  // Require 10px of movement before starting drag to allow clicks
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 10, // 10px movement required before drag starts
+      },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragStart = (event: any) => {
     const { active } = event;
-    console.log('🔄 [TRACK SORT] Drag started:', { activeId: active.id });
+    console.log('🔄 [TRACK SORT] Drag started:', { 
+      activeId: active.id,
+      isPlaylistView,
+      tracksCount: tracks.length,
+      activeTrack: tracks.find(t => t.id === active.id)?.name
+    });
     console.log('🔄 [TRACK SORT] Active element:', active);
-    console.log('🔄 [TRACK SORT] Tracks in SortableContext:', tracks.map(t => t.id));
+    console.log('🔄 [TRACK SORT] Tracks in SortableContext:', tracks.map(t => ({ id: t.id, name: t.name })).slice(0, 5));
   };
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = (event: any) => {
     const { active, over } = event;
-    console.log('🔄 [TRACK SORT] Drag ended:', { activeId: active.id, overId: over?.id });
+    console.log('🔄 [TRACK SORT] Drag ended:', { 
+      activeId: active.id, 
+      overId: over?.id,
+      isPlaylistView,
+      canReorder: isPlaylistView,
+      hasOnReorderTracks: !!onReorderTracks
+    });
     console.log('🔄 [TRACK SORT] Full event:', event);
-    console.log('🔄 [TRACK SORT] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name })));
+    console.log('🔄 [TRACK SORT] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name })).slice(0, 10));
+    
+    // Only process reordering in playlist view
+    if (!isPlaylistView) {
+      console.log('🔄 [TRACK SORT] Not in playlist view, skipping reorder');
+      return;
+    }
+
+    // Check if onReorderTracks function is provided
+    if (!onReorderTracks) {
+      console.error('🔄 [TRACK SORT] No onReorderTracks function provided');
+      return;
+    }
     
     // Prevent processing if no valid drop target
     if (!active || !over || active.id === over.id) {
@@ -81,8 +132,8 @@ const TracksTable: React.FC<TracksTableProps> = ({
       overId: over.id,
       oldIndex,
       newIndex,
-      activeTrack: tracks[oldIndex],
-      overTrack: tracks[newIndex]
+      activeTrack: tracks[oldIndex]?.name,
+      overTrack: tracks[newIndex]?.name
     });
     
     // Validate indices
@@ -92,7 +143,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
     }
 
     console.log('🔄 [TRACK SORT] Moving track from index', oldIndex, 'to', newIndex);
-    console.log('🔄 [TRACK SORT] Track being moved:', tracks[oldIndex]?.name);
+    console.log('🔄 [TRACK SORT] Calling onReorderTracks...');
     
     onReorderTracks(oldIndex, newIndex);
   };
@@ -147,6 +198,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
 
   return (
     <DndContext 
+      sensors={sensors}
       collisionDetection={closestCenter} 
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -155,11 +207,21 @@ const TracksTable: React.FC<TracksTableProps> = ({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <SortableHeader column="name">Title</SortableHeader>
-              <SortableHeader column="artistName">Artist</SortableHeader>
-              <SortableHeader column="albumName">Album</SortableHeader>
-              <SortableHeader column="year">Year</SortableHeader>
-              <SortableHeader column="duration">Duration</SortableHeader>
+              {visibleColumns.title && (
+                <SortableHeader column="name">Title</SortableHeader>
+              )}
+              {visibleColumns.artist && (
+                <SortableHeader column="artistName">Artist</SortableHeader>
+              )}
+              {visibleColumns.album && (
+                <SortableHeader column="albumName">Album</SortableHeader>
+              )}
+              {visibleColumns.year && (
+                <SortableHeader column="year">Year</SortableHeader>
+              )}
+              {visibleColumns.duration && (
+                <SortableHeader column="duration">Duration</SortableHeader>
+              )}
               {isPlaylistView && (
                 <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               )}
@@ -178,6 +240,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
                 onRemoveFromPlaylist={onRemoveFromPlaylist}
                 isPlaylistView={isPlaylistView}
                 onContextMenu={onContextMenu}
+                visibleColumns={visibleColumns}
               />
             ))}
           </tbody>

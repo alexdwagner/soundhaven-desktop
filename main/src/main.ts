@@ -996,7 +996,7 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         console.error('[API DEBUG] Error deleting playlist:', error);
         return { error: 'Failed to delete playlist', status: 500 };
       }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/tracks\/[\w\d_-]+$/) && method === 'POST') {
+    } else if (apiPath.match(/^\/api\/playlists\/[a-zA-Z0-9_-]+\/tracks\/[a-zA-Z0-9_-]+$/) && method === 'POST') {
       console.log('[API DEBUG] Matched POST /api/playlists/{id}/tracks/{trackId}');
       console.log('[DRAG N DROP] 🔥 Backend: Add track to playlist endpoint hit');
       console.log('[DRAG N DROP] 🔥 Backend: apiPath:', apiPath);
@@ -1013,13 +1013,42 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
       console.log('[DRAG N DROP] 🔥 Backend: Force flag:', force);
       
       try {
+        console.log('[DRAG N DROP] 🔥 Backend: Starting database operations...');
+        console.log('[DRAG N DROP] 🔥 Backend: dbAsync available:', !!dbAsync);
+        
+        // Validate inputs
+        if (!playlistId || !trackId) {
+          console.error('[DRAG N DROP] ❌ Backend: Missing playlistId or trackId');
+          return { error: 'Invalid playlist ID or track ID', status: 400 };
+        }
+        
+        // Check if track exists in tracks table
+        console.log('[DRAG N DROP] 🔥 Backend: Verifying track exists...');
+        const trackExists = await dbAsync.get('SELECT id FROM tracks WHERE id = ?', [trackId]);
+        if (!trackExists) {
+          console.error('[DRAG N DROP] ❌ Backend: Track not found in database');
+          return { error: 'Track not found', status: 404 };
+        }
+        
+        // Check if playlist exists
+        console.log('[DRAG N DROP] 🔥 Backend: Verifying playlist exists...');
+        const playlistExists = await dbAsync.get('SELECT id FROM playlists WHERE id = ?', [playlistId]);
+        if (!playlistExists) {
+          console.error('[DRAG N DROP] ❌ Backend: Playlist not found in database');
+          return { error: 'Playlist not found', status: 404 };
+        }
+        
         // Check if track already exists in playlist
+        console.log('[DRAG N DROP] 🔥 Backend: Checking if track exists in playlist...');
         const existing = await dbAsync.get(
           'SELECT * FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?',
           [playlistId, trackId]
         );
         
+        console.log('[DRAG N DROP] 🔥 Backend: Existing track check result:', { existing: !!existing, force });
+        
         if (existing && !force) {
+          console.log('[DRAG N DROP] 🔥 Backend: Track exists and force=false, returning duplicate error');
           return { 
             error: 'Track already exists in playlist', 
             status: 409,
@@ -1027,24 +1056,48 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
           };
         }
         
-        if (!existing) {
+        // Insert track if it doesn't exist OR if force=true (allowing duplicates)
+        if (!existing || force) {
+          console.log('[DRAG N DROP] 🔥 Backend: Inserting track into playlist', { existing: !!existing, force });
+          
           // Get the highest order number for this playlist
+          console.log('[DRAG N DROP] 🔥 Backend: Getting max order for playlist...');
           const maxOrder = await dbAsync.get(
             'SELECT MAX("order") as max_order FROM playlist_tracks WHERE playlist_id = ?',
             [playlistId]
           );
           
           const nextOrder = (maxOrder?.max_order || 0) + 1;
+          console.log('[DRAG N DROP] 🔥 Backend: Next order will be:', nextOrder);
           
-          await dbAsync.run(
+          console.log('[DRAG N DROP] 🔥 Backend: Executing INSERT query...');
+          console.log('[DRAG N DROP] 🔥 Backend: INSERT parameters:', { playlistId, trackId, nextOrder });
+          
+          const insertResult = await dbAsync.run(
             'INSERT INTO playlist_tracks (playlist_id, track_id, "order") VALUES (?, ?, ?)',
             [playlistId, trackId, nextOrder]
           );
+          
+          console.log('[DRAG N DROP] 🔥 Backend: INSERT result:', insertResult);
+          console.log('[DRAG N DROP] 🔥 Backend: Successfully inserted track at order', nextOrder);
+          
+          // Verify the insertion
+          const verification = await dbAsync.get(
+            'SELECT * FROM playlist_tracks WHERE playlist_id = ? AND track_id = ? AND "order" = ?',
+            [playlistId, trackId, nextOrder]
+          );
+          console.log('[DRAG N DROP] 🔥 Backend: Verification query result:', verification);
+        } else {
+          console.log('[DRAG N DROP] 🔥 Backend: Track exists and force=false, skipping insertion');
         }
         
+        console.log('[DRAG N DROP] 🔥 Backend: Database operations completed successfully');
         return { data: { success: true } };
       } catch (error) {
-        console.error('[API DEBUG] Error adding track to playlist:', error);
+        console.error('[DRAG N DROP] ❌ Backend: Database error:', error);
+        console.error('[DRAG N DROP] ❌ Backend: Error type:', typeof error);
+        console.error('[DRAG N DROP] ❌ Backend: Error message:', error instanceof Error ? error.message : 'Unknown error');
+        console.error('[DRAG N DROP] ❌ Backend: Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         return { error: 'Failed to add track to playlist', status: 500 };
       }
     } else if (apiPath === '/api/tracks/sync-metadata' && method === 'POST') {
