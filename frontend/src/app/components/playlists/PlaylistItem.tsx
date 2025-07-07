@@ -68,12 +68,11 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const handlePlaylistNameBlur = async () => {
     if (playlistName !== playlist.name) {
       try {
-        const updatedPlaylist = await updatePlaylistMetadata(playlist.id, {
+        await updatePlaylistMetadata(playlist.id, {
           name: playlistName,
         });
-        // Update the local state with the new playlist data
-        setPlaylistName(updatedPlaylist.name);
-        // You might want to update other playlist properties here as well
+        // The UI is already updated, and the provider handles the backend sync.
+        // No need to set the name again from the return value.
       } catch (error) {
         console.error("Error updating playlist name:", error);
         // Revert the name change in the UI
@@ -87,7 +86,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   //     await deletePlaylist(playlist.id);
   //   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLLIElement>) => {
     console.log(`[DRAG N DROP] 🎯 Drop event triggered on playlist ${playlist.id} (${playlist.name})`);
     console.log(`[DRAG N DROP] 🎯 Event details:`, {
       type: e.type,
@@ -141,7 +140,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     }
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLLIElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     if (!isDragOver) {
@@ -155,7 +154,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     }
   };
 
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLLIElement>) => {
     // Only set isDragOver to false if we're actually leaving the element
     // (not just moving to a child element)
     const rect = e.currentTarget.getBoundingClientRect();
@@ -247,7 +246,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
       e.stopPropagation();
       onSelect(playlist.id);
     }
-
+    
     // Reset drag state
     dragStartPos.current = null;
     isDragActive.current = false;
@@ -273,42 +272,30 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    border: isDragOver ? '2px dashed #4F46E5' : '2px solid transparent',
+    backgroundColor: isSelected ? 'rgba(79, 70, 229, 0.3)' : (isDragOver ? 'rgba(79, 70, 229, 0.1)' : 'transparent'),
     opacity: isDragging ? 0.5 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab',
   };
 
   return (
-    <div
+    <li
       ref={setNodeRef}
       style={style}
-      {...(isBeingDragged ? attributes : {})}
-      {...(isBeingDragged ? listeners : {})}
+      {...attributes}
+      {...listeners}
+      className={`relative group rounded-md transition-all duration-150 ease-in-out ${isBeingDragged ? 'shadow-lg' : ''}`}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onContextMenu={handleContextMenu}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onDrop={onDrop || handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDragEnter={(e) => {
-        console.log(`[DRAG N DROP] 🎯 BASIC: Drag enter on playlist ${playlist.id}`);
-        e.preventDefault();
-      }}
-      onMouseEnter={() => {
-        console.log(`[DRAG N DROP] 🎯 BASIC: Mouse enter on playlist ${playlist.id}`);
-      }}
-      onContextMenu={handleContextMenu}
-      className={`playlist-item flex items-center justify-between p-2 mb-1 rounded transition-all duration-200 text-sm select-none border border-transparent ${
-        isDragOver 
-          ? "bg-green-600 border-green-400 shadow-md text-white cursor-pointer" // Drag over state
-          : dragState.isDragging
-            ? "bg-gray-700 border-gray-500 opacity-90 hover:bg-gray-600 hover:border-green-400 cursor-pointer" // Available drop zone during drag
-            : isDragging || isBeingDragged
-              ? "bg-gray-600 border-gray-400 shadow-lg z-50 cursor-grabbing transform scale-105" // Being dragged
-              : isSelected 
-                ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-500 cursor-pointer" // Selected state
-                : "hover:bg-gray-700 hover:border-gray-600 text-gray-100 cursor-pointer" // Default hover state
-      }`}
     >
-      <li className="w-full flex items-center justify-between">
+      <div
+        className="w-full h-full p-2 flex items-center justify-between"
+      >
         {isEditing ? (
           <input
             value={playlistName}
@@ -377,8 +364,8 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
             </div>
           </>
         )}
-      </li>
-    </div>
+      </div>
+    </li>
   );
 };
 

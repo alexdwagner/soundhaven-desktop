@@ -1614,6 +1614,89 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         console.error('[API DEBUG] Error updating comment:', error);
         return { error: 'Failed to update comment', status: 500 };
       }
+    } else if (method === 'POST' && endpoint.match(/^\/playlists\/?$/)) {
+      // Create a new playlist
+      const { name, description } = body;
+      const newPlaylistId = uuidv4();
+
+      // Get userId from token
+      const token = (headers.authorization || '').split(' ')[1];
+      const decoded = verifyToken(token);
+      if (!decoded || !decoded.userId) {
+        return { error: 'Unauthorized', status: 401 };
+      }
+      const { userId } = decoded;
+
+      await dbAsync.run(
+        'INSERT INTO playlists (id, name, description, userId) VALUES (?, ?, ?, ?)',
+        [newPlaylistId, name, description, userId]
+      );
+      const newPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [newPlaylistId]);
+      return { data: newPlaylist, status: 201 };
+
+    } else if (method === 'POST' && endpoint.match(/^\/playlists\/([a-f0-9-]+)\/tracks\/([a-f0-9-]+)\/?$/)) {
+      // Add a track to a playlist
+      const matches = endpoint.match(/^\/playlists\/([a-f0-9-]+)\/tracks\/([a-f0-9-]+)\/?$/);
+      const playlistId = matches[1];
+      const trackId = matches[2];
+      const { force } = body;
+
+      // Check for duplicates unless 'force' is true
+      if (!force) {
+        const existing = await dbAsync.get(
+          'SELECT * FROM playlist_tracks WHERE playlistId = ? AND trackId = ?',
+          [playlistId, trackId]
+        );
+        if (existing) {
+          return { 
+            error: 'Track is already in this playlist', 
+            status: 409, 
+            data: { status: 'DUPLICATE', message: 'Track is already in this playlist' }
+          };
+        }
+      }
+
+      // Get the current max order for this playlist
+      const maxOrderResult = await dbAsync.get(
+        'SELECT MAX(track_order) as max_order FROM playlist_tracks WHERE playlistId = ?',
+        [playlistId]
+      );
+      const newOrder = (maxOrderResult?.max_order ?? -1) + 1;
+
+      await dbAsync.run(
+        'INSERT INTO playlist_tracks (playlistId, trackId, track_order) VALUES (?, ?, ?)',
+        [playlistId, trackId, newOrder]
+      );
+      
+      // Return the updated playlist
+      const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', playlistId);
+      return { data: updatedPlaylist, status: 200 };
+
+    } else if (method === 'PUT' && endpoint.match(/^\/playlists\/([a-f0-9-]+)\/reorder\/?$/)) {
+      // Reorder tracks in a playlist
+      const playlistId = endpoint.split('/')[2];
+      const { trackIds } = body as { trackIds: string[] };
+      
+      if (!Array.isArray(trackIds)) {
+        return { error: 'trackIds must be an array', status: 400 };
+      }
+      
+      try {
+        // Update order for each track in the playlist
+        await Promise.all(trackIds.map((trackId, index) => 
+          dbAsync.run(
+            'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
+            [index, playlistId, trackId]
+          )
+        ));
+        
+        // Return updated playlist
+        const playlist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+        return { data: playlist };
+      } catch (error) {
+        console.error('[API DEBUG] Error updating playlist track order:', error);
+        return { error: 'Failed to update playlist track order', status: 500 };
+      }
     }
     
     console.log('[IPC HANDLER] No matching handler found for:', { method, endpoint, apiPath: apiPath || 'not set' });

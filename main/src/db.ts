@@ -1,4 +1,5 @@
 import { Database } from 'sqlite3';
+import * as sqlite3 from 'sqlite3';
 import * as path from 'path';
 import { config } from './config';
 
@@ -12,7 +13,7 @@ console.log('🗄️ [DB INIT] Process cwd:', process.cwd());
 console.log('🗄️ [DB INIT] Resolved DB path:', dbPath);
 
 // Create database connection
-export const db = new Database(dbPath, (err) => {
+export const db = new Database(dbPath, sqlite3.OPEN_READWRITE, (err) => {
   if (err) {
     console.error('Error opening database:', err);
   } else {

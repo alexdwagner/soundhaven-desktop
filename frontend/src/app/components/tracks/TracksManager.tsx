@@ -203,9 +203,14 @@ export default function TracksManager({
   }, [tracks, setCurrentTrackIndex, selectTrack]);
 
   const handlePlayTrack = useCallback((trackId: string) => {
-    console.log('🎵 handlePlayTrack called with trackId:', trackId);
-    handleSelectTrack(trackId);
-  }, [handleSelectTrack]);
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    if (trackIndex !== -1) {
+      const track = tracks[trackIndex];
+      // Here, we can decide if we want to autoplay.
+      // For a double-click action, autoplay is desired.
+      selectTrack(track, trackIndex, true);
+    }
+  }, [tracks, selectTrack]);
 
   // Sorting logic
   const handleSort = useCallback((column: SortColumn) => {
