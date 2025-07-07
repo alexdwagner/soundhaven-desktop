@@ -520,13 +520,21 @@ export const apiService = {
     if (error) throw new Error(error);
   },
 
-  async updatePlaylistMetadata(playlistId: string, updates: { name?: string; description?: string }) {
+  async updatePlaylistMetadata(playlistId: string, updates: { name?: string; description?: string }): Promise<Playlist> {
+    console.log(`[EDIT PLAYLIST] Step 3: updatePlaylistMetadata in apiService called for playlist ID: ${playlistId} with updates:`, updates);
     const { data, error } = await makeRequest<Playlist>(`/api/playlists/${playlistId}/metadata`, {
       method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (error) throw new Error(error);
-    return data;
+
+    if (error) {
+      console.error(`[EDIT PLAYLIST] Step 3 Failure: API error for playlist ${playlistId}:`, error);
+      throw new Error(error);
+    }
+    
+    console.log(`[EDIT PLAYLIST] Step 3 Success: API returned data for playlist ${playlistId}:`, data);
+    return data as Playlist;
   },
 
   async reorderPlaylists(playlistIds: string[]) {

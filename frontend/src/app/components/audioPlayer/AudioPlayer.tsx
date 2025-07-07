@@ -617,9 +617,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     // Validate the audio file path
     if (!track.filePath || typeof track.filePath !== 'string') {
       console.error('AudioPlayer: Invalid filePath:', track.filePath);
-      return;
-    }
-    
+        return;
+      }
+      
     // Always use audio server URL for better compatibility
     const fileName = track.filePath.replace('/uploads/', '');
     const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
@@ -634,9 +634,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       // Type check to ensure audioUrl is a string
       if (typeof audioUrl !== 'string') {
         console.error('AudioPlayer: audioUrl is not a string!', audioUrl);
-        return;
-      }
-      
+              return;
+            }
+            
       console.log('AudioPlayer: Creating WaveSurfer with audioUrl string:', audioUrl);
       initializeWaveSurfer();
     }
@@ -833,7 +833,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           waveSurferRef.current = null;
           
           // Clear refs
-          regionsRef.current = null;
+                    regionsRef.current = null;
           
           console.log('✅ AudioPlayer: WaveSurfer instance destroyed successfully');
         } catch (destroyError) {
@@ -857,34 +857,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   return (
     <div className="space-y-2">
       {/* Full Height Waveform */}
-      <div 
-        ref={waveformRef} 
-        className="w-full h-32 bg-white rounded border border-gray-300 overflow-hidden"
-        style={{ 
-          position: 'relative',
-          minHeight: '128px',
-          maxHeight: '128px',
-          cursor: 'default',
-          "--region-color": "rgba(59, 130, 246, 0.3)",
-          "--region-border-color": "rgb(59, 130, 246)",
-          "--region-handle-color": "rgb(59, 130, 246)",
-        } as React.CSSProperties}
-        onDoubleClick={(e) => {
-          if (!waveSurferRef.current) return;
-          
-          const rect = e.currentTarget.getBoundingClientRect();
-          const clickX = e.clientX - rect.left;
-          const clickPercent = clickX / rect.width;
-          const clickTime = clickPercent * duration;
-          
-          console.log('Double-click at time:', clickTime, 'seconds');
-          
-          if (onAddComment) {
-            onAddComment(clickTime);
-          }
-        }}
-        title="Double-click to add a comment"
-      />
+    <div 
+      ref={waveformRef} 
+      className="w-full h-32 bg-white rounded border border-gray-300 overflow-hidden"
+      style={{ 
+        position: 'relative',
+        minHeight: '128px',
+        maxHeight: '128px',
+        cursor: 'default',
+        "--region-color": "rgba(59, 130, 246, 0.3)",
+        "--region-border-color": "rgb(59, 130, 246)",
+        "--region-handle-color": "rgb(59, 130, 246)",
+      } as React.CSSProperties}
+      onDoubleClick={(e) => {
+        if (!waveSurferRef.current) return;
+        
+        const rect = e.currentTarget.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickPercent = clickX / rect.width;
+        const clickTime = clickPercent * duration;
+        
+        console.log('Double-click at time:', clickTime, 'seconds');
+        
+        if (onAddComment) {
+          onAddComment(clickTime);
+        }
+      }}
+      title="Double-click to add a comment"
+    />
 
       {/* Compact Transport Controls - Single Row */}
       <div className="flex items-center justify-between px-2 py-1 bg-gray-50 rounded border">
@@ -938,7 +938,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         <div className="flex-1 mx-4 min-w-0">
           <div className="text-center">
             <div className="text-sm font-medium text-gray-900 truncate">
-              {track?.name || 'No track selected'}
+            {track?.name || 'No track selected'}
             </div>
             {track?.artist?.name && (
               <div className="text-xs text-gray-600 truncate">
@@ -949,7 +949,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         </div>
 
         {/* Right: Volume and Speed */}
-        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3">
           {/* Volume */}
           <div className="flex items-center space-x-1">
             <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
@@ -967,18 +967,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </div>
           
           {/* Speed */}
-          <select
-            value={playbackSpeedState}
-            onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
+            <select
+              value={playbackSpeedState}
+              onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
             className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="0.5">0.5x</option>
-            <option value="0.75">0.75x</option>
-            <option value="1">1x</option>
-            <option value="1.25">1.25x</option>
-            <option value="1.5">1.5x</option>
-            <option value="2">2x</option>
-          </select>
+            >
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1">1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
         </div>
       </div>
     </div>

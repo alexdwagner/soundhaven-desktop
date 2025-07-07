@@ -1234,9 +1234,10 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         return { error: 'Failed to remove track from playlist', status: 500 };
       }
     } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/metadata$/) && method === 'PATCH') {
-      console.log('[API DEBUG] Matched PATCH /api/playlists/{id}/metadata');
+      console.log(`[EDIT PLAYLIST] Step 4: Backend handler PATCH /api/playlists/{id}/metadata matched.`);
       const playlistId = apiPath.split('/')[3];
       const { name, description } = body as { name?: string; description?: string };
+      console.log(`[EDIT PLAYLIST] Step 4.1: Received data for playlist ${playlistId}:`, { name, description });
       
       try {
         const updates: string[] = [];
@@ -1258,15 +1259,18 @@ ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = n
         
         values.push(playlistId);
         
+        console.log('[EDIT PLAYLIST] Step 4.2: Executing database update with query:', `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`, 'and values:', values);
         await dbAsync.run(
           `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`,
           values
         );
         
+        console.log('[EDIT PLAYLIST] Step 4.3: Database update finished. Fetching updated playlist...');
         const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+        console.log('[EDIT PLAYLIST] Step 4.4: Returning updated playlist:', updatedPlaylist);
         return { data: updatedPlaylist };
       } catch (error) {
-        console.error('[API DEBUG] Error updating playlist metadata:', error);
+        console.error('[EDIT PLAYLIST] Step 4 Failure: Error updating playlist metadata:', error);
         return { error: 'Failed to update playlist metadata', status: 500 };
       }
     } else if (apiPath === '/api/playlists/reorder' && method === 'PATCH') {

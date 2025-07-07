@@ -51,6 +51,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) {
+        console.log('[EDIT PLAYLIST] Clicked outside options menu, closing menu');
         setShowOptions(false);
       }
     };
@@ -66,18 +67,23 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   };
 
   const handlePlaylistNameBlur = async () => {
+    console.log(`[EDIT PLAYLIST] Step 1: handlePlaylistNameBlur called for playlist ID: ${playlist.id}`);
     if (playlistName !== playlist.name) {
+      console.log(`[EDIT PLAYLIST] Name changed from "${playlist.name}" to "${playlistName}". Proceeding with update.`);
       try {
         await updatePlaylistMetadata(playlist.id, {
           name: playlistName,
         });
+        console.log(`[EDIT PLAYLIST] Step 1 Success: updatePlaylistMetadata call finished.`);
         // The UI is already updated, and the provider handles the backend sync.
         // No need to set the name again from the return value.
       } catch (error) {
-        console.error("Error updating playlist name:", error);
+        console.error("[EDIT PLAYLIST] Step 1 Failure: Error calling updatePlaylistMetadata:", error);
         // Revert the name change in the UI
         setPlaylistName(playlist.name);
       }
+    } else {
+      console.log(`[EDIT PLAYLIST] Name not changed. Skipping update.`);
     }
     setIsEditing(false);
   };
@@ -172,23 +178,28 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   };
 
   const handleOptionsClick = (e: React.MouseEvent) => {
+    console.log('[EDIT PLAYLIST] Options menu clicked');
     e.stopPropagation();
     setShowOptions(!showOptions);
   };
 
   const handleEditClick = (e: React.MouseEvent) => {
+    console.log('[EDIT PLAYLIST] Edit button clicked');
     e.stopPropagation();
     setIsEditing(true);
     setShowOptions(false);
+    console.log('[EDIT PLAYLIST] isEditing set to true, showOptions set to false');
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
+    console.log('[EDIT PLAYLIST] Delete button clicked');
     e.stopPropagation();
     onDelete();
     setShowOptions(false);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
+    console.log('[EDIT PLAYLIST] Context menu opened');
     e.preventDefault();
     e.stopPropagation();
     setShowOptions(true);
@@ -348,6 +359,14 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
                   <button
                     className="block px-4 py-2 text-sm text-white hover:bg-gray-600 w-full text-left"
                     onClick={handleEditClick}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
                   >
                     <FaEdit className="inline mr-2" />
                     Edit
@@ -355,6 +374,14 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
                   <button
                     className="block px-4 py-2 text-sm text-white hover:bg-gray-600 w-full text-left"
                     onClick={handleDeleteClick}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
                   >
                     <FaTrash className="inline mr-2" />
                     Delete

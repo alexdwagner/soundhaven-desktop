@@ -278,28 +278,22 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
 
   const updatePlaylistMetadata = useCallback(
     async (playlistId: string, updates: { name?: string; description?: string }): Promise<boolean> => {
-      // Remove token requirement for local-first app
+      console.log(`[EDIT PLAYLIST] Step 2: updatePlaylistMetadata in provider called for playlist ID: ${playlistId} with updates:`, updates);
       try {
+        console.log(`[EDIT PLAYLIST] Step 2.1: Calling apiService.updatePlaylistMetadata...`);
         await apiService.updatePlaylistMetadata(playlistId, updates);
-        
-        // Update the local state with the new metadata
-        setPlaylists(prev =>
-          prev.map(playlist =>
-            playlist.id === playlistId
-              ? { ...playlist, ...updates, updatedAt: new Date().toISOString() }
-              : playlist
-          )
-        );
-
+        console.log(`[EDIT PLAYLIST] Step 2.2: apiService.updatePlaylistMetadata finished. Calling fetchPlaylists...`);
+        await fetchPlaylists();
+        console.log(`[EDIT PLAYLIST] Step 2.3: fetchPlaylists finished.`);
         return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        console.error(`Error updating playlist ${playlistId} metadata:`, errorMessage);
+        console.error(`[EDIT PLAYLIST] Step 2 Failure: Error updating playlist ${playlistId} metadata:`, errorMessage);
         setError(errorMessage);
         return false;
       }
     },
-    []
+    [fetchPlaylists]
   );
 
   const updatePlaylistOrder = useCallback(async (playlistIds: string[]): Promise<Playlist[]> => {
