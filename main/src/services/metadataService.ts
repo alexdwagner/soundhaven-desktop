@@ -1,204 +1,157 @@
 import * as mm from 'music-metadata';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as fs from 'fs';
 
-export interface ExtractedMetadata {
-  title: string;
-  artist: string | null;
-  album: string | null;
-  year: number | null;
-  genre: string | null;
-  trackNumber: number | null;
-  duration: number; // in seconds
-  bitrate: number | null;
-  sampleRate: number | null;
-  channels: number | null;
+export interface AudioMetadata {
+  title?: string;
+  artist?: string;
+  album?: string;
+  year?: number;
+  trackNumber?: number;
+  genre?: string[];
+  duration?: number;
+  bitrate?: number;
+  sampleRate?: number;
+  channels?: number;
+  format?: string;
+  lossless?: boolean;
+  fileSize?: number;
 }
 
 export class MetadataService {
-  /**
-   * Extract metadata from an audio file buffer
-   */
-  static async extractFromBuffer(fileBuffer: Buffer, fileName: string): Promise<ExtractedMetadata> {
-    console.log(`[METADATA] Extracting metadata from buffer for file: ${fileName}`);
-    
-    try {
-      // Parse metadata from buffer
-      const metadata = await mm.parseBuffer(fileBuffer, undefined, {
-        duration: true,
-        skipCovers: true, // Skip cover art to improve performance
-        skipPostHeaders: true
-      });
+  // List of supported audio file extensions
+  private static readonly SUPPORTED_EXTENSIONS = [
+    '.mp3',
+    '.m4a',
+    '.flac',
+    '.wav',
+    '.ogg',
+    '.aac',
+    '.wma',
+    '.aiff'
+  ];
 
-      console.log(`[METADATA] Raw metadata extracted:`, {
+  /**
+   * Extract metadata from an audio file
+   */
+  static async extractFromFile(filePath: string): Promise<AudioMetadata> {
+    try {
+      // Validate file extension
+      if (!this.isValidAudioFile(filePath)) {
+        throw new Error('Unsupported file format');
+      }
+
+      // Parse metadata
+      const metadata = await mm.parseFile(filePath);
+      
+      // Get file stats
+      const stats = await fs.promises.stat(filePath);
+
+      return {
         title: metadata.common.title,
         artist: metadata.common.artist,
         album: metadata.common.album,
-        year: metadata.common.year,
-        genre: metadata.common.genre?.[0],
-        trackNo: metadata.common.track?.no,
+        year: metadata.common.year || undefined,
+        trackNumber: metadata.common.track?.no || undefined,
+        genre: metadata.common.genre,
         duration: metadata.format.duration,
         bitrate: metadata.format.bitrate,
         sampleRate: metadata.format.sampleRate,
-        numberOfChannels: metadata.format.numberOfChannels
-      });
-
-      // Extract and clean the metadata
-      const result: ExtractedMetadata = {
-        title: this.cleanString(metadata.common.title) || this.extractTitleFromFilename(fileName),
-        artist: this.cleanString(metadata.common.artist) || null,
-        album: this.cleanString(metadata.common.album) || null,
-        year: metadata.common.year || null,
-        genre: metadata.common.genre?.[0] ? this.cleanString(metadata.common.genre[0]) : null,
-        trackNumber: metadata.common.track?.no || null,
-        duration: Math.round(metadata.format.duration || 0),
-        bitrate: metadata.format.bitrate || null,
-        sampleRate: metadata.format.sampleRate || null,
-        channels: metadata.format.numberOfChannels || null
+        channels: metadata.format.numberOfChannels,
+        format: metadata.format.container,
+        lossless: metadata.format.lossless,
+        fileSize: stats.size
       };
-
-      console.log(`[METADATA] Processed metadata:`, result);
-      return result;
-
     } catch (error) {
-      console.error(`[METADATA] Error extracting metadata from ${fileName}:`, error);
-      
-      // Fallback to filename-based extraction
-      return this.extractFromFilename(fileName);
+      console.error('❌ Error extracting metadata:', error);
+      throw error;
     }
   }
 
   /**
-   * Extract metadata from a file path
+   * Check if a file is a supported audio format
    */
-  static async extractFromFile(filePath: string): Promise<ExtractedMetadata> {
-    console.log(`[METADATA] Extracting metadata from file: ${filePath}`);
-    
-    try {
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File does not exist: ${filePath}`);
-      }
-
-      const metadata = await mm.parseFile(filePath, {
-        duration: true,
-        skipCovers: true,
-        skipPostHeaders: true
-      });
-
-      const fileName = path.basename(filePath);
-      
-      const result: ExtractedMetadata = {
-        title: this.cleanString(metadata.common.title) || this.extractTitleFromFilename(fileName),
-        artist: this.cleanString(metadata.common.artist) || null,
-        album: this.cleanString(metadata.common.album) || null,
-        year: metadata.common.year || null,
-        genre: metadata.common.genre?.[0] ? this.cleanString(metadata.common.genre[0]) : null,
-        trackNumber: metadata.common.track?.no || null,
-        duration: Math.round(metadata.format.duration || 0),
-        bitrate: metadata.format.bitrate || null,
-        sampleRate: metadata.format.sampleRate || null,
-        channels: metadata.format.numberOfChannels || null
-      };
-
-      console.log(`[METADATA] Extracted metadata from file:`, result);
-      return result;
-
-    } catch (error) {
-      console.error(`[METADATA] Error extracting metadata from file ${filePath}:`, error);
-      
-      // Fallback to filename-based extraction
-      const fileName = path.basename(filePath);
-      return this.extractFromFilename(fileName);
-    }
+  static isValidAudioFile(filePath: string): boolean {
+    const ext = path.extname(filePath).toLowerCase();
+    return this.SUPPORTED_EXTENSIONS.includes(ext);
   }
 
   /**
-   * Fallback: Extract basic info from filename
+   * Batch extract metadata from multiple files
    */
-  private static extractFromFilename(fileName: string): ExtractedMetadata {
-    console.log(`[METADATA] Using fallback filename extraction for: ${fileName}`);
+  static async extractFromFiles(filePaths: string[]): Promise<Map<string, AudioMetadata>> {
+    const results = new Map<string, AudioMetadata>();
     
-    const title = this.extractTitleFromFilename(fileName);
-    
-    // Try to parse artist and title from common patterns
-    let artist: string | null = null;
-    let cleanTitle = title;
-    
-    // Pattern: "Artist - Title"
-    const artistTitleMatch = title.match(/^(.+?)\s*-\s*(.+)$/);
-    if (artistTitleMatch && artistTitleMatch[1] && artistTitleMatch[2]) {
-      artist = this.cleanString(artistTitleMatch[1]);
-      const parsedTitle = this.cleanString(artistTitleMatch[2]);
-      if (parsedTitle) {
-        cleanTitle = parsedTitle;
+    for (const filePath of filePaths) {
+      try {
+        const metadata = await this.extractFromFile(filePath);
+        results.set(filePath, metadata);
+      } catch (error) {
+        console.error(`❌ Error extracting metadata from ${filePath}:`, error);
+        // Continue with next file
       }
     }
     
-    // Pattern: "01. Title" or "01 Title" (remove track numbers)
-    cleanTitle = cleanTitle.replace(/^\d+\.?\s*/, '');
+    return results;
+  }
+
+  /**
+   * Get a human-readable duration string
+   */
+  static formatDuration(seconds?: number): string {
+    if (!seconds) return '0:00';
     
-    return {
-      title: cleanTitle,
-      artist,
-      album: null,
-      year: null,
-      genre: null,
-      trackNumber: null,
-      duration: 0, // Will need to be calculated elsewhere if needed
-      bitrate: null,
-      sampleRate: null,
-      channels: null
-    };
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
   /**
-   * Extract title from filename by removing extension and cleaning
+   * Get a human-readable file size string
    */
-  private static extractTitleFromFilename(fileName: string): string {
-    return fileName
-      .replace(/\.[^/.]+$/, '') // Remove extension
-      .replace(/^\d+-/, '') // Remove leading numbers like "01-"
-      .replace(/[_]/g, ' ') // Replace underscores with spaces
-      .trim();
-  }
-
-  /**
-   * Clean and normalize strings
-   */
-  private static cleanString(str: string | undefined): string | null {
-    if (!str) return null;
+  static formatFileSize(bytes?: number): string {
+    if (!bytes) return '0 B';
     
-    return str
-      .trim()
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
-      || null;
-  }
-
-  /**
-   * Validate audio file format
-   */
-  static isValidAudioFile(fileName: string): boolean {
-    const validExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma'];
-    const extension = path.extname(fileName).toLowerCase();
-    return validExtensions.includes(extension);
-  }
-
-  /**
-   * Get file format from filename
-   */
-  static getFileFormat(fileName: string): string | null {
-    const extension = path.extname(fileName).toLowerCase();
-    const formatMap: Record<string, string> = {
-      '.mp3': 'MP3',
-      '.wav': 'WAV',
-      '.flac': 'FLAC',
-      '.m4a': 'M4A',
-      '.aac': 'AAC',
-      '.ogg': 'OGG',
-      '.wma': 'WMA'
-    };
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
     
-    return formatMap[extension] || null;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+  }
+
+  /**
+   * Get a human-readable bitrate string
+   */
+  static formatBitrate(bps?: number): string {
+    if (!bps) return '0 kbps';
+    return `${Math.round(bps / 1000)} kbps`;
+  }
+
+  /**
+   * Validate metadata completeness
+   */
+  static validateMetadata(metadata: AudioMetadata): string[] {
+    const issues: string[] = [];
+    
+    if (!metadata.title) issues.push('Missing title');
+    if (!metadata.artist) issues.push('Missing artist');
+    if (!metadata.album) issues.push('Missing album');
+    if (!metadata.year) issues.push('Missing year');
+    if (!metadata.trackNumber) issues.push('Missing track number');
+    if (!metadata.genre || metadata.genre.length === 0) issues.push('Missing genre');
+    
+    return issues;
+  }
+
+  /**
+   * Check if metadata is complete enough for organization
+   */
+  static isOrganizable(metadata: AudioMetadata): boolean {
+    return !!(metadata.artist && metadata.album);
   }
 } 
