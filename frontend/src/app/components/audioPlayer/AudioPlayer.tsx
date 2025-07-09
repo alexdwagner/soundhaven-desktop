@@ -510,25 +510,55 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       // Try to load preprocessed waveform data first
       console.log('🎵 AudioPlayer: Attempting to load preprocessed waveform data...');
+      const startTime = performance.now();
+      
+      // TEMPORARY: Add flag to test direct loading vs preprocessing
+      const DISABLE_PREPROCESSING = false; // Set to true to test direct loading
+      
       try {
-        const { waveformData } = await apiService.getWaveformData(track.id.toString());
-        
-        if (waveformData && waveformData.length > 0) {
-          console.log(`✅ AudioPlayer: Using preprocessed waveform data with ${waveformData.length} points`);
-          
-          // Load with the audio URL and preprocessed peaks data
-          await wavesurfer.load(fileUrl, waveformData);
-          console.log('🎵 AudioPlayer: WaveSurfer loaded with preprocessed peaks data');
-          
-        } else {
-          console.log('⚠️ AudioPlayer: No preprocessed waveform data found, loading audio file directly');
+        if (DISABLE_PREPROCESSING) {
+          console.log('🧪 AudioPlayer: Preprocessing disabled for testing - loading directly');
           await wavesurfer.load(fileUrl);
-          console.log('🎵 AudioPlayer: Audio file loaded successfully (direct)');
+          const endTime = performance.now();
+          console.log(`🧪 AudioPlayer: DIRECT TEST load completed in ${(endTime - startTime).toFixed(2)}ms`);
+          console.log('🎵 AudioPlayer: Audio file loaded successfully (direct test)');
+        } else {
+          const preprocessStartTime = performance.now();
+          const { waveformData } = await apiService.getWaveformData(track.id.toString());
+          const preprocessEndTime = performance.now();
+          
+          console.log(`📊 AudioPlayer: Preprocessing data fetch took ${(preprocessEndTime - preprocessStartTime).toFixed(2)}ms`);
+          
+          if (waveformData && waveformData.length > 0) {
+            console.log(`✅ AudioPlayer: Using preprocessed waveform data with ${waveformData.length} points`);
+            console.log(`📊 AudioPlayer: Peaks data size: ${JSON.stringify(waveformData).length} bytes`);
+            console.log(`📊 AudioPlayer: Expected benefit: Using ${waveformData.length} peaks instead of full audio decode`);
+            
+            // Load with the audio URL and preprocessed peaks data
+            const loadStartTime = performance.now();
+            await wavesurfer.load(fileUrl, waveformData);
+            const loadEndTime = performance.now();
+            const endTime = performance.now();
+            
+            console.log(`🚀 AudioPlayer: PREPROCESSED load completed in ${(endTime - startTime).toFixed(2)}ms`);
+            console.log(`   └── Data fetch: ${(preprocessEndTime - preprocessStartTime).toFixed(2)}ms`);
+            console.log(`   └── WaveSurfer load: ${(loadEndTime - loadStartTime).toFixed(2)}ms`);
+            console.log('🎵 AudioPlayer: WaveSurfer loaded with preprocessed peaks data');
+            
+          } else {
+            console.log('⚠️ AudioPlayer: No preprocessed waveform data found, loading audio file directly');
+            await wavesurfer.load(fileUrl);
+            const endTime = performance.now();
+            console.log(`🐌 AudioPlayer: DIRECT load completed in ${(endTime - startTime).toFixed(2)}ms`);
+            console.log('🎵 AudioPlayer: Audio file loaded successfully (direct)');
+          }
         }
       } catch (preprocessError) {
         console.error('❌ AudioPlayer: Error loading preprocessed data, falling back to audio file:', preprocessError);
         try {
           await wavesurfer.load(fileUrl);
+          const endTime = performance.now();
+          console.log(`🐌 AudioPlayer: FALLBACK load completed in ${(endTime - startTime).toFixed(2)}ms`);
           console.log('🎵 AudioPlayer: Audio file loaded successfully (fallback)');
         } catch (loadError) {
           console.error('❌ AudioPlayer: Failed to load audio file:', loadError);

@@ -40,14 +40,14 @@ const TracksTable: React.FC<TracksTableProps> = ({
   // Add ref to track the last drag operation and prevent duplicates
   const lastDragRef = useRef<{ activeId: any; overId: any; timestamp: number } | null>(null);
 
-  const handleDragStart = (event) => {
+  const handleDragStart = (event: any) => {
     const { active } = event;
     console.log('🔄 [TRACK SORT] Drag started:', { activeId: active.id });
     console.log('🔄 [TRACK SORT] Active element:', active);
     console.log('🔄 [TRACK SORT] Tracks in SortableContext:', tracks.map(t => t.id));
   };
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = (event: any) => {
     const { active, over } = event;
     console.log('🔄 [TRACK SORT] Drag ended:', { activeId: active.id, overId: over?.id });
     console.log('🔄 [TRACK SORT] Full event:', event);
@@ -102,12 +102,12 @@ const TracksTable: React.FC<TracksTableProps> = ({
     
     if (sortColumn === column) {
       return sortDirection === 'asc' ? (
-        <FaSortUp className="ml-1 text-blue-600" />
+        <FaSortUp className="ml-1 text-blue-600" size={12} />
       ) : (
-        <FaSortDown className="ml-1 text-blue-600" />
+        <FaSortDown className="ml-1 text-blue-600" size={12} />
       );
     }
-    return <FaSort className="ml-1 text-gray-400 opacity-0 group-hover:opacity-100" />;
+    return <FaSort className="ml-1 text-gray-400 opacity-50 group-hover:opacity-100 transition-opacity" size={12} />;
   };
 
   const handleSort = (column: SortColumn) => {
@@ -117,29 +117,30 @@ const TracksTable: React.FC<TracksTableProps> = ({
   };
 
   const SortableHeader: React.FC<{ column: SortColumn; children: React.ReactNode }> = ({ column, children }) => {
-    // Disable sorting in playlist view to avoid conflicts with drag & drop
-    if (!onSort || isPlaylistView) {
+    // Allow sorting in both library and playlist views
+    if (!onSort) {
       return (
         <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">
           {children}
-          {/* Only show the drag hint in the first column (Title) */}
-          {isPlaylistView && column === 'name' && (
-            <span className="ml-2 text-xs text-blue-600 font-normal">
-              (Drag to reorder)
-            </span>
-          )}
         </th>
       );
     }
 
     return (
       <th 
-        className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 group transition-colors"
+        className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 group transition-colors select-none"
         onClick={() => handleSort(column)}
+        title={`Sort by ${children}`}
       >
         <div className="flex items-center">
           {children}
           {getSortIcon(column)}
+          {/* Show drag hint only in playlist view and only for the first column */}
+          {isPlaylistView && column === 'name' && (
+            <span className="ml-2 text-xs text-blue-600 font-normal">
+              (Drag to reorder)
+            </span>
+          )}
         </div>
       </th>
     );
