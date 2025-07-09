@@ -46,14 +46,24 @@ declare global {
   }
 }
 
-const isElectron = typeof window !== 'undefined' && window.electron?.ipcRenderer;
+// Fix for SSR: Check if we're in browser and if electron is available
+const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
 
 // Debug Electron detection
-console.log('🔍 [ELECTRON DETECTION] typeof window:', typeof window);
-console.log('🔍 [ELECTRON DETECTION] window !== undefined:', typeof window !== 'undefined');
-console.log('🔍 [ELECTRON DETECTION] window.electron exists:', !!(typeof window !== 'undefined' && window.electron));
-console.log('🔍 [ELECTRON DETECTION] window.electron.ipcRenderer exists:', !!(typeof window !== 'undefined' && window.electron?.ipcRenderer));
-console.log('🔍 [ELECTRON DETECTION] isElectron:', isElectron);
+if (typeof window !== 'undefined') {
+  console.log('🔍 [ELECTRON DETECTION] Running in browser');
+  console.log('🔍 [ELECTRON DETECTION] window.electron exists:', !!window.electron);
+  console.log('🔍 [ELECTRON DETECTION] window.electron.ipcRenderer exists:', !!window.electron?.ipcRenderer);
+  console.log('🔍 [ELECTRON DETECTION] isElectron:', isElectron);
+  
+  // Additional debugging to understand the window.electron structure
+  if (window.electron) {
+    console.log('🔍 [ELECTRON DETECTION] window.electron keys:', Object.keys(window.electron));
+    console.log('🔍 [ELECTRON DETECTION] window.electron.ipcRenderer type:', typeof window.electron.ipcRenderer);
+  }
+} else {
+  console.log('🔍 [ELECTRON DETECTION] Running on server (SSR)');
+}
 
 // Base URL for API requests (only used in web mode)
 const getBaseUrl = () => {
@@ -376,30 +386,31 @@ export const apiService = {
       }
       
       // Ensure the response data matches the Track interface and includes new metadata fields
-      const tracks = response.data.map(track => ({
+      const tracks = response.data?.map((track: any) => ({
         id: track.id,
         name: track.name,
         duration: track.duration,
-        artistId: track.artistId,
-        artistName: track.artistName, // Include artistName
+        artistId: track.artist_id || track.artistId,
+        artistName: track.artist_name || track.artistName, // Map artist_name to artistName
         artist: track.artist,
-        albumId: track.albumId,
-        albumName: track.albumName, // Include albumName
+        albumId: track.album_id || track.albumId,
+        albumName: track.album_name || track.albumName, // Map album_name to albumName
         album: track.album,
-        userId: track.userId,
-        createdAt: track.createdAt,
-        updatedAt: track.updatedAt,
+        albumArtPath: track.album_album_art_path || track.album_art_path || track.albumArtPath || undefined, // Album art support
+        userId: track.user_id || track.userId,
+        createdAt: track.created_at || track.createdAt,
+        updatedAt: track.updated_at || track.updatedAt,
         playlists: track.playlists || [],
         genres: track.genres || [],
-        filePath: track.filePath,
+        filePath: track.file_path || track.filePath,
         // Include new metadata fields
         bitrate: track.bitrate,
-        sampleRate: track.sampleRate,
+        sampleRate: track.sample_rate || track.sampleRate,
         channels: track.channels,
         year: track.year,
         genre: track.genre,
-        trackNumber: track.trackNumber
-      }));
+        trackNumber: track.track_number || track.trackNumber
+      })) || [];
       
       console.log('📡 [API SERVICE] Tracks after mapping:', tracks.length, 'tracks');
       if (tracks.length > 0) {
@@ -1005,30 +1016,49 @@ export const apiService = {
   },
 
   async deleteComment(commentId: number): Promise<ApiResponse<void>> {
-    console.log('🌐 [ApiService] Deleting comment:', commentId);
-    try {
-      const response = await makeRequest<void>(`/api/comments/${commentId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${this.getToken()}`
-        }
-      });
+    const { error } = await makeRequest<void>(`/api/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+    if (error) throw new Error(error);
+    return { status: 200 };
+  },
 
-      if (response.error) {
-        console.error('❌ [ApiService] Failed to delete comment:', response.error);
-        throw new Error(response.error);
+  // Debug function to test Electron detection and IPC
+  async testElectronDetection() {
+    console.log('🧪 [TEST] Testing Electron detection...');
+    console.log('🧪 [TEST] typeof window:', typeof window);
+    console.log('🧪 [TEST] window.electron:', window?.electron);
+    console.log('🧪 [TEST] window.electron?.ipcRenderer:', window?.electron?.ipcRenderer);
+    console.log('🧪 [TEST] isElectron:', isElectron);
+    
+    if (isElectron) {
+      console.log('🧪 [TEST] Electron detected, testing IPC...');
+      try {
+        const response = await window.electron!.ipcRenderer.invoke('debug:test', { test: 'playlists debug' });
+        console.log('🧪 [TEST] IPC test successful:', response);
+        return { success: true, response };
+      } catch (error) {
+        console.error('🧪 [TEST] IPC test failed:', error);
+        return { success: false, error };
       }
-
-      console.log('✅ [ApiService] Comment deleted successfully');
-      return response;
-    } catch (error) {
-      console.error('❌ [ApiService] Error deleting comment:', error);
-      return { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        status: 500
-      };
+    } else {
+      console.log('🧪 [TEST] Electron not detected, would use fetch');
+      return { success: false, error: 'Not in Electron environment' };
     }
   },
+
+  // Test playlists API specifically
+  async testPlaylistsAPI() {
+    console.log('🧪 [TEST] Testing playlists API...');
+    try {
+      const result = await this.getPlaylists();
+      console.log('🧪 [TEST] Playlists API test result:', result);
+      return { success: true, result };
+    } catch (error) {
+      console.error('🧪 [TEST] Playlists API test failed:', error);
+      return { success: false, error };
+    }
+  }
 };
 
 export default apiService;

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import TracksTable, { SortColumn, SortDirection } from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
+import AlbumArtPanel from "../audioPlayer/AlbumArtPanel";
 import CommentsPanel from "../comments/CommentsPanel";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import { useTracks } from "@/app/providers/TracksProvider";
@@ -907,6 +908,12 @@ export default function TracksManager({
             onSelectComment={handleSelectComment}
           />
         )}
+
+        {/* Album Art Panel */}
+        <AlbumArtPanel
+          track={playbackCurrentTrack}
+          show={!!playbackCurrentTrack}
+        />
       </div>
 
       <DeleteConfirmationModal

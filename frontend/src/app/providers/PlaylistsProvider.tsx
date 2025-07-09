@@ -73,33 +73,33 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
         console.log("🎵 [PLAYLISTS PROVIDER] First playlist keys:", Object.keys(playlists[0]));
       }
       
-      // Filter out any invalid playlists and ensure required fields exist
-      const validPlaylists = playlists.filter((playlist): playlist is ExtendedPlaylist => {
+      // Transform and validate playlists
+      const validPlaylists = playlists.map((playlist: any): ExtendedPlaylist => {
+        // Transform the playlist to match the expected interface
+        const transformedPlaylist: ExtendedPlaylist = {
+          ...playlist,
+          userId: playlist.userId || playlist.user_id?.toString() || '1', // Handle both userId and user_id
+          tracks: playlist.tracks || [], // Default to empty array if not provided
+          user: playlist.user || {
+            id: playlist.user_id || 1,
+            name: playlist.user_name || 'Unknown User',
+            email: playlist.user_email || 'unknown@example.com'
+          }
+        };
+        
+        console.log("🎵 [PLAYLISTS PROVIDER] Transformed playlist:", transformedPlaylist);
+        return transformedPlaylist;
+      }).filter((playlist): playlist is ExtendedPlaylist => {
         const isValid = (
           !!playlist && 
           typeof playlist.id === 'string' && 
           typeof playlist.name === 'string' &&
-          (typeof playlist.userId === 'string' || typeof playlist.userId === 'number') &&
           !!playlist.user &&
           Array.isArray(playlist.tracks)
         );
         
         if (!isValid) {
           console.log("🎵 [PLAYLISTS PROVIDER] Invalid playlist filtered out:", playlist);
-          console.log("🎵 [PLAYLISTS PROVIDER] Validation details:", {
-            hasPlaylist: !!playlist,
-            hasId: !!playlist?.id,
-            idType: typeof playlist?.id,
-            hasName: !!playlist?.name,
-            nameType: typeof playlist?.name,
-            hasUserId: !!playlist?.userId,
-            userIdType: typeof playlist?.userId,
-            hasUser: !!playlist?.user,
-            userObject: playlist?.user,
-            hasTracks: !!playlist?.tracks,
-            tracksType: typeof playlist?.tracks,
-            tracksIsArray: Array.isArray(playlist?.tracks)
-          });
         }
         
         return isValid;
@@ -163,7 +163,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       console.log("🎯 About to call apiService.createPlaylist...");
       console.log("🎯 Request data:", { name, description });
       
-      const newPlaylist = await apiService.createPlaylist({ name, description }) as Playlist;
+      const newPlaylist = await apiService.createPlaylist({ name, description }) as any;
       
       console.log("🎯 API returned new playlist:", newPlaylist);
       console.log("🎯 Playlist type:", typeof newPlaylist);
@@ -172,7 +172,18 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       if (newPlaylist && typeof newPlaylist === 'object' && Object.keys(newPlaylist).length > 0) {
         setPlaylists(prev => {
           console.log("🎯 Updating playlists state, previous count:", prev.length);
-          const updated = [...prev, newPlaylist];
+          // Transform the new playlist to match ExtendedPlaylist interface
+          const extendedPlaylist: ExtendedPlaylist = {
+            ...newPlaylist,
+            userId: newPlaylist.userId || newPlaylist.user_id?.toString() || '1',
+            tracks: newPlaylist.tracks || [],
+            user: newPlaylist.user || {
+              id: newPlaylist.user_id || 1,
+              name: 'Unknown User',
+              email: 'unknown@example.com'
+            }
+          };
+          const updated = [...prev, extendedPlaylist];
           console.log("🎯 New playlists count:", updated.length);
           return updated;
         });
@@ -299,8 +310,19 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   const updatePlaylistOrder = useCallback(async (playlistIds: string[]): Promise<Playlist[]> => {
     // Remove token requirement for local-first app
     try {
-      const updatedPlaylists = await apiService.reorderPlaylists(playlistIds) as Playlist[];
-      setPlaylists(updatedPlaylists);
+      const updatedPlaylists = await apiService.reorderPlaylists(playlistIds) as any[];
+      // Transform playlists to match ExtendedPlaylist interface
+      const extendedPlaylists: ExtendedPlaylist[] = updatedPlaylists.map(playlist => ({
+        ...playlist,
+        userId: playlist.userId || playlist.user_id?.toString() || '1',
+        tracks: playlist.tracks || [],
+        user: playlist.user || {
+          id: playlist.user_id || 1,
+          name: 'Unknown User',
+          email: 'unknown@example.com'
+        }
+      }));
+      setPlaylists(extendedPlaylists);
       return updatedPlaylists;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

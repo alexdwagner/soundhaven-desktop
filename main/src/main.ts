@@ -17,13 +17,21 @@ import dotenv from 'dotenv';
 import * as http from 'http';
 import * as fs from 'fs';
 import type { CreateCommentDto } from '@shared/dtos/create-comment.dto';
-import { startAudioServer } from './audioServer';
+import { AudioServer } from './audioServer';
+import { MetadataService } from './services/metadataService';
 import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 
 let mainWindow: BrowserWindow | null = null;
 let audioServer: http.Server | null = null;
+
+// Function to start audio server
+function startAudioServer() {
+  const server = new AudioServer();
+  server.start(config.audioServerPort);
+  return server;
+}
 
 // Function to check if Next.js server is ready
 async function waitForNextJS(port: number, maxAttempts: number = 30): Promise<void> {
@@ -169,6 +177,741 @@ async function ensureTestTrack() {
   }
 }
 
+// Auth handler functions
+const authHandlers = {
+  async register(credentials: { name: string; email: string; password: string }) {
+    const { name, email, password } = credentials;
+    
+    try {
+      // Check if user already exists
+      const existing = await dbAsync.get(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+        
+      if (existing) {
+        throw new Error('Email already registered');
+      }
+        
+      // Hash password
+      const hashedPassword = await hashPassword(password);
+      const now = Math.floor(Date.now() / 1000);
+        
+      // Start transaction
+      await dbAsync.run(
+        'INSERT INTO users (name, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [name, email, hashedPassword, now, now]
+      );
+        
+      const newUser = await dbAsync.get(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+        
+      // Generate tokens
+      const accessToken = generateJWT(newUser.id);
+      const refreshToken = generateRefreshToken(newUser.id);
+      const expiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
+        
+      // Store refresh token
+      await dbAsync.run(
+        'INSERT INTO refresh_tokens (token, user_id, expires_in) VALUES (?, ?, ?)',
+        [refreshToken, newUser.id, expiresIn]
+      );
+        
+      // Update user's updatedAt timestamp
+      await dbAsync.run(
+        'UPDATE users SET updated_at = ? WHERE id = ?',
+        [Math.floor(Date.now() / 1000), newUser.id]
+      );
+
+      // Return user data (excluding password)
+      const { password: pwd, ...userData } = newUser;
+        
+      return {
+        user: userData,
+        accessToken,
+        refreshToken
+      };
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  },
+  
+  async login(credentials: { email: string; password: string }) {
+    const { email, password } = credentials;
+    
+    try {
+      // Find user by email
+      const user = await dbAsync.get(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+        
+      if (!user) {
+        throw new Error('Invalid email or password');
+      }
+        
+      // Verify password
+      const isPasswordValid = await verifyPassword(password, user.password);
+      if (!isPasswordValid) {
+        throw new Error('Invalid email or password');
+      }
+        
+      // Generate tokens
+      const accessToken = generateJWT(user.id);
+      const refreshToken = generateRefreshToken(user.id);
+      const expiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
+
+      // Store refresh token in the refresh_tokens table within a transaction
+      await dbAsync.run(
+        'DELETE FROM refresh_tokens WHERE user_id = ?',
+        [user.id]
+      );
+      
+      await dbAsync.run(
+        'INSERT INTO refresh_tokens (token, user_id, expires_in) VALUES (?, ?, ?)',
+        [refreshToken, user.id, expiresIn]
+      );
+      
+      // Update user's updatedAt timestamp
+      await dbAsync.run(
+        'UPDATE users SET updated_at = ? WHERE id = ?',
+        [Math.floor(Date.now() / 1000), user.id]
+      );
+
+      // Return user data (excluding password)
+      const { password: _, ...userData } = user;
+        
+      return {
+        user: userData,
+        accessToken,
+        refreshToken
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  },
+  
+  async refreshToken(credentials: { refreshToken: string }) {
+    const { refreshToken } = credentials;
+    
+    try {
+      // Find the refresh token in the database
+      const storedToken = await dbAsync.get(
+        'SELECT * FROM refresh_tokens WHERE token = ?',
+        [refreshToken]
+      );
+      
+      if (!storedToken) {
+        throw new Error('Invalid refresh token');
+      }
+      
+      // Check if token is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (storedToken.expires_in < now) {
+        // Clean up expired token
+      await dbAsync.run(
+        'DELETE FROM refresh_tokens WHERE token = ?',
+        [refreshToken]
+      );
+        throw new Error('Refresh token expired');
+      }
+      
+      // Get user data
+      const user = await dbAsync.get(
+        'SELECT * FROM users WHERE id = ?',
+        [storedToken.user_id]
+      );
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      // Generate new access token
+      const accessToken = generateJWT(user.id);
+      
+      // Return user data (excluding password)
+      const { password: _, ...userData } = user;
+      
+      return {
+        user: userData,
+        accessToken,
+        refreshToken // Return the same refresh token
+      };
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      throw error;
+    }
+  },
+  
+  async logout(credentials: { refreshToken: string }) {
+    const { refreshToken } = credentials;
+    
+    try {
+      // Delete the refresh token from the database
+      await dbAsync.run(
+        'DELETE FROM refresh_tokens WHERE token = ?',
+        [refreshToken]
+      );
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  }
+};
+
+// API Request Handler - Register at module level
+ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => {
+  try {
+    const url = new URL(endpoint, 'http://localhost:3000');
+    const normalizedPath = url.pathname;
+    
+    console.log('API Request:', { endpoint, method, normalizedPath });
+    
+    // Handle authentication routes
+    if (normalizedPath === '/api/auth/register' && method === 'POST') {
+      console.log('[IPC HANDLER] Handling register request');
+      const { name, email, password } = body;
+      if (!name || !email || !password) {
+        throw new Error('Name, email, and password are required');
+      }
+      return await authHandlers.register({ name, email, password });
+    }
+    
+    if (normalizedPath === '/api/auth/login' && method === 'POST') {
+      console.log('[IPC HANDLER] Handling login request');
+      const { email, password } = body;
+      console.log('Login request received:', { email });
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+      try {
+        const result = await authHandlers.login({ email, password });
+        return { data: result };
+      } catch (error) {
+        console.error('Login error in handler:', error);
+        throw error;
+      }
+    }
+    
+    if (normalizedPath === '/api/auth/refresh' && method === 'POST') {
+      const { refreshToken } = body;
+      if (!refreshToken) {
+        throw new Error('Refresh token is required');
+      }
+      return await authHandlers.refreshToken({ refreshToken });
+    }
+    
+    if (normalizedPath === '/api/auth/logout' && method === 'POST') {
+      const { refreshToken } = body;
+      if (!refreshToken) {
+        throw new Error('Refresh token is required');
+      }
+      return await authHandlers.logout({ refreshToken });
+    }
+    
+    if (normalizedPath.startsWith('/audio/')) {
+      const fileName = normalizedPath.replace('/audio/', '');
+      // Check both uploads and public directories
+      let filePath = path.join(process.cwd(), 'uploads', fileName);
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(process.cwd(), 'public', fileName);
+      }
+      console.log('[AUDIO DEBUG] Requested:', filePath);
+      if (!fs.existsSync(filePath)) {
+        console.log('[AUDIO DEBUG] File not found:', filePath);
+        return { status: 404, error: 'File not found' };
+      }
+      const fileBuffer = fs.readFileSync(filePath);
+      return {
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': fileBuffer.length,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Range',
+        },
+        data: fileBuffer,
+      };
+    }
+
+    // Handle album art requests
+    if (normalizedPath.startsWith('/uploads/album-art/')) {
+      const fileName = normalizedPath.replace('/uploads/album-art/', '');
+      const filePath = path.join(process.cwd(), 'uploads', 'album-art', fileName);
+      console.log('[ALBUM ART DEBUG] Requested:', filePath);
+      if (!fs.existsSync(filePath)) {
+        console.log('[ALBUM ART DEBUG] File not found:', filePath);
+        return { status: 404, error: 'Album art not found' };
+      }
+      const fileBuffer = fs.readFileSync(filePath);
+      
+      // Determine content type based on file content and extension
+      let contentType = 'image/jpeg'; // default
+      
+      // Check file signature (magic bytes) first
+      if (fileBuffer.length >= 4) {
+        // PNG signature
+        if (fileBuffer[0] === 0x89 && fileBuffer[1] === 0x50 && fileBuffer[2] === 0x4E && fileBuffer[3] === 0x47) {
+          contentType = 'image/png';
+        }
+        // JPEG signature
+        else if (fileBuffer[0] === 0xFF && fileBuffer[1] === 0xD8) {
+          contentType = 'image/jpeg';
+        }
+        // GIF signature
+        else if (fileBuffer[0] === 0x47 && fileBuffer[1] === 0x49 && fileBuffer[2] === 0x46) {
+          contentType = 'image/gif';
+        }
+        // WebP signature
+        else if (fileBuffer.length >= 12 && 
+                 fileBuffer[0] === 0x52 && fileBuffer[1] === 0x49 && fileBuffer[2] === 0x46 && fileBuffer[3] === 0x46 &&
+                 fileBuffer[8] === 0x57 && fileBuffer[9] === 0x45 && fileBuffer[10] === 0x42 && fileBuffer[11] === 0x50) {
+          contentType = 'image/webp';
+        }
+      }
+      
+      // Fall back to extension-based detection if signature check failed
+      if (contentType === 'image/jpeg') {
+        const ext = path.extname(fileName).toLowerCase();
+        if (ext === '.png') contentType = 'image/png';
+        else if (ext === '.gif') contentType = 'image/gif';
+        else if (ext === '.webp') contentType = 'image/webp';
+      }
+      
+      console.log('[ALBUM ART DEBUG] Content type:', contentType);
+      console.log('[ALBUM ART DEBUG] File size:', fileBuffer.length);
+      
+      return {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': fileBuffer.length,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+        },
+        data: fileBuffer,
+      };
+    }
+    
+    // Normalize path to handle both /api/ and / paths for other API requests
+    let apiPath = normalizedPath;
+    if (!apiPath.startsWith('/api/') && apiPath.startsWith('/')) {
+      apiPath = `/api${apiPath}`;
+    }
+    
+    // Route the request to the appropriate handler
+    console.log('API Request:', { endpoint, method, apiPath });
+    
+    // Handle track endpoints
+    if (apiPath.startsWith('/api/tracks')) {
+      if (method === 'GET') {
+      console.log('Tracks API request received');
+      console.log('[TRACKS DEBUG] Database path:', config.database.path);
+      console.log('[TRACKS DEBUG] Database connection status:', dbAsync ? 'connected' : 'not connected');
+      
+      try {
+        const result = await dbAsync.all(`
+          SELECT t.*, 
+                 a.name as artist_name,
+                   al.name as album_name,
+                   al.album_art_path as album_album_art_path,
+                   GROUP_CONCAT(DISTINCT pt.playlist_id) as playlist_ids,
+                   GROUP_CONCAT(DISTINCT c.id) as comment_ids,
+                   COUNT(DISTINCT c.id) as comment_count
+          FROM tracks t
+          LEFT JOIN artists a ON t.artist_id = a.id
+          LEFT JOIN albums al ON t.album_id = al.id
+            LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
+            LEFT JOIN comments c ON t.id = c.track_id
+            GROUP BY t.id
+          `);
+          
+          return { data: result };
+        } catch (error) {
+          console.error('[TRACKS DEBUG] Error fetching tracks:', error);
+          throw error;
+        }
+      }
+      
+      // Handle track metadata sync
+      if (apiPath === '/api/tracks/sync-metadata' && method === 'POST') {
+        const { trackIds } = body;
+        if (!Array.isArray(trackIds)) {
+          return { error: 'trackIds must be an array', status: 400 };
+        }
+        
+        try {
+          const results = await Promise.all(trackIds.map(async (trackId) => {
+            const track = await dbAsync.get('SELECT * FROM tracks WHERE id = ?', [trackId]);
+            if (!track) return { trackId, success: false, error: 'Track not found' };
+            
+            try {
+              const metadata = await MetadataService.extractFromFile(track.file_path);
+              await dbAsync.run(
+                'UPDATE tracks SET duration = ?, bitrate = ?, sample_rate = ? WHERE id = ?',
+                [metadata.duration, metadata.bitrate, metadata.sampleRate, trackId]
+              );
+              return { trackId, success: true, metadata };
+            } catch (error) {
+              return { trackId, success: false, error: String(error) };
+            }
+          }));
+          
+          return { data: results };
+      } catch (error) {
+          console.error('[API DEBUG] Error syncing metadata:', error);
+          return { error: 'Failed to sync metadata', status: 500 };
+        }
+      }
+    }
+    
+    // Handle playlist endpoints
+    if (apiPath.startsWith('/api/playlists')) {
+      // Get all playlists
+      if (method === 'GET' && apiPath === '/api/playlists') {
+        try {
+        const playlists = await dbAsync.all(`
+            SELECT p.*,
+                   u.name as user_name,
+                   u.email as user_email,
+                   GROUP_CONCAT(pt.track_id) as track_ids,
+                   COUNT(DISTINCT pt.track_id) as track_count
+          FROM playlists p 
+          LEFT JOIN users u ON p.user_id = u.id 
+            LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+            GROUP BY p.id
+            ORDER BY p."order", p.created_at
+          `);
+          
+          // Transform playlists to include user object and proper structure
+          const transformedPlaylists = playlists.map(playlist => ({
+            ...playlist,
+            user: {
+              id: playlist.user_id,
+              name: playlist.user_name,
+              email: playlist.user_email
+            },
+            tracks: [] // Will be populated when fetching specific playlist
+          }));
+          
+          return { data: transformedPlaylists };
+      } catch (error) {
+          console.error('[API DEBUG] Error fetching playlists:', error);
+        return { error: 'Failed to fetch playlists', status: 500 };
+      }
+      }
+      
+      // Get specific playlist by ID with tracks
+      if (method === 'GET' && apiPath.match(/^\/api\/playlists\/[^/]+$/)) {
+        const [, , , playlistId] = apiPath.split('/');
+      if (!playlistId) {
+        return { error: 'Invalid playlist ID', status: 400 };
+      }
+      
+      try {
+          // Get playlist details
+        const playlist = await dbAsync.get(`
+            SELECT p.*,
+                   u.name as user_name,
+                   u.email as user_email
+          FROM playlists p 
+          LEFT JOIN users u ON p.user_id = u.id 
+          WHERE p.id = ?
+        `, [playlistId]);
+        
+        if (!playlist) {
+          return { error: 'Playlist not found', status: 404 };
+        }
+        
+          // Get playlist tracks with full track information
+        const tracks = await dbAsync.all(`
+            SELECT t.*, 
+                 a.name as artist_name,
+                   al.name as album_name,
+                   al.album_art_path as album_album_art_path,
+                   pt."order" as playlist_order
+            FROM playlist_tracks pt
+            JOIN tracks t ON pt.track_id = t.id
+          LEFT JOIN artists a ON t.artist_id = a.id
+          LEFT JOIN albums al ON t.album_id = al.id
+          WHERE pt.playlist_id = ?
+            ORDER BY pt."order"
+        `, [playlistId]);
+        
+          // Transform the response
+          const transformedPlaylist = {
+            ...playlist,
+          user: {
+              id: playlist.user_id,
+              name: playlist.user_name,
+              email: playlist.user_email
+            },
+            tracks: tracks
+          };
+
+          return { data: transformedPlaylist };
+      } catch (error) {
+          console.error('[API DEBUG] Error fetching playlist by ID:', error);
+        return { error: 'Failed to fetch playlist', status: 500 };
+      }
+      }
+      
+      // Create new playlist
+      if (method === 'POST' && apiPath === '/api/playlists') {
+        const { name, description } = body;
+      if (!name) {
+          return { error: 'Name is required', status: 400 };
+      }
+      
+      // For now, use a default user ID (1) - you might want to get this from token
+      const userId = 1;
+      const now = Math.floor(Date.now() / 1000);
+      const playlistId = uuidv4();
+      
+      try {
+          await dbAsync.run(
+          'INSERT INTO playlists (id, name, description, user_id, "order") VALUES (?, ?, ?, ?, ?)',
+          [playlistId, name, description || '', userId, 0]
+        );
+        
+          const playlist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+          return { data: playlist };
+      } catch (error) {
+        console.error('[API DEBUG] Error creating playlist:', error);
+        return { error: 'Failed to create playlist', status: 500 };
+      }
+      }
+      
+      // Add track to playlist
+      if (method === 'POST' && apiPath.match(/^\/api\/playlists\/[^/]+\/tracks\/[^/]+$/)) {
+        const [, , , playlistId, , trackId] = apiPath.split('/');
+        if (!playlistId || !trackId) {
+          return { error: 'Invalid playlist or track ID', status: 400 };
+        }
+        
+        try {
+          // Get the current highest order
+          const result = await dbAsync.get(
+            'SELECT MAX("order") as maxOrder FROM playlist_tracks WHERE playlist_id = ?',
+            [playlistId]
+          );
+          const nextOrder = (result?.maxOrder || -1) + 1;
+          
+          // Add the track
+          await dbAsync.run(
+            'INSERT INTO playlist_tracks (playlist_id, track_id, "order") VALUES (?, ?, ?)',
+            [playlistId, trackId, nextOrder]
+          );
+        
+        return { data: { success: true } };
+      } catch (error) {
+        console.error('[API DEBUG] Error adding track to playlist:', error);
+        return { error: 'Failed to add track to playlist', status: 500 };
+      }
+      }
+      
+      // Remove track from playlist
+      if (method === 'DELETE' && apiPath.match(/^\/api\/playlists\/[^/]+\/tracks\/[^/]+$/)) {
+        const [, , , playlistId, , trackId] = apiPath.split('/');
+        if (!playlistId || !trackId) {
+          return { error: 'Invalid playlist or track ID', status: 400 };
+        }
+        
+        try {
+          await dbAsync.run(
+          'DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?',
+          [playlistId, trackId]
+        );
+        
+          // Reorder remaining tracks
+          const tracks = await dbAsync.all(
+            'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY "order"',
+            [playlistId]
+          );
+          
+          await Promise.all(tracks.map((track, index) => 
+            dbAsync.run(
+              'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
+              [index, playlistId, track.track_id]
+            )
+          ));
+        
+        return { data: { success: true } };
+      } catch (error) {
+        console.error('[API DEBUG] Error removing track from playlist:', error);
+        return { error: 'Failed to remove track from playlist', status: 500 };
+      }
+      }
+      
+      // Update playlist metadata (name, description)
+      if (method === 'PATCH' && apiPath.match(/^\/api\/playlists\/[^/]+\/metadata$/)) {
+        const [, , , playlistId] = apiPath.split('/');
+        const { name, description } = body;
+        
+        if (!playlistId) {
+          return { error: 'Invalid playlist ID', status: 400 };
+        }
+        
+        try {
+          // Build update query dynamically based on provided fields
+          const updates = [];
+          const values = [];
+          
+          if (name !== undefined) {
+            updates.push('name = ?');
+            values.push(name);
+          }
+          
+          if (description !== undefined) {
+            updates.push('description = ?');
+            values.push(description);
+          }
+          
+          if (updates.length === 0) {
+            return { error: 'No valid fields to update', status: 400 };
+          }
+          
+          // Add playlist ID to values array
+          values.push(playlistId);
+          
+          // Execute update
+          await dbAsync.run(
+            `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`,
+            values
+          );
+          
+          // Return updated playlist
+          const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+          return { data: updatedPlaylist };
+        } catch (error) {
+          console.error('[API DEBUG] Error updating playlist metadata:', error);
+          return { error: 'Failed to update playlist metadata', status: 500 };
+        }
+      }
+
+      // Update playlist track order
+      if (method === 'PATCH' && apiPath.match(/^\/api\/playlists\/[^/]+\/track-order$/)) {
+        const [, , , playlistId] = apiPath.split('/');
+        const { trackIds } = body;
+        
+        if (!playlistId) {
+          return { error: 'Invalid playlist ID', status: 400 };
+        }
+      if (!Array.isArray(trackIds)) {
+        return { error: 'trackIds must be an array', status: 400 };
+      }
+      
+      try {
+          // Update order for each track
+        await Promise.all(trackIds.map((trackId, index) => 
+          dbAsync.run(
+            'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
+            [index, playlistId, trackId]
+          )
+        ));
+        
+          return { data: { success: true } };
+      } catch (error) {
+        console.error('[API DEBUG] Error updating playlist track order:', error);
+        return { error: 'Failed to update playlist track order', status: 500 };
+      }
+      }
+    }
+    
+    // Handle comment endpoints
+    if (apiPath.startsWith('/api/comments')) {
+      // Get comments for a track
+      if (method === 'GET') {
+        const trackId = url.searchParams.get('trackId');
+      const page = parseInt(url.searchParams.get('page') || '1', 10);
+      const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+      
+        if (!trackId) {
+        return { error: 'Missing trackId parameter', status: 400 };
+      }
+        
+        try {
+        const comments = await dbAsync.all(
+          'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+          [trackId, limit, (page - 1) * limit]
+        );
+        
+          const total = await dbAsync.get(
+            'SELECT COUNT(*) as count FROM comments WHERE track_id = ?',
+            [trackId]
+          );
+          
+          return {
+              data: {
+              comments,
+              pagination: {
+                total: total.count,
+                page,
+                limit,
+                pages: Math.ceil(total.count / limit)
+              }
+            }
+          };
+      } catch (error) {
+        console.error('[API DEBUG] Error fetching comments:', error);
+        return { error: 'Failed to fetch comments', status: 500 };
+      }
+      }
+      
+      // Create new comment
+      if (method === 'POST') {
+        const { trackId, userId, content, time } = body;
+        
+      if (!trackId) {
+        return { error: 'Missing trackId', status: 400 };
+      }
+      if (!userId) {
+        return { error: 'Missing userId', status: 400 };
+      }
+      if (!content) {
+        return { error: 'Missing content', status: 400 };
+      }
+      if (typeof time !== 'number') {
+        return { error: 'Missing or invalid time', status: 400 };
+      }
+      
+      try {
+      const commentId = uuidv4();
+          const now = Math.floor(Date.now() / 1000);
+          
+          await dbAsync.run(
+            'INSERT INTO comments (id, content, track_id, user_id, created_at, time) VALUES (?, ?, ?, ?, ?, ?)',
+            [commentId, content, trackId, userId, now, time]
+          );
+          
+          const comment = await dbAsync.get(
+            'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.id = ?',
+            [commentId]
+          );
+          
+          return { data: comment };
+        } catch (error) {
+          console.error('[API DEBUG] Error creating comment:', error);
+          return { error: 'Failed to create comment', status: 500 };
+        }
+      }
+    }
+    
+    console.log('[IPC HANDLER] No matching handler found for:', { method, endpoint, apiPath: apiPath || 'not set' });
+    throw new Error(`No handler for ${method} ${endpoint}`);
+  } catch (error) {
+    console.error('API request error:', error);
+    throw error;
+  }
+});
+
 app.whenReady().then(async () => {
   try {
     console.log('🚀 Electron app starting...');
@@ -307,7 +1050,7 @@ ipcMain.handle('auth:login', async (_, credentials) => {
       accessToken,
       refreshToken
     };
-  } catch (error) {
+      } catch (error) {
     console.error('Login error:', error);
     throw error;
   }
@@ -373,1340 +1116,6 @@ ipcMain.handle('auth:register', async (_, userData) => {
     };
   } catch (error) {
     console.error('Registration error:', error);
-    throw error;
-  }
-});
-
-// Auth handler functions
-const authHandlers = {
-  async register(credentials: { name: string; email: string; password: string }) {
-    const { name, email, password } = credentials;
-    
-    try {
-      // Check if user already exists
-      const existing = await dbAsync.get(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
-        
-      if (existing) {
-        throw new Error('Email already registered');
-      }
-        
-      // Hash password
-      const hashedPassword = await hashPassword(password);
-      const now = Math.floor(Date.now() / 1000);
-        
-      // Start transaction
-      await dbAsync.run(
-        'INSERT INTO users (name, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        [name, email, hashedPassword, now, now]
-      );
-        
-      const newUser = await dbAsync.get(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
-        
-      // Generate tokens
-      const accessToken = generateJWT(newUser.id);
-      const refreshToken = generateRefreshToken(newUser.id);
-      const expiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
-        
-      // Store refresh token
-      await dbAsync.run(
-        'INSERT INTO refresh_tokens (token, user_id, expires_in) VALUES (?, ?, ?)',
-        [refreshToken, newUser.id, expiresIn]
-      );
-        
-      // Update user's updatedAt timestamp
-      await dbAsync.run(
-        'UPDATE users SET updated_at = ? WHERE id = ?',
-        [Math.floor(Date.now() / 1000), newUser.id]
-      );
-
-      // Return user data (excluding password)
-      const { password: pwd, ...userData } = newUser;
-        
-      return {
-        user: userData,
-        accessToken,
-        refreshToken
-      };
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    }
-  },
-  
-  async login(credentials: { email: string; password: string }) {
-    const { email, password } = credentials;
-    
-    try {
-      // Find user by email
-      const user = await dbAsync.get(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
-        
-      if (!user) {
-        throw new Error('Invalid email or password');
-      }
-        
-      // Verify password
-      const isPasswordValid = await verifyPassword(password, user.password);
-      if (!isPasswordValid) {
-        throw new Error('Invalid email or password');
-      }
-        
-      // Generate tokens
-      const accessToken = generateJWT(user.id);
-      const refreshToken = generateRefreshToken(user.id);
-      const expiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
-
-      // Store refresh token in the refresh_tokens table within a transaction
-      await dbAsync.run(
-        'DELETE FROM refresh_tokens WHERE user_id = ?',
-        [user.id]
-      );
-      
-      await dbAsync.run(
-        'INSERT INTO refresh_tokens (token, user_id, expires_in) VALUES (?, ?, ?)',
-        [refreshToken, user.id, expiresIn]
-      );
-      
-      // Update user's updatedAt timestamp
-      await dbAsync.run(
-        'UPDATE users SET updated_at = ? WHERE id = ?',
-        [Math.floor(Date.now() / 1000), user.id]
-      );
-
-      // Return user data (excluding password)
-      const { password: _, ...userData } = user;
-        
-      return {
-        user: userData,
-        accessToken,
-        refreshToken
-      };
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  },
-  
-  async refreshToken(credentials: { refreshToken: string }) {
-    const { refreshToken } = credentials;
-    
-    try {
-      // Verify the refresh token
-      const payload = verify(refreshToken, process.env.JWT_SECRET!) as { userId: number };
-      if (!payload || !payload.userId) {
-        throw new Error('Invalid refresh token');
-      }
-      
-      // Check if the refresh token exists in the database
-      const token = await dbAsync.get(
-        'SELECT * FROM refresh_tokens WHERE token = ? AND expires_in >= ?',
-        [refreshToken, Math.floor(Date.now() / 1000)]
-      );
-      
-      if (!token) {
-        throw new Error('Invalid or expired refresh token');
-      }
-      
-      // Generate new tokens
-      const newAccessToken = generateJWT(payload.userId);
-      const newRefreshToken = generateRefreshToken(payload.userId);
-      const expiresIn = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
-      
-      // Update the refresh token in the database
-      await dbAsync.run(
-        'DELETE FROM refresh_tokens WHERE token = ?',
-        [refreshToken]
-      );
-      
-      await dbAsync.run(
-        'INSERT INTO refresh_tokens (token, user_id, expires_in) VALUES (?, ?, ?)',
-        [newRefreshToken, payload.userId, expiresIn]
-      );
-      
-      return {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken
-      };
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      throw new Error('Failed to refresh token');
-    }
-  },
-  
-  async logout(credentials: { refreshToken: string }) {
-    const { refreshToken } = credentials;
-    
-    try {
-      // Remove the refresh token from the database
-      await dbAsync.run(
-        'DELETE FROM refresh_tokens WHERE token = ?',
-        [refreshToken]
-      );
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Logout error:', error);
-      throw new Error('Failed to logout');
-    }
-  }
-};
-
-// API Request Handler
-ipcMain.handle('api-request', async (event, { endpoint, method = 'GET', body = null, headers = {} }) => {
-  console.log('🔥 [IPC HANDLER] api-request called!');
-  console.log('🔥 [IPC HANDLER] endpoint:', endpoint);
-  console.log('🔥 [IPC HANDLER] method:', method);
-  console.log('🔥 [IPC HANDLER] body:', body);
-  console.log('🔥 [IPC HANDLER] headers:', headers);
-  
-  try {
-    const url = new URL(endpoint, 'http://localhost:3000');
-    const normalizedPath = url.pathname;
-    
-    console.log('API Request:', { endpoint, method, normalizedPath });
-    
-    // Handle authentication routes
-    if (normalizedPath === '/api/auth/register' && method === 'POST') {
-      console.log('[IPC HANDLER] Handling register request');
-      const { name, email, password } = body;
-      if (!name || !email || !password) {
-        throw new Error('Name, email, and password are required');
-      }
-      return await authHandlers.register({ name, email, password });
-    }
-    
-    if (normalizedPath === '/api/auth/login' && method === 'POST') {
-      console.log('[IPC HANDLER] Handling login request');
-      const { email, password } = body;
-      console.log('Login request received:', { email });
-      if (!email || !password) {
-        throw new Error('Email and password are required');
-      }
-      try {
-        const result = await authHandlers.login({ email, password });
-        return { data: result };
-      } catch (error) {
-        console.error('Login error in handler:', error);
-        throw error;
-      }
-    }
-    
-    if (normalizedPath === '/api/auth/refresh' && method === 'POST') {
-      const { refreshToken } = body;
-      if (!refreshToken) {
-        throw new Error('Refresh token is required');
-      }
-      return await authHandlers.refreshToken({ refreshToken });
-    }
-    
-    if (normalizedPath === '/api/auth/logout' && method === 'POST') {
-      const { refreshToken } = body;
-      if (!refreshToken) {
-        throw new Error('Refresh token is required');
-      }
-      return await authHandlers.logout({ refreshToken });
-    }
-    
-    if (normalizedPath.startsWith('/audio/')) {
-      const fileName = normalizedPath.replace('/audio/', '');
-      const filePath = path.join(process.cwd(), 'public', fileName);
-      console.log('[AUDIO DEBUG] Requested:', filePath);
-      if (!fs.existsSync(filePath)) {
-        console.log('[AUDIO DEBUG] File not found:', filePath);
-        return { status: 404, error: 'File not found' };
-      }
-      const fileBuffer = fs.readFileSync(filePath);
-      return {
-        headers: {
-          'Content-Type': 'audio/mpeg', // You may want to use mime-types for other formats
-          'Content-Length': fileBuffer.length,
-        },
-        data: fileBuffer,
-      };
-    }
-    
-    // Normalize path to handle both /api/ and / paths for other API requests
-    let apiPath = normalizedPath;
-    if (!apiPath.startsWith('/api/') && apiPath.startsWith('/')) {
-      apiPath = `/api${apiPath}`;
-    }
-    
-    // Route the request to the appropriate handler
-    console.log('API Request:', { endpoint, method, apiPath });
-    console.log('[DRAG N DROP] 🔍 Backend: All incoming request debug');
-    console.log('[DRAG N DROP] 🔍 Backend: endpoint:', endpoint);
-    console.log('[DRAG N DROP] 🔍 Backend: method:', method);
-    console.log('[DRAG N DROP] 🔍 Backend: apiPath:', apiPath);
-    console.log('[DRAG N DROP] 🔍 Backend: normalizedPath:', normalizedPath);
-    if (apiPath.startsWith('/api/auth/')) {
-      const action = apiPath.split('/').pop();
-      
-      if (action === 'login' && method === 'POST') {
-        const result = await ipcMain.handle('auth:login', () => body);
-        return { data: result };
-      } else if (action === 'register' && method === 'POST') {
-        const result = await ipcMain.handle('auth:register', () => body);
-        return { data: result };
-      } else if (action === 'refresh' && method === 'POST') {
-        const result = await ipcMain.handle('auth:refresh', () => body);
-        return { data: result };
-      }
-    } else if (apiPath.startsWith('/api/tracks') && method === 'GET') {
-      console.log('Tracks API request received');
-      console.log('[TRACKS DEBUG] Database path:', config.database.path);
-      console.log('[TRACKS DEBUG] Database connection status:', dbAsync ? 'connected' : 'not connected');
-      
-      try {
-        // For local desktop app, return all tracks since authentication is simpler
-        // We can add user filtering later if needed
-        console.log('🔥 [TRACKS DEBUG] About to query database...');
-        console.log('🔥 [TRACKS DEBUG] Database path:', config.database.path);
-        
-        const result = await dbAsync.all(`
-          SELECT t.*, 
-                 a.name as artist_name,
-                 al.name as album_name
-          FROM tracks t
-          LEFT JOIN artists a ON t.artist_id = a.id
-          LEFT JOIN albums al ON t.album_id = al.id
-        `);
-        
-        console.log('🔥 [TRACKS DEBUG] Query completed successfully');
-        console.log('🔥 [TRACKS DEBUG] Raw result from database:');
-        console.log('🔥 [TRACKS DEBUG] Number of tracks found:', result.length);
-        
-        // Log first few tracks with all details
-        result.slice(0, 3).forEach((track, index) => {
-          console.log(`🔥 [TRACKS DEBUG] Track ${index + 1}:`, {
-            id: track.id,
-            name: track.name,
-            artist_id: track.artist_id,
-            artist_name: track.artist_name,
-            album_id: track.album_id,
-            album_name: track.album_name,
-            year: track.year,
-            genre: track.genre,
-            bitrate: track.bitrate,
-            duration: track.duration
-          });
-        });
-        
-        // Map snake_case to camelCase and include artist/album names
-        console.log('🔥 [TRACKS DEBUG] Starting mapping process...');
-        const mapped = result.map((track, index) => {
-          const mappedTrack = {
-            id: track.id,
-            name: track.name,
-            duration: track.duration,
-            artistId: track.artist_id,
-            artistName: track.artist_name || null,
-            albumId: track.album_id,
-            albumName: track.album_name || null,
-            userId: track.user_id,
-            filePath: track.file_path,
-            bitrate: track.bitrate,
-            sampleRate: track.sample_rate,
-            channels: track.channels,
-            year: track.year,
-            genre: track.genre,
-            trackNumber: track.track_number,
-            createdAt: track.created_at,
-            updatedAt: track.updated_at
-          };
-          
-          // Log first few mapped tracks
-          if (index < 3) {
-            console.log(`🔥 [TRACKS DEBUG] Mapped Track ${index + 1}:`, {
-              name: mappedTrack.name,
-              artistName: mappedTrack.artistName,
-              albumName: mappedTrack.albumName,
-              year: mappedTrack.year,
-              artistId: mappedTrack.artistId
-            });
-          }
-          
-          return mappedTrack;
-        });
-        
-        console.log('🔥 [TRACKS DEBUG] Mapping completed. Total mapped tracks:', mapped.length);
-        console.log('🔥 [TRACKS DEBUG] Final response data structure:');
-        console.log('🔥 [TRACKS DEBUG] Sample response (first track):', mapped[0] ? {
-          name: mapped[0].name,
-          artistName: mapped[0].artistName,
-          albumName: mapped[0].albumName,
-          year: mapped[0].year
-        } : 'No tracks');
-        
-        const response = { data: mapped };
-        console.log('🔥 [TRACKS DEBUG] About to return response with keys:', Object.keys(response));
-        return response;
-      } catch (error) {
-        console.error('[TRACKS DEBUG] Database query failed:', error);
-        return { error: 'Database query failed', status: 500 };
-      }
-    } else if (apiPath === '/api/playlists' && method === 'GET') {
-      console.log('[API DEBUG] Matched GET /api/playlists');
-      console.log('🔥 LINE 2');
-      console.log('🔥 LINE 3');
-      console.log('🎵 [PLAYLISTS DEBUG] Starting playlist fetch...');
-      console.log('🔥 LINE 5');
-      console.log('🎵 [PLAYLISTS DEBUG] Database path:', path.join(process.cwd(), 'db.sqlite'));
-      console.log('🔥 LINE 7');
-      
-      try {
-        console.log('🎵 [PLAYLISTS DEBUG] About to query playlists from database...');
-        const playlists = await dbAsync.all(`
-          SELECT p.*, u.name as user_name 
-          FROM playlists p 
-          LEFT JOIN users u ON p.user_id = u.id 
-          ORDER BY p."order" ASC
-        `);
-        
-        console.log('🎵 [PLAYLISTS DEBUG] Raw playlists from database:', playlists);
-        console.log('🎵 [PLAYLISTS DEBUG] Number of playlists found:', playlists?.length || 0);
-        
-        if (!playlists || playlists.length === 0) {
-          console.log('🎵 [PLAYLISTS DEBUG] No playlists found in database');
-          return { data: [] };
-        }
-        
-        console.log('🎵 [PLAYLISTS DEBUG] About to fetch tracks for each playlist...');
-        
-        const playlistsWithTracks = await Promise.all(playlists.map(async (playlist) => {
-          console.log(`🎵 [PLAYLISTS DEBUG] Fetching tracks for playlist ${playlist.id}...`);
-          
-          const tracks = await dbAsync.all(`
-            SELECT t.*, pt."order" as playlist_order,
-                   a.name as artist_name,
-                   al.name as album_name
-            FROM tracks t
-            JOIN playlist_tracks pt ON t.id = pt.track_id
-            LEFT JOIN artists a ON t.artist_id = a.id
-            LEFT JOIN albums al ON t.album_id = al.id
-            WHERE pt.playlist_id = ?
-            ORDER BY pt."order" ASC
-          `, [playlist.id]);
-          
-          console.log(`🎵 [PLAYLISTS DEBUG] Found ${tracks?.length || 0} tracks for playlist ${playlist.id}`);
-          
-          const result = {
-            id: playlist.id,
-            name: playlist.name,
-            description: playlist.description,
-            userId: String(playlist.user_id),
-            user: {
-              id: String(playlist.user_id),
-              name: playlist.user_name || 'Unknown User'
-            },
-            tracks: tracks.map(track => ({
-              id: track.id,
-              name: track.name,
-              duration: track.duration,
-              artistId: track.artist_id,
-              artistName: track.artist_name || null,
-              albumId: track.album_id,
-              albumName: track.album_name || null,
-              userId: track.user_id,
-              filePath: track.file_path,
-              bitrate: track.bitrate,
-              sampleRate: track.sample_rate,
-              channels: track.channels,
-              year: track.year,
-              genre: track.genre,
-              trackNumber: track.track_number,
-              createdAt: track.created_at,
-              updatedAt: track.updated_at
-            })),
-            createdAt: playlist.created_at,
-            updatedAt: playlist.updated_at
-          };
-          
-          console.log(`🎵 [PLAYLISTS DEBUG] Processed playlist ${playlist.id}:`, result);
-          return result;
-        }));
-        
-        console.log('🎵 [PLAYLISTS DEBUG] Final playlists response:', playlistsWithTracks?.length || 0, 'playlists');
-        console.log('🎵 [PLAYLISTS DEBUG] About to return data...');
-        
-        const response = { data: playlistsWithTracks };
-        console.log('🎵 [PLAYLISTS DEBUG] Final response object:', response);
-        
-        return response;
-      } catch (error) {
-        console.error('🎵 [PLAYLISTS DEBUG] Error fetching playlists:', error);
-        console.error('🎵 [PLAYLISTS DEBUG] Error stack:', (error as Error)?.stack);
-        return { error: 'Failed to fetch playlists', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+$/) && method === 'GET') {
-      console.log('[API DEBUG] Matched GET /api/playlists/{id}');
-      const playlistId = apiPath.split('/')[3];
-      
-      if (!playlistId) {
-        return { error: 'Invalid playlist ID', status: 400 };
-      }
-      
-      try {
-        const playlist = await dbAsync.get(`
-          SELECT p.*, u.name as user_name 
-          FROM playlists p 
-          LEFT JOIN users u ON p.user_id = u.id 
-          WHERE p.id = ?
-        `, [playlistId]);
-        
-        if (!playlist) {
-          return { error: 'Playlist not found', status: 404 };
-        }
-        
-        const tracks = await dbAsync.all(`
-          SELECT t.*, pt."order" as playlist_order,
-                 a.name as artist_name,
-                 al.name as album_name
-          FROM tracks t
-          JOIN playlist_tracks pt ON t.id = pt.track_id
-          LEFT JOIN artists a ON t.artist_id = a.id
-          LEFT JOIN albums al ON t.album_id = al.id
-          WHERE pt.playlist_id = ?
-          ORDER BY pt."order" ASC
-        `, [playlistId]);
-        
-        const result = {
-          id: playlist.id,
-          name: playlist.name,
-          description: playlist.description,
-          userId: String(playlist.user_id),
-          user: {
-            id: String(playlist.user_id),
-            name: playlist.user_name || 'Unknown User'
-          },
-          tracks: tracks.map(track => ({
-            id: track.id,
-            name: track.name,
-            duration: track.duration,
-            artistId: track.artist_id,
-            artistName: track.artist_name || null,
-            albumId: track.album_id,
-            albumName: track.album_name || null,
-            userId: track.user_id,
-            filePath: track.file_path,
-            bitrate: track.bitrate,
-            sampleRate: track.sample_rate,
-            channels: track.channels,
-            year: track.year,
-            genre: track.genre,
-            trackNumber: track.track_number,
-            createdAt: track.created_at,
-            updatedAt: track.updated_at
-          })),
-          createdAt: playlist.created_at,
-          updatedAt: playlist.updated_at
-        };
-        
-        return { data: result };
-      } catch (error) {
-        console.error('[API DEBUG] Error fetching playlist:', error);
-        return { error: 'Failed to fetch playlist', status: 500 };
-      }
-    } else if (apiPath === '/api/playlists' && method === 'POST') {
-      console.log('[IPC HANDLER] Received POST /api/playlists request');
-      console.log('[API DEBUG] Matched POST /api/playlists');
-      console.log('[API DEBUG] Request body:', body);
-      const { name, description } = body as { name: string; description?: string };
-      
-      if (!name) {
-        console.log('[API DEBUG] Playlist name is required');
-        return { error: 'Playlist name is required', status: 400 };
-      }
-      
-      // For now, use a default user ID (1) - you might want to get this from token
-      const userId = 1;
-      const now = Math.floor(Date.now() / 1000);
-      const playlistId = uuidv4();
-      
-      console.log('[API DEBUG] Creating playlist with data:', { playlistId, name, description, userId });
-      
-      try {
-        const result = await dbAsync.run(
-          'INSERT INTO playlists (id, name, description, user_id, "order") VALUES (?, ?, ?, ?, ?)',
-          [playlistId, name, description || '', userId, 0]
-        );
-        
-        console.log('[API DEBUG] INSERT result:', result);
-        
-        if (result.changes === 0) {
-          console.log('[API DEBUG] Failed to create playlist - no changes');
-          return { error: 'Failed to create playlist', status: 500 };
-        }
-        
-        const newPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
-        console.log('[API DEBUG] Retrieved new playlist:', newPlaylist);
-        
-        if (!newPlaylist) {
-          console.log('[API DEBUG] Failed to retrieve created playlist');
-          return { error: 'Failed to retrieve created playlist', status: 500 };
-        }
-        
-        // Return with proper structure
-        const playlistData = {
-          id: newPlaylist.id,
-          name: newPlaylist.name,
-          description: newPlaylist.description,
-          userId: String(newPlaylist.user_id),
-          user: {
-            id: String(newPlaylist.user_id),
-            name: 'Test User' // TODO: Get actual user name
-          },
-          tracks: [],
-          createdAt: now,
-          updatedAt: now
-        };
-        
-        console.log('[API DEBUG] Returning playlist data:', playlistData);
-        const response = { data: playlistData };
-        console.log('[API DEBUG] Final response:', response);
-        return response;
-      } catch (error) {
-        console.error('[API DEBUG] Error creating playlist:', error);
-        return { error: 'Failed to create playlist', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+$/) && method === 'DELETE') {
-      console.log('[API DEBUG] Matched DELETE /api/playlists/{id}');
-      const playlistId = apiPath.split('/')[3];
-      
-      try {
-        // Delete playlist tracks first
-        await dbAsync.run('DELETE FROM playlist_tracks WHERE playlist_id = ?', [playlistId]);
-        
-        // Delete playlist
-        const result = await dbAsync.run('DELETE FROM playlists WHERE id = ?', [playlistId]);
-        
-        if (result.changes === 0) {
-          return { error: 'Playlist not found', status: 404 };
-        }
-        
-        return { data: { success: true } };
-      } catch (error) {
-        console.error('[API DEBUG] Error deleting playlist:', error);
-        return { error: 'Failed to delete playlist', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/tracks\/[\w\d_-]+$/) && method === 'POST') {
-      console.log('[API DEBUG] Matched POST /api/playlists/{id}/tracks/{trackId}');
-      console.log('[DRAG N DROP] 🔥 Backend: Add track to playlist endpoint hit');
-      console.log('[DRAG N DROP] 🔥 Backend: apiPath:', apiPath);
-      console.log('[DRAG N DROP] 🔥 Backend: method:', method);
-      console.log('[DRAG N DROP] 🔥 Backend: url.searchParams:', url.searchParams.toString());
-      
-      const pathParts = apiPath.split('/');
-      const playlistId = pathParts[3];
-      const trackId = pathParts[5];
-      const force = url.searchParams.get('force') === 'true';
-      
-      console.log('[DRAG N DROP] 🔥 Backend: Extracted playlistId:', playlistId);
-      console.log('[DRAG N DROP] 🔥 Backend: Extracted trackId:', trackId);
-      console.log('[DRAG N DROP] 🔥 Backend: Force flag:', force);
-      
-      try {
-        // Check if track already exists in playlist
-        const existing = await dbAsync.get(
-          'SELECT * FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?',
-          [playlistId, trackId]
-        );
-        
-        if (existing && !force) {
-          return { 
-            error: 'Track already exists in playlist', 
-            status: 409,
-            data: { status: 'DUPLICATE', message: 'Track already exists in playlist', playlistId, trackId }
-          };
-        }
-        
-        if (!existing) {
-          // Get the highest order number for this playlist
-          const maxOrder = await dbAsync.get(
-            'SELECT MAX("order") as max_order FROM playlist_tracks WHERE playlist_id = ?',
-            [playlistId]
-          );
-          
-          const nextOrder = (maxOrder?.max_order || 0) + 1;
-          
-          await dbAsync.run(
-            'INSERT INTO playlist_tracks (playlist_id, track_id, "order") VALUES (?, ?, ?)',
-            [playlistId, trackId, nextOrder]
-          );
-        }
-        
-        return { data: { success: true } };
-      } catch (error) {
-        console.error('[API DEBUG] Error adding track to playlist:', error);
-        return { error: 'Failed to add track to playlist', status: 500 };
-      }
-    } else if (apiPath === '/api/tracks/sync-metadata' && method === 'POST') {
-      console.log('[API DEBUG] Matched POST /api/tracks/sync-metadata');
-      
-      try {
-        console.log('🎵 [METADATA SYNC] Starting metadata sync process...');
-        
-        // Get all tracks from database
-        const tracks = await dbAsync.all('SELECT * FROM tracks');
-        console.log(`🎵 [METADATA SYNC] Found ${tracks.length} tracks to process`);
-        
-        let processed = 0;
-        let updated = 0;
-        let errors = 0;
-        const results = [];
-        
-        for (const track of tracks) {
-          processed++;
-          console.log(`🎵 [METADATA SYNC] Processing ${processed}/${tracks.length}: ${track.name}`);
-          
-          try {
-            // Check if track already has metadata
-            if (track.bitrate !== null && track.duration > 0) {
-              console.log(`🎵 [METADATA SYNC] Track already has metadata, skipping...`);
-              results.push({ trackId: track.id, status: 'skipped', reason: 'Already has metadata' });
-              continue;
-            }
-            
-            // Construct full file path
-            const fullPath = path.join(process.cwd(), track.file_path.replace(/^\/uploads\//, 'uploads/'));
-            console.log(`🎵 [METADATA SYNC] Processing file: ${fullPath}`);
-            
-            // Check if file exists
-            try {
-              await fs.promises.access(fullPath);
-            } catch (error) {
-              console.log(`❌ [METADATA SYNC] File not found: ${fullPath}`);
-              errors++;
-              results.push({ trackId: track.id, status: 'error', reason: 'File not found' });
-              continue;
-            }
-            
-            // Extract metadata from file
-            const { MetadataService } = await import('./services/metadataService');
-            const metadata = await MetadataService.extractFromFile(fullPath);
-            console.log(`🎵 [METADATA SYNC] Extracted metadata for ${track.name}:`, metadata);
-            
-            // Update database with extracted metadata
-            await dbAsync.run(`
-              UPDATE tracks 
-              SET 
-                name = ?,
-                duration = ?,
-                bitrate = ?,
-                sample_rate = ?,
-                channels = ?,
-                year = ?,
-                genre = ?,
-                track_number = ?,
-                updated_at = ?
-              WHERE id = ?
-            `, [
-              metadata.title,
-              metadata.duration,
-              metadata.bitrate,
-              metadata.sampleRate,
-              metadata.channels,
-              metadata.year,
-              metadata.genre,
-              metadata.trackNumber,
-              Math.floor(Date.now() / 1000),
-              track.id
-            ]);
-            
-            // Process artists and albums if available
-            let artistId = null;
-            let albumId = null;
-            
-            if (metadata.artist) {
-              // Find or create artist
-              let artist = await dbAsync.get('SELECT id FROM artists WHERE name = ?', [metadata.artist]);
-              
-              if (!artist) {
-                const result = await dbAsync.run(
-                  'INSERT INTO artists (name, created_at, updated_at) VALUES (?, ?, ?)',
-                  [metadata.artist, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]
-                );
-                artistId = result.lastID;
-                console.log(`✅ [METADATA SYNC] Created new artist: ${metadata.artist} (ID: ${artistId})`);
-              } else {
-                artistId = artist.id;
-                console.log(`✅ [METADATA SYNC] Found existing artist: ${metadata.artist} (ID: ${artistId})`);
-              }
-              
-              // Process album if available
-              if (metadata.album) {
-                let album = await dbAsync.get(
-                  'SELECT id FROM albums WHERE name = ? AND artist_id = ?',
-                  [metadata.album, artistId]
-                );
-                
-                if (!album) {
-                  const result = await dbAsync.run(
-                    'INSERT INTO albums (name, release_date, artist_id) VALUES (?, ?, ?)',
-                    [metadata.album, metadata.year || Math.floor(Date.now() / 1000), artistId]
-                  );
-                  albumId = result.lastID;
-                  console.log(`✅ [METADATA SYNC] Created new album: ${metadata.album} (ID: ${albumId})`);
-                } else {
-                  albumId = album.id;
-                  console.log(`✅ [METADATA SYNC] Found existing album: ${metadata.album} (ID: ${albumId})`);
-                }
-              }
-              
-              // Update track with artist and album IDs
-              await dbAsync.run(
-                'UPDATE tracks SET artist_id = ?, album_id = ? WHERE id = ?',
-                [artistId, albumId, track.id]
-              );
-            }
-            
-            console.log(`✅ [METADATA SYNC] Updated track ${track.name} with metadata`);
-            updated++;
-            results.push({ 
-              trackId: track.id, 
-              status: 'updated', 
-              metadata: {
-                title: metadata.title,
-                artist: metadata.artist,
-                album: metadata.album,
-                duration: metadata.duration,
-                year: metadata.year
-              }
-            });
-            
-          } catch (error) {
-            console.error(`❌ [METADATA SYNC] Error processing track ${track.name}:`, error);
-            errors++;
-            results.push({ 
-              trackId: track.id, 
-              status: 'error', 
-              reason: error instanceof Error ? error.message : 'Unknown error' 
-            });
-          }
-        }
-        
-        const summary = {
-          processed,
-          updated,
-          errors,
-          skipped: processed - updated - errors
-        };
-        
-        console.log(`🎉 [METADATA SYNC] Metadata sync completed!`, summary);
-        
-        return { 
-          data: { 
-            summary,
-            results 
-          } 
-        };
-        
-      } catch (error) {
-        console.error('❌ [METADATA SYNC] Fatal error:', error);
-        return { error: 'Metadata sync failed', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/tracks\/[\w\d_-]+$/) && method === 'DELETE') {
-      console.log('[API DEBUG] Matched DELETE /api/playlists/{id}/tracks/{trackId}');
-      const pathParts = apiPath.split('/');
-      const playlistId = pathParts[3];
-      const trackId = pathParts[5];
-      
-      try {
-        const result = await dbAsync.run(
-          'DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?',
-          [playlistId, trackId]
-        );
-        
-        if (result.changes === 0) {
-          return { error: 'Track not found in playlist', status: 404 };
-        }
-        
-        return { data: { success: true } };
-      } catch (error) {
-        console.error('[API DEBUG] Error removing track from playlist:', error);
-        return { error: 'Failed to remove track from playlist', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/metadata$/) && method === 'PATCH') {
-      console.log(`[EDIT PLAYLIST] Step 4: Backend handler PATCH /api/playlists/{id}/metadata matched.`);
-      const playlistId = apiPath.split('/')[3];
-      const { name, description } = body as { name?: string; description?: string };
-      console.log(`[EDIT PLAYLIST] Step 4.1: Received data for playlist ${playlistId}:`, { name, description });
-      
-      try {
-        const updates: string[] = [];
-        const values: any[] = [];
-        
-        if (name !== undefined) {
-          updates.push('name = ?');
-          values.push(name);
-        }
-        
-        if (description !== undefined) {
-          updates.push('description = ?');
-          values.push(description);
-        }
-        
-        if (updates.length === 0) {
-          return { error: 'No updates provided', status: 400 };
-        }
-        
-        values.push(playlistId);
-        
-        console.log('[EDIT PLAYLIST] Step 4.2: Executing database update with query:', `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`, 'and values:', values);
-        await dbAsync.run(
-          `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`,
-          values
-        );
-        
-        console.log('[EDIT PLAYLIST] Step 4.3: Database update finished. Fetching updated playlist...');
-        const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
-        console.log('[EDIT PLAYLIST] Step 4.4: Returning updated playlist:', updatedPlaylist);
-        return { data: updatedPlaylist };
-      } catch (error) {
-        console.error('[EDIT PLAYLIST] Step 4 Failure: Error updating playlist metadata:', error);
-        return { error: 'Failed to update playlist metadata', status: 500 };
-      }
-    } else if (apiPath === '/api/playlists/reorder' && method === 'PATCH') {
-      console.log('[API DEBUG] Matched PATCH /api/playlists/reorder');
-      const { playlistIds } = body as { playlistIds: string[] };
-      
-      if (!Array.isArray(playlistIds)) {
-        return { error: 'playlistIds must be an array', status: 400 };
-      }
-      
-      try {
-        // Update order for each playlist
-        await Promise.all(playlistIds.map((id, index) => 
-          dbAsync.run('UPDATE playlists SET "order" = ? WHERE id = ?', [index, id])
-        ));
-        
-        // Return updated playlists
-        const updatedPlaylists = await dbAsync.all(`
-          SELECT p.*, u.name as user_name 
-          FROM playlists p 
-          LEFT JOIN users u ON p.user_id = u.id 
-          ORDER BY p."order" ASC
-        `);
-        
-        return { data: updatedPlaylists };
-      } catch (error) {
-        console.error('[API DEBUG] Error reordering playlists:', error);
-        return { error: 'Failed to reorder playlists', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/playlists\/[\w\d_-]+\/track-order$/) && method === 'PATCH') {
-      console.log('[API DEBUG] Matched PATCH /api/playlists/{id}/track-order');
-      const playlistId = apiPath.split('/')[3];
-      const { trackIds } = body as { trackIds: string[] };
-      
-      if (!Array.isArray(trackIds)) {
-        return { error: 'trackIds must be an array', status: 400 };
-      }
-      
-      try {
-        // Update order for each track in the playlist
-        await Promise.all(trackIds.map((trackId, index) => 
-          dbAsync.run(
-            'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
-            [index, playlistId, trackId]
-          )
-        ));
-        
-        // Return updated playlist
-        const playlist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
-        return { data: playlist };
-      } catch (error) {
-        console.error('[API DEBUG] Error updating playlist track order:', error);
-        return { error: 'Failed to update playlist track order', status: 500 };
-      }
-    } else if (apiPath.startsWith('/api/users') && method === 'GET') {
-      const result = await ipcMain.handle('getUsers', () => []);
-      return { data: result };
-    } else if (apiPath.startsWith('/api/user') && method === 'GET') {
-      const userId = url.searchParams.get('id');
-      const result = await ipcMain.handle('getUser', () => ({}));
-      return { data: result };
-    } else if (apiPath.startsWith('/api/comments') && method === 'GET' && !apiPath.includes('/with-marker')) {
-      console.log('[API DEBUG] Matched /api/comments GET');
-      const trackIdParam = url.searchParams.get('trackId');
-      const page = parseInt(url.searchParams.get('page') || '1', 10);
-      const limit = parseInt(url.searchParams.get('limit') || '10', 10);
-      
-      if (!trackIdParam) {
-        console.error('[API DEBUG] Missing trackId query parameter');
-        return { error: 'Missing trackId parameter', status: 400 };
-      }
-      
-      const trackId = trackIdParam;
-      if (!trackId) {
-        console.error('[API DEBUG] Invalid trackId parameter:', trackIdParam);
-        return { error: 'Invalid trackId parameter', status: 400 };
-      }
-      
-      try {
-        console.log('[API DEBUG] Fetching comments for track:', trackId);
-        
-        // First get all comments for the track
-        const comments = await dbAsync.all(
-          'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
-          [trackId, limit, (page - 1) * limit]
-        );
-        
-        console.log('[API DEBUG] Found comments:', comments.length);
-        
-        // For each comment, check if it has an associated marker
-        const commentsWithMarkers = await Promise.all(comments.map(async (comment) => {
-          const marker = await dbAsync.get(
-            'SELECT * FROM markers WHERE comment_id = ?',
-            [comment.id]
-          );
-          
-          return {
-            id: comment.id,
-            content: comment.content,
-            trackId: comment.track_id,
-            userId: comment.user_id,
-            userName: comment.user_name || 'Unknown User',
-            createdAt: comment.created_at,
-            marker: marker ? {
-              id: marker.id,
-              time: marker.time,
-              end: marker.time + (marker.duration || 0.5),
-              duration: marker.duration || 0.5,
-              trackId: marker.track_id,
-              commentId: marker.comment_id,
-              createdAt: marker.created_at,
-              waveSurferRegionID: marker.wave_surfer_region_id,
-              data: {
-                customColor: "#FF0000", // Default color
-                isVisible: true,
-                isDraggable: true,
-                isResizable: false
-              }
-            } : null
-          };
-        }));
-        
-        console.log('[API DEBUG] Processed comments with markers:', commentsWithMarkers.length);
-        return { data: commentsWithMarkers };
-      } catch (error) {
-        console.error('[API DEBUG] Error fetching comments:', error);
-        return { error: 'Failed to fetch comments', status: 500 };
-      }
-    } else if (apiPath.includes('/api/comments/with-marker') && method === 'POST') {
-      console.log('[API DEBUG] Matched /api/comments/with-marker POST', { body });
-      const { trackId, userId, content, time, color } = body as CreateCommentDto;
-      
-      // Validate required fields
-      if (!trackId) {
-        console.error('[API DEBUG] Missing trackId in request body');
-        return { error: 'Missing trackId', status: 400 };
-      }
-      if (!userId) {
-        console.error('[API DEBUG] Missing userId in request body');
-        return { error: 'Missing userId', status: 400 };
-      }
-      if (!content) {
-        console.error('[API DEBUG] Missing content in request body');
-        return { error: 'Missing content', status: 400 };
-      }
-      if (typeof time !== 'number') {
-        console.error('[API DEBUG] Missing or invalid time in request body:', time);
-        return { error: 'Missing or invalid time', status: 400 };
-      }
-      
-      const now = Math.floor(Date.now() / 1000);
-      
-      try {
-      // Insert comment
-        console.log('[API DEBUG] Inserting comment:', { content, trackId, userId, now });
-      const commentId = uuidv4();
-      const commentResult = await dbAsync.run(
-        'INSERT INTO comments (id, content, track_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)',
-        [commentId, content, trackId, userId, now]
-      );
-        
-        if (!commentResult || commentResult.changes === 0) {
-          console.error('[API DEBUG] Failed to insert comment');
-          return { error: 'Failed to create comment', status: 500 };
-        }
-        console.log('[API DEBUG] Comment created with ID:', commentId);
-        
-      // Insert marker
-      const regionId = `region_${commentId}_${Date.now()}`;
-        console.log('[API DEBUG] Inserting marker:', { regionId, time, commentId, trackId });
-      const markerId = uuidv4();
-      const markerResult = await dbAsync.run(
-        'INSERT INTO markers (id, wave_surfer_region_id, time, duration, comment_id, track_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [markerId, regionId, time, 0.5, commentId, trackId, now]
-      );
-        
-        if (!markerResult || markerResult.changes === 0) {
-          console.error('[API DEBUG] Failed to insert marker');
-          // Attempt to rollback the comment
-          try {
-            await dbAsync.run('DELETE FROM comments WHERE id = ?', [commentId]);
-            console.log('[API DEBUG] Rolled back comment:', commentId);
-          } catch (rollbackError) {
-            console.error('[API DEBUG] Failed to rollback comment:', rollbackError);
-          }
-          return { error: 'Failed to create marker', status: 500 };
-        }
-        console.log('[API DEBUG] Marker created with ID:', markerId);
-        
-        // Fetch the new comment
-      const comment = await dbAsync.get('SELECT * FROM comments WHERE id = ?', [commentId]);
-        if (!comment) {
-          console.error('[API DEBUG] Failed to fetch created comment with ID:', commentId);
-          return { error: 'Failed to retrieve created comment', status: 500 };
-        }
-        
-        // Fetch the new marker
-      const marker = await dbAsync.get('SELECT * FROM markers WHERE id = ?', [markerId]);
-        if (!marker) {
-          console.error('[API DEBUG] Failed to fetch created marker with ID:', markerId);
-          return { error: 'Failed to retrieve created marker', status: 500 };
-        }
-        
-        // Get user info
-        const user = await dbAsync.get('SELECT name FROM users WHERE id = ?', [userId]);
-        const userName = user ? user.name : 'Unknown User';
-        
-        console.log('[API DEBUG] Created comment and marker:', { comment, marker });
-        
-        // Return in the format expected by the frontend
-      return {
-        data: {
-          comment: {
-            id: comment.id,
-            content: comment.content,
-            trackId: comment.track_id,
-            userId: comment.user_id,
-              userName: userName,
-            createdAt: comment.created_at,
-            marker: {
-              id: marker.id,
-              time: marker.time,
-                end: marker.time + marker.duration,
-                duration: marker.duration,
-              trackId: marker.track_id,
-              commentId: marker.comment_id,
-              createdAt: marker.created_at,
-              waveSurferRegionID: marker.wave_surfer_region_id,
-                data: {
-                  customColor: color || "#FF0000",
-                  isVisible: true,
-                  isDraggable: true,
-                  isResizable: false
-                }
-            }
-          }
-        }
-      };
-      } catch (error) {
-        console.error('[API DEBUG] Error creating comment with marker:', error);
-        return { error: 'Failed to create comment with marker', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/comments\/[\w\d_-]+$/) && method === 'DELETE') {
-      console.log('[API DEBUG] Matched DELETE /api/comments/{id}');
-      const commentId = apiPath.split('/')[3];
-      
-      if (!commentId) {
-        console.error('[API DEBUG] Invalid comment ID in URL:', apiPath);
-        return { error: 'Invalid comment ID', status: 400 };
-      }
-      
-      try {
-        console.log('[API DEBUG] Deleting comment with ID:', commentId);
-        
-        // First, delete the associated marker if it exists
-        await dbAsync.run('DELETE FROM markers WHERE comment_id = ?', [commentId]);
-        console.log('[API DEBUG] Deleted associated marker for comment ID:', commentId);
-        
-        // Then delete the comment
-        const result = await dbAsync.run('DELETE FROM comments WHERE id = ?', [commentId]);
-        console.log('[API DEBUG] Delete comment result:', result);
-        
-        if (result.changes === 0) {
-          console.error('[API DEBUG] Comment not found with ID:', commentId);
-          return { error: 'Comment not found', status: 404 };
-        }
-        
-        console.log('[API DEBUG] Successfully deleted comment and marker:', commentId);
-        return { data: null, status: 200 };
-      } catch (error) {
-        console.error('[API DEBUG] Error deleting comment:', error);
-        return { error: 'Failed to delete comment', status: 500 };
-      }
-    } else if (apiPath.match(/^\/api\/comments\/[\w\d_-]+$/) && method === 'PUT') {
-      console.log('[API DEBUG] Matched PUT /api/comments/{id}');
-      const commentId = apiPath.split('/')[3];
-      const { content } = body as { content: string };
-      
-      if (!commentId) {
-        console.error('[API DEBUG] Invalid comment ID in URL:', apiPath);
-        return { error: 'Invalid comment ID', status: 400 };
-      }
-      
-      if (!content) {
-        console.error('[API DEBUG] Missing content in request body');
-        return { error: 'Missing content', status: 400 };
-      }
-      
-      try {
-        console.log('[API DEBUG] Updating comment with ID:', commentId, 'content:', content);
-        
-        // Update the comment
-        const result = await dbAsync.run(
-          'UPDATE comments SET content = ? WHERE id = ?',
-          [content, commentId]
-        );
-        
-        if (result.changes === 0) {
-          console.error('[API DEBUG] Comment not found with ID:', commentId);
-          return { error: 'Comment not found', status: 404 };
-        }
-        
-        // Fetch the updated comment with user info
-        const updatedComment = await dbAsync.get(
-          'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.id = ?',
-          [commentId]
-        );
-        
-        if (!updatedComment) {
-          console.error('[API DEBUG] Failed to fetch updated comment with ID:', commentId);
-          return { error: 'Failed to retrieve updated comment', status: 500 };
-        }
-        
-        // Also fetch associated marker if exists
-        const marker = await dbAsync.get('SELECT * FROM markers WHERE comment_id = ?', [commentId]);
-        
-        const response = {
-          id: updatedComment.id,
-          content: updatedComment.content,
-          trackId: updatedComment.track_id,
-          userId: updatedComment.user_id,
-          userName: updatedComment.user_name || 'Unknown User',
-          createdAt: updatedComment.created_at,
-          marker: marker ? {
-            id: marker.id,
-            time: marker.time,
-            end: marker.time + (marker.duration || 0.5),
-            duration: marker.duration || 0.5,
-            trackId: marker.track_id,
-            commentId: marker.comment_id,
-            createdAt: marker.created_at,
-            waveSurferRegionID: marker.wave_surfer_region_id,
-            data: {
-              customColor: "#FF0000",
-              isVisible: true,
-              isDraggable: true,
-              isResizable: false
-            }
-          } : null
-        };
-        
-        console.log('[API DEBUG] Successfully updated comment:', response);
-        return { data: response, status: 200 };
-      } catch (error) {
-        console.error('[API DEBUG] Error updating comment:', error);
-        return { error: 'Failed to update comment', status: 500 };
-      }
-    } else if (method === 'POST' && endpoint.match(/^\/playlists\/?$/)) {
-      // Create a new playlist
-      const { name, description } = body;
-      const newPlaylistId = uuidv4();
-
-      // Get userId from token
-      const token = (headers.authorization || '').split(' ')[1];
-      const decoded = verifyToken(token);
-      if (!decoded || !decoded.userId) {
-        return { error: 'Unauthorized', status: 401 };
-      }
-      const { userId } = decoded;
-
-      await dbAsync.run(
-        'INSERT INTO playlists (id, name, description, userId) VALUES (?, ?, ?, ?)',
-        [newPlaylistId, name, description, userId]
-      );
-      const newPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [newPlaylistId]);
-      return { data: newPlaylist, status: 201 };
-
-    } else if (method === 'POST' && endpoint.match(/^\/playlists\/([a-f0-9-]+)\/tracks\/([a-f0-9-]+)\/?$/)) {
-      // Add a track to a playlist
-      const matches = endpoint.match(/^\/playlists\/([a-f0-9-]+)\/tracks\/([a-f0-9-]+)\/?$/);
-      const playlistId = matches[1];
-      const trackId = matches[2];
-      const { force } = body;
-
-      // Check for duplicates unless 'force' is true
-      if (!force) {
-        const existing = await dbAsync.get(
-          'SELECT * FROM playlist_tracks WHERE playlistId = ? AND trackId = ?',
-          [playlistId, trackId]
-        );
-        if (existing) {
-          return { 
-            error: 'Track is already in this playlist', 
-            status: 409, 
-            data: { status: 'DUPLICATE', message: 'Track is already in this playlist' }
-          };
-        }
-      }
-
-      // Get the current max order for this playlist
-      const maxOrderResult = await dbAsync.get(
-        'SELECT MAX(track_order) as max_order FROM playlist_tracks WHERE playlistId = ?',
-        [playlistId]
-      );
-      const newOrder = (maxOrderResult?.max_order ?? -1) + 1;
-
-      await dbAsync.run(
-        'INSERT INTO playlist_tracks (playlistId, trackId, track_order) VALUES (?, ?, ?)',
-        [playlistId, trackId, newOrder]
-      );
-      
-      // Return the updated playlist
-      const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', playlistId);
-      return { data: updatedPlaylist, status: 200 };
-
-    } else if (method === 'PUT' && endpoint.match(/^\/playlists\/([a-f0-9-]+)\/reorder\/?$/)) {
-      // Reorder tracks in a playlist
-      const playlistId = endpoint.split('/')[2];
-      const { trackIds } = body as { trackIds: string[] };
-      
-      if (!Array.isArray(trackIds)) {
-        return { error: 'trackIds must be an array', status: 400 };
-      }
-      
-      try {
-        // Update order for each track in the playlist
-        await Promise.all(trackIds.map((trackId, index) => 
-          dbAsync.run(
-            'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
-            [index, playlistId, trackId]
-          )
-        ));
-        
-        // Return updated playlist
-        const playlist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
-        return { data: playlist };
-      } catch (error) {
-        console.error('[API DEBUG] Error updating playlist track order:', error);
-        return { error: 'Failed to update playlist track order', status: 500 };
-      }
-    }
-    
-    console.log('[IPC HANDLER] No matching handler found for:', { method, endpoint, apiPath: apiPath || 'not set' });
-    throw new Error(`No handler for ${method} ${endpoint}`);
-  } catch (error) {
-    console.error('API request error:', error);
     throw error;
   }
 });
@@ -1844,10 +1253,10 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
     
     // Extract metadata using music-metadata
     console.log(`[UPLOAD] Extracting metadata for ${fileName}`);
-    const { MetadataService } = await import('./services/metadataService');
-    const metadata = await MetadataService.extractFromBuffer(fileBuffer, fileName);
+    const metadata = await MetadataService.extractFromFile(filePath);
     
     console.log(`[UPLOAD] Extracted metadata:`, metadata);
+    console.log(`[UPLOAD] Album art info:`, metadata.albumArt);
     
     // Find or create artist
     let artistId = null;
@@ -1883,13 +1292,22 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
       if (existingAlbum) {
         albumId = existingAlbum.id;
         console.log(`[UPLOAD] Found existing album with ID: ${albumId}`);
+        
+        // Update album art if we have it and the album doesn't
+        if (metadata.albumArt && !existingAlbum.album_art_path) {
+          await dbAsync.run(
+            'UPDATE albums SET album_art_path = ? WHERE id = ?',
+            [metadata.albumArt.path, albumId]
+          );
+          console.log(`[UPLOAD] Updated album art for existing album ${albumId}`);
+        }
       } else {
         const albumResult = await dbAsync.run(
-          'INSERT INTO albums (name, release_date, artist_id) VALUES (?, ?, ?)',
-          [metadata.album, Math.floor(Date.now() / 1000), artistId]
+          'INSERT INTO albums (name, release_date, artist_id, album_art_path) VALUES (?, ?, ?, ?)',
+          [metadata.album, Math.floor(Date.now() / 1000), artistId, metadata.albumArt?.path || null]
         );
         albumId = albumResult.lastID;
-        console.log(`[UPLOAD] Created new album with ID: ${albumId}`);
+        console.log(`[UPLOAD] Created new album with ID: ${albumId}, album art: ${metadata.albumArt?.path || 'none'}`);
       }
     }
     
@@ -1900,8 +1318,8 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
       `INSERT INTO tracks (
         id, name, duration, artist_id, album_id, user_id, file_path, 
         bitrate, sample_rate, channels, year, genre, track_number,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        album_art_path, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         trackId,
         metadata.title,
@@ -1916,6 +1334,7 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
         metadata.year,
         metadata.genre,
         metadata.trackNumber,
+        metadata.albumArt?.path || null, // Track-level album art fallback
         Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000)
       ]
@@ -1924,7 +1343,7 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
     
     // Fetch the complete track data
     const track = await dbAsync.get(
-      `SELECT t.*, a.name as artist_name, al.name as album_name 
+      `SELECT t.*, a.name as artist_name, al.name as album_name, al.album_art_path as album_album_art_path
        FROM tracks t 
        LEFT JOIN artists a ON t.artist_id = a.id 
        LEFT JOIN albums al ON t.album_id = al.id 
@@ -1946,6 +1365,7 @@ async function processSingleTrackUpload(fileBuffer: Buffer, fileName: string, us
         album: track.album_name ? { name: track.album_name } : null,
         userId: track.user_id,
         filePath: track.file_path,
+        albumArtPath: track.album_album_art_path || track.album_art_path || null, // Album art from album or track
         bitrate: track.bitrate,
         sampleRate: track.sample_rate,
         channels: track.channels,
@@ -2147,8 +1567,8 @@ async function checkDatabaseIntegrity() {
     // Get all tracks from database
     const tracksInDb = await dbAsync.all('SELECT id, name, file_path FROM tracks');
     
-    console.log('🗄️ Tracks found in database:', tracksInDb.length);
-    console.log('🗄️ Database tracks:', tracksInDb.map(t => ({ id: t.id, name: t.name, filePath: t.file_path })));
+    // console.log('🗄️ Tracks found in database:', tracksInDb.length);
+    // console.log('🗄️ Database tracks:', tracksInDb.map(t => ({ id: t.id, name: t.name, filePath: t.file_path })));
     
     // Check for orphaned files (files in uploads but not in database)
     const orphanedFiles = [];

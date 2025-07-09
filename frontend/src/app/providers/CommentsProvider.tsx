@@ -96,9 +96,32 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
           throw new Error(`Failed to fetch comments: ${response.error}`);
         }
 
-        const fetchedComments = response.data;
+        const responseData = response.data;
+        console.log('📋 [CommentsProvider] Response data:', responseData);
+
+        // Handle pagination structure from API
+        let fetchedComments;
+        if (responseData && typeof responseData === 'object' && 'comments' in responseData) {
+          // New pagination structure
+          fetchedComments = responseData.comments;
+          console.log('📋 [CommentsProvider] Using pagination structure, comments:', fetchedComments);
+        } else if (Array.isArray(responseData)) {
+          // Legacy array structure
+          fetchedComments = responseData;
+          console.log('📋 [CommentsProvider] Using legacy array structure, comments:', fetchedComments);
+        } else {
+          console.error(
+            "❌ [CommentsProvider] Expected an array of comments or pagination object, received:",
+            typeof responseData,
+            responseData
+          );
+          setError("Invalid response format from server");
+          setIsLoadingMarkers(false);
+          return;
+        }
+
         console.log('📋 [CommentsProvider] Fetched comments:', fetchedComments);
-        console.log('📋 [CommentsProvider] Comments count:', fetchedComments?.length);
+        console.log('📋 [CommentsProvider] Comments count:', Array.isArray(fetchedComments) ? fetchedComments.length : 0);
 
         if (!Array.isArray(fetchedComments)) {
           console.error(

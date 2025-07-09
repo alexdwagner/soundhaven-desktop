@@ -1,157 +1,224 @@
-import * as mm from 'music-metadata';
-import * as path from 'path';
-import * as fs from 'fs';
+import { spawn } from 'child_process';
+import path from 'path';
+import fs from 'fs';
 
 export interface AudioMetadata {
+  format: string;
+  duration: number;
+  bitrate: number;
+  sampleRate: number;
+  channels: number;
   title?: string;
   artist?: string;
   album?: string;
   year?: number;
+  genre?: string;
   trackNumber?: number;
-  genre?: string[];
-  duration?: number;
-  bitrate?: number;
-  sampleRate?: number;
-  channels?: number;
-  format?: string;
-  lossless?: boolean;
-  fileSize?: number;
+  albumArt?: {
+    path: string;
+    format: string;
+    size: number;
+  };
 }
 
 export class MetadataService {
-  // List of supported audio file extensions
-  private static readonly SUPPORTED_EXTENSIONS = [
-    '.mp3',
-    '.m4a',
-    '.flac',
-    '.wav',
-    '.ogg',
-    '.aac',
-    '.wma',
-    '.aiff'
-  ];
+  private static readonly ALBUM_ART_DIR = path.join(process.cwd(), 'uploads', 'album-art');
+
+  /**
+   * Ensure album art directory exists
+   */
+  private static async ensureAlbumArtDir(): Promise<void> {
+    if (!fs.existsSync(this.ALBUM_ART_DIR)) {
+      fs.mkdirSync(this.ALBUM_ART_DIR, { recursive: true });
+    }
+  }
 
   /**
    * Extract metadata from an audio file
    */
-  static async extractFromFile(filePath: string): Promise<AudioMetadata> {
-    try {
-      // Validate file extension
-      if (!this.isValidAudioFile(filePath)) {
-        throw new Error('Unsupported file format');
-      }
+  public static async extractFromFile(filePath: string): Promise<AudioMetadata> {
+    return new Promise((resolve, reject) => {
+      const ffprobe = spawn('ffprobe', [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_format',
+        '-show_streams',
+        filePath
+      ]);
 
-      // Parse metadata
-      const metadata = await mm.parseFile(filePath);
-      
-      // Get file stats
-      const stats = await fs.promises.stat(filePath);
+      let output = '';
 
-      return {
-        title: metadata.common.title,
-        artist: metadata.common.artist,
-        album: metadata.common.album,
-        year: metadata.common.year || undefined,
-        trackNumber: metadata.common.track?.no || undefined,
-        genre: metadata.common.genre,
-        duration: metadata.format.duration,
-        bitrate: metadata.format.bitrate,
-        sampleRate: metadata.format.sampleRate,
-        channels: metadata.format.numberOfChannels,
-        format: metadata.format.container,
-        lossless: metadata.format.lossless,
-        fileSize: stats.size
-      };
+      ffprobe.stdout.on('data', (data) => {
+        output += data;
+      });
+
+      ffprobe.stderr.on('data', (data) => {
+        console.error('ffprobe stderr:', data.toString());
+      });
+
+      ffprobe.on('close', async (code) => {
+        if (code !== 0) {
+          reject(new Error(`ffprobe process exited with code ${code}`));
+          return;
+        }
+
+        try {
+          const data = JSON.parse(output);
+          const audioStream = data.streams.find((s: any) => s.codec_type === 'audio');
+          const tags = data.format.tags || {};
+
+          if (!audioStream) {
+            reject(new Error('No audio stream found'));
+            return;
+          }
+
+          // Check for embedded album art
+          const videoStream = data.streams.find((s: any) => 
+            s.codec_type === 'video' && s.disposition?.attached_pic === 1
+          );
+
+          let albumArt;
+          if (videoStream) {
+            try {
+              albumArt = await this.extractAlbumArt(filePath, tags.artist, tags.album);
     } catch (error) {
-      console.error('❌ Error extracting metadata:', error);
-      throw error;
+              console.warn('Failed to extract album art:', error);
+              // Continue without album art
+            }
+          }
+
+          resolve({
+            format: data.format.format_name,
+            duration: parseFloat(data.format.duration),
+            bitrate: parseInt(data.format.bit_rate),
+            sampleRate: parseInt(audioStream.sample_rate),
+            channels: audioStream.channels,
+            title: tags.title,
+            artist: tags.artist,
+            album: tags.album,
+            year: tags.date ? parseInt(tags.date) : undefined,
+            genre: tags.genre,
+            trackNumber: tags.track ? parseInt(tags.track) : undefined,
+            albumArt
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      ffprobe.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Extract album art from audio file
+   */
+  private static async extractAlbumArt(
+    filePath: string, 
+    artist?: string, 
+    album?: string
+  ): Promise<{ path: string; format: string; size: number }> {
+    await this.ensureAlbumArtDir();
+
+    // Generate filename for album art
+    const fileName = this.generateAlbumArtFileName(artist, album, filePath);
+    const outputPath = path.join(this.ALBUM_ART_DIR, fileName);
+
+    // Skip if album art already exists
+    if (fs.existsSync(outputPath)) {
+      const stats = fs.statSync(outputPath);
+      return {
+        path: `/uploads/album-art/${fileName}`,
+        format: path.extname(fileName).slice(1),
+        size: stats.size
+      };
     }
+
+    return new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', filePath,
+        '-an', // no audio
+        '-vcodec', 'copy',
+        '-f', 'image2',
+        '-y', // overwrite
+        outputPath
+      ]);
+
+      ffmpeg.stderr.on('data', (data) => {
+        // FFmpeg outputs progress info to stderr, which is normal
+        const output = data.toString();
+        if (output.includes('Error') || output.includes('error')) {
+          console.error('ffmpeg stderr:', output);
+        }
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`ffmpeg process exited with code ${code}`));
+          return;
+        }
+
+        // Verify the file was created
+        if (!fs.existsSync(outputPath)) {
+          reject(new Error('Album art file was not created'));
+          return;
+        }
+
+        const stats = fs.statSync(outputPath);
+        resolve({
+          path: `/uploads/album-art/${fileName}`,
+          format: path.extname(fileName).slice(1),
+          size: stats.size
+        });
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(err);
+      });
+    });
   }
 
   /**
-   * Check if a file is a supported audio format
+   * Generate filename for album art
    */
-  static isValidAudioFile(filePath: string): boolean {
-    const ext = path.extname(filePath).toLowerCase();
-    return this.SUPPORTED_EXTENSIONS.includes(ext);
-  }
-
-  /**
-   * Batch extract metadata from multiple files
-   */
-  static async extractFromFiles(filePaths: string[]): Promise<Map<string, AudioMetadata>> {
-    const results = new Map<string, AudioMetadata>();
+  private static generateAlbumArtFileName(artist?: string, album?: string, filePath?: string): string {
+    let baseName = '';
     
-    for (const filePath of filePaths) {
-      try {
-        const metadata = await this.extractFromFile(filePath);
-        results.set(filePath, metadata);
-      } catch (error) {
-        console.error(`❌ Error extracting metadata from ${filePath}:`, error);
-        // Continue with next file
-      }
+    if (artist && album) {
+      // Use artist-album as base name
+      baseName = `${this.sanitizeFileName(artist)}-${this.sanitizeFileName(album)}`;
+    } else if (filePath) {
+      // Use original file name as fallback
+      baseName = path.parse(filePath).name;
+    } else {
+      // Generate unique name
+      baseName = `unknown-${Date.now()}`;
     }
-    
-    return results;
+
+    return `${baseName}.jpg`;
   }
 
   /**
-   * Get a human-readable duration string
+   * Sanitize filename for cross-platform compatibility
    */
-  static formatDuration(seconds?: number): string {
-    if (!seconds) return '0:00';
-    
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  private static sanitizeFileName(name: string): string {
+    return name
+      .replace(/[<>:"/\\|?*]/g, '') // Remove invalid characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .substring(0, 50); // Limit length
   }
 
   /**
-   * Get a human-readable file size string
+   * Get album art path for a track or album
    */
-  static formatFileSize(bytes?: number): string {
-    if (!bytes) return '0 B';
+  public static getAlbumArtPath(artist?: string, album?: string): string | null {
+    if (!artist || !album) return null;
     
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let size = bytes;
-    let unitIndex = 0;
+    const fileName = this.generateAlbumArtFileName(artist, album);
+    const fullPath = path.join(this.ALBUM_ART_DIR, fileName);
     
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-    
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
-  }
-
-  /**
-   * Get a human-readable bitrate string
-   */
-  static formatBitrate(bps?: number): string {
-    if (!bps) return '0 kbps';
-    return `${Math.round(bps / 1000)} kbps`;
-  }
-
-  /**
-   * Validate metadata completeness
-   */
-  static validateMetadata(metadata: AudioMetadata): string[] {
-    const issues: string[] = [];
-    
-    if (!metadata.title) issues.push('Missing title');
-    if (!metadata.artist) issues.push('Missing artist');
-    if (!metadata.album) issues.push('Missing album');
-    if (!metadata.year) issues.push('Missing year');
-    if (!metadata.trackNumber) issues.push('Missing track number');
-    if (!metadata.genre || metadata.genre.length === 0) issues.push('Missing genre');
-    
-    return issues;
-  }
-
-  /**
-   * Check if metadata is complete enough for organization
-   */
-  static isOrganizable(metadata: AudioMetadata): boolean {
-    return !!(metadata.artist && metadata.album);
+    return fs.existsSync(fullPath) ? `/uploads/album-art/${fileName}` : null;
   }
 } 
