@@ -32,6 +32,7 @@ const validChannels = [
   'upload:single-track',
   'upload:batch-tracks',
   'get-file-url',
+  'get-waveform-data',
   'db:check-integrity',
   'db:cleanup-orphaned',
   'db:fix-paths',

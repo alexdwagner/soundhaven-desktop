@@ -1058,6 +1058,24 @@ export const apiService = {
       console.error('🧪 [TEST] Playlists API test failed:', error);
       return { success: false, error };
     }
+  },
+
+  /**
+   * Get preprocessed waveform data for a track
+   */
+  async getWaveformData(trackId: string): Promise<{ waveformData: number[] | null; chunks: string[] | null }> {
+    try {
+      if (isElectron) {
+        const result = await window.electron.ipcRenderer.invoke('get-waveform-data', trackId);
+        return result;
+      } else {
+        // For web fallback, return null to use regular audio loading
+        return { waveformData: null, chunks: null };
+      }
+    } catch (error) {
+      console.error('Error fetching waveform data:', error);
+      return { waveformData: null, chunks: null };
+    }
   }
 };
 

@@ -5,6 +5,7 @@ import type { Region } from 'wavesurfer.js/dist/plugins/regions';
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { useComments } from "@/app/hooks/useComments";
 import { Marker as MarkerType } from "../../../../../shared/types";
+import apiService from "../../../services/electronApiService";
 
 // Extend the WaveSurfer type to include our custom properties
 declare module 'wavesurfer.js' {
@@ -128,28 +129,35 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [volumeState, setVolume] = useState(volume);
   const [playbackSpeedState, setPlaybackSpeed] = useState(playbackSpeed);
 
+  // Track if WaveSurfer is loaded and ready to play audio
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+
   // Sync internal isPlayingState with external isPlaying prop
   useEffect(() => {
     console.log('🎵 AudioPlayer: isPlaying prop changed:', isPlaying);
     setIsPlaying(isPlaying);
     
-    // If we should be playing and WaveSurfer is ready, start playback
-    if (isPlaying && waveSurferRef.current && isReady) {
-      console.log('🎵 AudioPlayer: Auto-starting playback from prop change');
-      try {
-        waveSurferRef.current.play();
-      } catch (error) {
-        console.error('❌ AudioPlayer: Error auto-starting playback:', error);
+    // OPTIMIZED: Use WaveSurfer for immediate audio playback
+    if (isPlaying && waveSurferRef.current && isAudioLoaded) {
+      console.log('🎵 AudioPlayer: Auto-starting WaveSurfer audio playback (immediate)');
+      const playPromise = waveSurferRef.current.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(error => {
+          // Ignore AbortError - it's expected when play() is interrupted
+          if (error.name !== 'AbortError') {
+            console.error('❌ AudioPlayer: Error auto-starting WaveSurfer audio:', error);
+          }
+        });
       }
     } else if (!isPlaying && waveSurferRef.current) {
-      console.log('🎵 AudioPlayer: Auto-pausing playback from prop change');
+      console.log('🎵 AudioPlayer: Auto-pausing WaveSurfer audio playback');
       try {
         waveSurferRef.current.pause();
       } catch (error) {
-        console.error('❌ AudioPlayer: Error auto-pausing playback:', error);
+        console.error('❌ AudioPlayer: Error auto-pausing WaveSurfer audio:', error);
       }
     }
-  }, [isPlaying, isReady]);
+  }, [isPlaying, isAudioLoaded]);
 
   // Get markers from comments context
   const { markers, setSelectedCommentId, regionCommentMap, setRegionCommentMap } = useComments(waveSurferRef as any, regionsRef as any);
@@ -260,6 +268,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         const oldInstance = waveSurferRef.current;
         waveSurferRef.current = null; // Clear reference immediately to prevent race conditions
         setIsReady(false);
+        setIsAudioLoaded(false); // Reset audio loaded state
         
         // Safely destroy the old instance
         try {
@@ -358,8 +367,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         urlType: typeof fileUrl
       });
 
-      // Create WaveSurfer instance
-      console.log('🎵 AudioPlayer: Creating WaveSurfer instance...');
+      // Create WaveSurfer instance - OPTIMIZED for immediate audio playback
+      console.log('🎵 AudioPlayer: Creating WaveSurfer instance for immediate audio playback...');
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
         waveColor: '#4F46E5',
@@ -373,6 +382,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         responsive: true,
         normalize: true,
         backend: 'WebAudio',
+        // Ensure we see the full waveform
+        minPxPerSec: 1, // Allow very zoomed out view to see entire track
+        maxCanvasWidth: 4000, // Allow wide canvas for full track view
+        // OPTIMIZATION: Enable immediate playback
+        progressiveLoad: true, // Allow playback to start before full file is loaded
+        xhr: {
+          // Enable range requests for progressive loading
+          requestHeaders: [
+            {
+              key: 'Range',
+              value: 'bytes=0-'
+            }
+          ]
+        },
         plugins: [
           RegionsPlugin.create({
             dragSelection: {
@@ -441,8 +464,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       // Set up event listeners
       wavesurfer.on('ready', () => {
-        console.log('🎵 AudioPlayer: WaveSurfer ready event');
+        console.log('🎵 AudioPlayer: WaveSurfer ready event - audio can play immediately');
         setIsReady(true);
+        setIsAudioLoaded(true); // Audio is loaded and ready to play
         setDuration(wavesurfer.getDuration());
         
         // Add markers after WaveSurfer is ready
@@ -452,6 +476,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         }
       });
 
+      // WaveSurfer events handle audio playback
       wavesurfer.on('play', () => {
         console.log('🎵 AudioPlayer: WaveSurfer play event');
         setIsPlaying(true);
@@ -483,14 +508,32 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         console.error('🎵 AudioPlayer: WaveSurfer error event triggered:', error);
       });
 
-      // Load the audio file
-      console.log('🎵 AudioPlayer: Loading audio file...');
+      // Try to load preprocessed waveform data first
+      console.log('🎵 AudioPlayer: Attempting to load preprocessed waveform data...');
       try {
-        await wavesurfer.load(fileUrl);
-        console.log('🎵 AudioPlayer: Audio file loaded successfully');
-      } catch (loadError) {
-        console.error('❌ AudioPlayer: Failed to load audio file:', loadError);
-        throw loadError;
+        const { waveformData } = await apiService.getWaveformData(track.id.toString());
+        
+        if (waveformData && waveformData.length > 0) {
+          console.log(`✅ AudioPlayer: Using preprocessed waveform data with ${waveformData.length} points`);
+          
+          // Load with the audio URL and preprocessed peaks data
+          await wavesurfer.load(fileUrl, waveformData);
+          console.log('🎵 AudioPlayer: WaveSurfer loaded with preprocessed peaks data');
+          
+        } else {
+          console.log('⚠️ AudioPlayer: No preprocessed waveform data found, loading audio file directly');
+          await wavesurfer.load(fileUrl);
+          console.log('🎵 AudioPlayer: Audio file loaded successfully (direct)');
+        }
+      } catch (preprocessError) {
+        console.error('❌ AudioPlayer: Error loading preprocessed data, falling back to audio file:', preprocessError);
+        try {
+          await wavesurfer.load(fileUrl);
+          console.log('🎵 AudioPlayer: Audio file loaded successfully (fallback)');
+        } catch (loadError) {
+          console.error('❌ AudioPlayer: Failed to load audio file:', loadError);
+          throw loadError;
+        }
       }
 
       console.log('🎵 AudioPlayer: WaveSurfer initialization completed successfully');
@@ -628,7 +671,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setAudioUrl(audioServerUrl);
   }, [track?.filePath]);
 
-  // Create WaveSurfer when audioUrl is available
+  // Reset states when audioUrl changes
+  useEffect(() => {
+    if (audioUrl) {
+      console.log('🎵 AudioPlayer: Audio URL changed, resetting states');
+      setIsAudioLoaded(false);
+      setCurrentTime(0);
+      setDuration(0);
+    }
+  }, [audioUrl]);
+
+  // Create WaveSurfer when audioUrl is available (for visualization only)
   useEffect(() => {
     if (audioUrl && waveformRef.current) {
       // Type check to ensure audioUrl is a string
@@ -637,32 +690,45 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               return;
             }
             
-      console.log('AudioPlayer: Creating WaveSurfer with audioUrl string:', audioUrl);
+      console.log('AudioPlayer: Creating WaveSurfer for visualization:', audioUrl);
       initializeWaveSurfer();
     }
   }, [audioUrl]);
 
-  // Handle play/pause
+  // Handle play/pause - OPTIMIZED: Use WaveSurfer for immediate response
   const handlePlayPause = useCallback(() => {
     if (!waveSurferRef.current) {
       console.warn('🎵 AudioPlayer: No WaveSurfer instance available for play/pause');
       return;
     }
 
+    if (!isAudioLoaded) {
+      console.warn('🎵 AudioPlayer: WaveSurfer audio not yet loaded, cannot play/pause');
+      return;
+    }
+
     try {
       if (isPlayingState) {
-        console.log('🎵 AudioPlayer: Pausing audio');
+        console.log('🎵 AudioPlayer: Pausing WaveSurfer audio');
         waveSurferRef.current.pause();
       } else {
-        console.log('🎵 AudioPlayer: Playing audio');
-        waveSurferRef.current.play();
+        console.log('🎵 AudioPlayer: Playing WaveSurfer audio');
+        const playPromise = waveSurferRef.current.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(error => {
+            // Ignore AbortError - it's expected when play() is interrupted
+            if (error.name !== 'AbortError') {
+              console.error('❌ AudioPlayer: Error during WaveSurfer audio play:', error);
+            }
+          });
+        }
       }
     } catch (error) {
-      console.error('❌ AudioPlayer: Error during play/pause:', error);
+      console.error('❌ AudioPlayer: Error during WaveSurfer audio play/pause:', error);
     }
-  }, [isPlayingState]);
+  }, [isPlayingState, isAudioLoaded]);
 
-  // Handle seek
+  // Handle seek - OPTIMIZED: Use WaveSurfer for immediate seeking
   const handleSeek = useCallback((time: number) => {
     if (!waveSurferRef.current) {
       console.warn('🎵 AudioPlayer: No WaveSurfer instance available for seek');
@@ -670,10 +736,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
 
     try {
-      console.log('🎵 AudioPlayer: Seeking to time:', time);
+      console.log('🎵 AudioPlayer: Seeking WaveSurfer to time:', time);
       waveSurferRef.current.seekTo(time / duration);
     } catch (error) {
-      console.error('❌ AudioPlayer: Error during seek:', error);
+      console.error('❌ AudioPlayer: Error during WaveSurfer seek:', error);
     }
   }, [duration]);
 

@@ -946,6 +946,7 @@ app.whenReady().then(async () => {
     console.log('  - upload:single-track');
     console.log('  - upload:batch-tracks');
     console.log('  - getTracks');
+    console.log('  - get-waveform-data');
     console.log('  - getUser');
     console.log('  - auth:login');
     console.log('  - auth:register');
@@ -1130,6 +1131,51 @@ ipcMain.handle('getTracks', async () => {
   } catch (error) {
     console.error('Error fetching tracks:', error);
     return { error: 'Failed to fetch tracks', data: [] };
+  }
+});
+
+// Handler for fetching preprocessed waveform data
+ipcMain.handle('get-waveform-data', async (_, trackId: string) => {
+  try {
+    console.log(`📊 [WAVEFORM] Fetching preprocessed data for track: ${trackId}`);
+    
+    const track = await dbAsync.get(
+      'SELECT waveform_data, preprocessed_chunks FROM tracks WHERE id = ?',
+      [trackId]
+    );
+    
+    if (!track) {
+      console.log(`📊 [WAVEFORM] Track not found: ${trackId}`);
+      return { waveformData: null, chunks: null };
+    }
+    
+    let waveformData = null;
+    let chunks = null;
+    
+    // Parse waveform data if it exists
+    if (track.waveform_data) {
+      try {
+        waveformData = JSON.parse(track.waveform_data);
+        console.log(`📊 [WAVEFORM] Parsed waveform data: ${waveformData.length} points`);
+      } catch (error) {
+        console.error(`📊 [WAVEFORM] Error parsing waveform data:`, error);
+      }
+    }
+    
+    // Parse chunks data if it exists
+    if (track.preprocessed_chunks) {
+      try {
+        chunks = JSON.parse(track.preprocessed_chunks);
+        console.log(`📊 [WAVEFORM] Parsed chunks data: ${chunks.length} chunks`);
+      } catch (error) {
+        console.error(`📊 [WAVEFORM] Error parsing chunks data:`, error);
+      }
+    }
+    
+    return { waveformData, chunks };
+  } catch (error) {
+    console.error('📊 [WAVEFORM] Error fetching waveform data:', error);
+    return { waveformData: null, chunks: null };
   }
 });
 

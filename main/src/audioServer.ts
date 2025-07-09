@@ -104,26 +104,35 @@ export class AudioServer {
         
         file.pipe(res);
       } else {
-        // Serve entire file
+        // Serve entire file with streaming
         const filePath = request.filePath;
-        // Serve the file with proper headers
-        const fileBuffer = fs.readFileSync(filePath);
-        const contentType = this.getContentType(filePath, fileBuffer);
+        const fs = require('fs');
+        const stat = fs.statSync(filePath);
+        const fileSize = stat.size;
         
-        console.log(`[AUDIO SERVER] Serving file: ${filePath}`);
+        // Read a small sample for content type detection instead of entire file
+        const sampleBuffer = Buffer.alloc(Math.min(fileSize, 512));
+        const fd = fs.openSync(filePath, 'r');
+        fs.readSync(fd, sampleBuffer, 0, sampleBuffer.length, 0);
+        fs.closeSync(fd);
+        const contentType = this.getContentType(filePath, sampleBuffer);
+        
+        console.log(`[AUDIO SERVER] Streaming file: ${filePath}`);
         console.log(`[AUDIO SERVER] Content type: ${contentType}`);
-        console.log(`[AUDIO SERVER] File size: ${fileBuffer.length} bytes`);
+        console.log(`[AUDIO SERVER] File size: ${fileSize} bytes`);
 
         res.writeHead(200, {
           'Content-Type': contentType,
-          'Content-Length': fileBuffer.length,
+          'Content-Length': fileSize,
           'Accept-Ranges': 'bytes',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Range',
         });
 
-        res.end(fileBuffer);
+        // Stream the file instead of loading it entirely into memory
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
       }
 
     } catch (error) {
