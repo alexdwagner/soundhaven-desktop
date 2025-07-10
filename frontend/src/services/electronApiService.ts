@@ -694,33 +694,19 @@ export const apiService = {
 
   // Track Management
   async updateTrackMetadata(id: string, updates: Partial<Track>): Promise<Track> {
-    const response = await makeRequest<Track>(`/tracks/${id}`, {
+    const response = await makeRequest<Track>(`/api/tracks/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)
     });
     if (response.error || !response.data) {
       throw new Error(response.error || 'No data returned');
     }
-    // Ensure the response data matches the Track interface
-    return {
-      id: response.data.id,
-      name: response.data.name,
-      duration: response.data.duration,
-      artistId: response.data.artistId,
-      artist: response.data.artist,
-      albumId: response.data.albumId,
-      album: response.data.album,
-      createdAt: response.data.createdAt,
-      updatedAt: response.data.updatedAt,
-      playlists: response.data.playlists || [],
-      genres: response.data.genres || [],
-      filePath: response.data.filePath
-    };
+    return response.data;
   },
 
-  async deleteTrack(id: string): Promise<ApiResponse<void>> {
+  async deleteTrack(id: string): Promise<ApiResponse<{ success: boolean; deletedTrackId: string }>> {
     try {
-      const response = await makeRequest<void>(`/tracks/${id}`, {
+      const response = await makeRequest<{ success: boolean; deletedTrackId: string }>(`/api/tracks/${id}`, {
         method: 'DELETE'
       });
       return { ...response, status: response.status || 200 };

@@ -6,9 +6,15 @@ interface GenericModalProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  showDefaultCloseButton?: boolean;
 }
 
-const GenericModal: React.FC<GenericModalProps> = ({ isOpen, onClose, children }) => {
+const GenericModal: React.FC<GenericModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  children, 
+  showDefaultCloseButton = true 
+}) => {
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -39,11 +45,13 @@ const GenericModal: React.FC<GenericModalProps> = ({ isOpen, onClose, children }
         tabIndex={-1}
       >
         {children}
-        <div className="mt-4 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">
-            Close
-          </button>
-        </div>
+        {showDefaultCloseButton && (
+          <div className="mt-4 flex justify-end">
+            <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

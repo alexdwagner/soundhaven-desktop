@@ -26,7 +26,7 @@ async function setupDatabase() {
         token TEXT UNIQUE NOT NULL,
         user_id INTEGER NOT NULL,
         expires_in INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 
@@ -48,25 +48,37 @@ async function setupDatabase() {
         name TEXT NOT NULL,
         release_date INTEGER NOT NULL,
         artist_id INTEGER NOT NULL,
-        FOREIGN KEY (artist_id) REFERENCES artists(id)
+        album_art_path TEXT,
+        created_at INTEGER DEFAULT (unixepoch()),
+        updated_at INTEGER DEFAULT (unixepoch()),
+        FOREIGN KEY (artist_id) REFERENCES artists(id) ON DELETE CASCADE
       )
     `);
 
-    // Create tracks table
+    // Create tracks table - UPDATED to use TEXT PRIMARY KEY for UUID support
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS tracks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         duration INTEGER NOT NULL,
         artist_id INTEGER,
         album_id INTEGER,
         user_id INTEGER NOT NULL,
         file_path TEXT NOT NULL,
+        bitrate INTEGER,
+        sample_rate INTEGER,
+        channels INTEGER,
+        year INTEGER,
+        genre TEXT,
+        track_number INTEGER,
+        album_art_path TEXT,
+        waveform_data TEXT,
+        preprocessed_chunks TEXT,
         created_at INTEGER DEFAULT (unixepoch()),
         updated_at INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (artist_id) REFERENCES artists(id),
-        FOREIGN KEY (album_id) REFERENCES albums(id),
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (artist_id) REFERENCES artists(id) ON DELETE SET NULL,
+        FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 
@@ -78,31 +90,34 @@ async function setupDatabase() {
         description TEXT,
         user_id INTEGER NOT NULL,
         "order" INTEGER DEFAULT 0,
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        created_at INTEGER DEFAULT (unixepoch()),
+        updated_at INTEGER DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 
-    // Create playlist_tracks table
+    // Create playlist_tracks table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS playlist_tracks (
-        track_id INTEGER NOT NULL,
+        track_id TEXT NOT NULL,
         playlist_id TEXT NOT NULL,
         "order" INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (unixepoch()),
         PRIMARY KEY (track_id, playlist_id),
-        FOREIGN KEY (track_id) REFERENCES tracks(id),
-        FOREIGN KEY (playlist_id) REFERENCES playlists(id)
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+        FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
       )
     `);
 
-    // Create track_access table
+    // Create track_access table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS track_access (
         user_id INTEGER NOT NULL,
-        track_id INTEGER NOT NULL,
-        permission TEXT NOT NULL CHECK (permission IN ('READ', 'EDIT', 'DELETE')),
+        track_id TEXT NOT NULL,
+        permission TEXT NOT NULL CHECK (permission IN ('read', 'EDIT', 'DELETE')),
         PRIMARY KEY (user_id, track_id),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (track_id) REFERENCES tracks(id)
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
       )
     `);
 
@@ -111,10 +126,10 @@ async function setupDatabase() {
       CREATE TABLE IF NOT EXISTS playlist_access (
         user_id INTEGER NOT NULL,
         playlist_id TEXT NOT NULL,
-        permission TEXT NOT NULL CHECK (permission IN ('READ', 'EDIT', 'DELETE')),
+        permission TEXT NOT NULL CHECK (permission IN ('read', 'EDIT', 'DELETE')),
         PRIMARY KEY (user_id, playlist_id),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (playlist_id) REFERENCES playlists(id)
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
       )
     `);
 
@@ -126,46 +141,58 @@ async function setupDatabase() {
       )
     `);
 
-    // Create tracks_in_genres table
+    // Create tracks_in_genres table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS tracks_in_genres (
-        track_id INTEGER NOT NULL,
+        track_id TEXT NOT NULL,
         genre_id INTEGER NOT NULL,
         PRIMARY KEY (track_id, genre_id),
-        FOREIGN KEY (track_id) REFERENCES tracks(id),
-        FOREIGN KEY (genre_id) REFERENCES genres(id)
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+        FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
       )
     `);
 
-    // Create comments table
+    // Create comments table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS comments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
-        track_id INTEGER,
+        track_id TEXT,
         user_id INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()),
-        reply_to_id INTEGER,
-        FOREIGN KEY (track_id) REFERENCES tracks(id),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (reply_to_id) REFERENCES comments(id)
+        updated_at INTEGER DEFAULT (unixepoch()),
+        reply_to_id TEXT,
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (reply_to_id) REFERENCES comments(id) ON DELETE SET NULL
       )
     `);
 
-    // Create markers table
+    // Create markers table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS markers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         wave_surfer_region_id TEXT NOT NULL,
         time REAL NOT NULL,
         duration REAL NOT NULL,
-        comment_id INTEGER,
-        track_id INTEGER,
+        comment_id TEXT,
+        track_id TEXT,
         created_at INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (comment_id) REFERENCES comments(id),
-        FOREIGN KEY (track_id) REFERENCES tracks(id)
+        FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
       )
     `);
+
+    // Create indexes for better performance
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_tracks_created_at ON tracks(created_at)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_tracks_user_id ON tracks(user_id)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_tracks_artist_id ON tracks(artist_id)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_playlist_tracks_order ON playlist_tracks("order")`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_comments_track_id ON comments(track_id)`);
+    await dbAsync.run(`CREATE INDEX IF NOT EXISTS idx_comments_timestamp ON comments(timestamp)`);
 
     console.log('✅ Database tables created successfully!');
   } catch (error) {

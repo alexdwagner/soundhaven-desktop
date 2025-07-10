@@ -539,6 +539,154 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           throw error;
         }
       }
+
+      // Update track metadata
+      if (method === 'PATCH' && apiPath.match(/^\/api\/tracks\/[^/]+$/)) {
+        const [, , , trackId] = apiPath.split('/');
+        if (!trackId) {
+          return { error: 'Invalid track ID', status: 400 };
+        }
+
+        try {
+          // Check if track exists
+          const existingTrack = await dbAsync.get('SELECT * FROM tracks WHERE id = ?', [trackId]);
+          if (!existingTrack) {
+            return { error: 'Track not found', status: 404 };
+          }
+
+          // Extract updateable fields from body
+          const { name, artistName, albumName, year, genre, trackNumber } = body;
+          const updates: string[] = [];
+          const values: any[] = [];
+
+          // Handle basic track fields
+          if (name !== undefined) {
+            updates.push('name = ?');
+            values.push(name);
+          }
+          if (year !== undefined) {
+            updates.push('year = ?');
+            values.push(year);
+          }
+          if (genre !== undefined) {
+            updates.push('genre = ?');
+            values.push(genre);
+          }
+          if (trackNumber !== undefined) {
+            updates.push('track_number = ?');
+            values.push(trackNumber);
+          }
+
+          // Handle artist updates
+          let artistId = existingTrack.artist_id;
+          if (artistName !== undefined && artistName !== existingTrack.artist_name) {
+            if (artistName) {
+              // Find or create artist
+              const existingArtist = await dbAsync.get('SELECT id FROM artists WHERE name = ?', [artistName]);
+              if (existingArtist) {
+                artistId = existingArtist.id;
+              } else {
+                const artistResult = await dbAsync.run(
+                  'INSERT INTO artists (name, created_at) VALUES (?, ?)',
+                  [artistName, Math.floor(Date.now() / 1000)]
+                );
+                artistId = artistResult.lastID;
+              }
+            } else {
+              artistId = null;
+            }
+            updates.push('artist_id = ?');
+            values.push(artistId);
+          }
+
+          // Handle album updates
+          let albumId = existingTrack.album_id;
+          if (albumName !== undefined && albumName !== existingTrack.album_name) {
+            if (albumName && artistId) {
+              // Find or create album
+              const existingAlbum = await dbAsync.get(
+                'SELECT id FROM albums WHERE name = ? AND artist_id = ?',
+                [albumName, artistId]
+              );
+              if (existingAlbum) {
+                albumId = existingAlbum.id;
+              } else {
+                const albumResult = await dbAsync.run(
+                  'INSERT INTO albums (name, artist_id, created_at) VALUES (?, ?, ?)',
+                  [albumName, artistId, Math.floor(Date.now() / 1000)]
+                );
+                albumId = albumResult.lastID;
+              }
+            } else {
+              albumId = null;
+            }
+            updates.push('album_id = ?');
+            values.push(albumId);
+          }
+
+          // Always update the updated_at timestamp
+          updates.push('updated_at = ?');
+          values.push(Math.floor(Date.now() / 1000));
+
+          if (updates.length === 1) { // Only updated_at was added
+            return { error: 'No valid fields to update', status: 400 };
+          }
+
+          // Build and execute update query
+          values.push(trackId); // Add trackId for WHERE clause
+          const updateQuery = `UPDATE tracks SET ${updates.join(', ')} WHERE id = ?`;
+          
+          console.log('[TRACK UPDATE] Executing query:', updateQuery);
+          console.log('[TRACK UPDATE] With values:', values);
+          
+          await dbAsync.run(updateQuery, values);
+
+          // Fetch updated track with related data
+          const updatedTrack = await dbAsync.get(`
+            SELECT t.*, 
+                   a.name as artist_name,
+                   al.name as album_name,
+                   al.album_art_path as album_album_art_path
+            FROM tracks t
+            LEFT JOIN artists a ON t.artist_id = a.id
+            LEFT JOIN albums al ON t.album_id = al.id
+            WHERE t.id = ?
+          `, [trackId]);
+
+          console.log('[TRACK UPDATE] Updated track:', updatedTrack);
+          return { data: updatedTrack };
+
+        } catch (error) {
+          console.error('[TRACK UPDATE] Error updating track:', error);
+          return { error: 'Failed to update track', status: 500 };
+        }
+      }
+
+      // Delete track
+      if (method === 'DELETE' && apiPath.match(/^\/api\/tracks\/[^/]+$/)) {
+        const [, , , trackId] = apiPath.split('/');
+        if (!trackId) {
+          return { error: 'Invalid track ID', status: 400 };
+        }
+
+        try {
+          // Check if track exists
+          const existingTrack = await dbAsync.get('SELECT * FROM tracks WHERE id = ?', [trackId]);
+          if (!existingTrack) {
+            return { error: 'Track not found', status: 404 };
+          }
+
+          // Delete track (this will cascade to related tables due to foreign key constraints)
+          await dbAsync.run('DELETE FROM tracks WHERE id = ?', [trackId]);
+
+          console.log('[TRACK DELETE] Deleted track:', trackId);
+          return { data: { success: true, deletedTrackId: trackId } };
+
+        } catch (error) {
+          console.error('[TRACK DELETE] Error deleting track:', error);
+          return { error: 'Failed to delete track', status: 500 };
+        }
+      }
       
       // Handle track metadata sync
       if (apiPath === '/api/tracks/sync-metadata' && method === 'POST') {

@@ -6,6 +6,9 @@ import AudioPlayer from "../audioPlayer/AudioPlayer";
 import AlbumArtPanel from "../audioPlayer/AlbumArtPanel";
 import CommentsPanel from "../comments/CommentsPanel";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
+import TrackContextMenu from "./TrackContextMenu";
+import EditTrackForm from "./EditTrackForm";
+import GenericModal from "../modals/GenericModal";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useComments } from "@/app/hooks/useComments";
@@ -72,9 +75,23 @@ export default function TracksManager({
   });
   
   const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
+  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null); // Track the anchor point for shift+click
   const [showComments, setShowComments] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [doNotAskAgain, setDoNotAskAgain] = useState(false);
+  
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    trackIds: string[];
+  } | null>(null);
+  
+  // Edit track modal state
+  const [editTrackModal, setEditTrackModal] = useState<{
+    isOpen: boolean;
+    track: Track | null;
+  }>({ isOpen: false, track: null });
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
@@ -132,86 +149,107 @@ export default function TracksManager({
       return;
     }
 
+    // Record the operation
+    lastReorderRef.current = { startIndex, endIndex, timestamp: now };
+
     try {
       setReorderingTracks(true);
-      lastReorderRef.current = { startIndex, endIndex, timestamp: now };
-
-      // Create optimistically reordered tracks for immediate UI update
+      console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder...');
+      
+      // Create a copy of the tracks array for optimistic update
       const reorderedTracks = [...tracks];
       const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
       reorderedTracks.splice(endIndex, 0, reorderedItem);
 
-      console.log('🔄 [DRAG] Optimistic reorder:', { 
-        originalLength: tracks.length, 
-        reorderedLength: reorderedTracks.length,
-        movedTrack: reorderedItem.name,
-        from: startIndex,
-        to: endIndex
-      });
-
-      // Optimistically update the UI immediately
+      // Optimistically update the UI
       setCurrentPlaylistTracks(reorderedTracks);
-
+      
       // Prepare track IDs in new order for API call
       const trackIds = reorderedTracks.map(track => track.id);
-
-      console.log('🔄 [DRAG] Calling API with track order:', trackIds);
-
-      // Call the API to persist the change
-      const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
       
-      if (result) {
-        console.log('✅ [DRAG] Reorder operation completed successfully');
-        
-        // Refresh the playlist data to ensure consistency
-        await fetchPlaylistById(selectedPlaylistId);
-      } else {
-        console.error('❌ [DRAG] Reorder operation failed');
-        throw new Error('Failed to reorder tracks');
-      }
-
+      // Make the API call
+      await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
+      console.log('✅ [DRAG] Reorder operation completed successfully');
     } catch (error) {
       console.error('❌ [DRAG] Error during reorder operation:', error);
-      
-      // Revert optimistic update on failure
+      // Revert optimistic update by refetching
       if (selectedPlaylistId) {
-        console.log('🔄 [DRAG] Reverting optimistic update due to error');
-        await fetchPlaylistById(selectedPlaylistId);
+        try {
+          await fetchPlaylistById(selectedPlaylistId);
+        } catch (refetchError) {
+          console.error('❌ [DRAG] Failed to revert optimistic update:', refetchError);
+        }
       }
-      
-      setError(`Failed to reorder tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setReorderingTracks(false);
     }
   };
 
-  const handleSelectTrack = useCallback((trackId: string) => {
-    console.log('🎵 handleSelectTrack called with trackId:', trackId);
-    console.log('🎵 Available tracks:', tracks);
-    
-    const trackIndex = tracks.findIndex((t) => t.id === trackId);
-    console.log('🎵 Found trackIndex:', trackIndex);
-    
-    if (trackIndex !== -1) {
-      const track = tracks[trackIndex];
-      console.log('🎵 Selecting track for playback:', track);
-      setCurrentTrackIndex(trackIndex);
-      selectTrack(track, trackIndex); // Also set in PlaybackContext for CommentsProvider
-      console.log('🎵 selectTrack called successfully');
-    } else {
-      console.log('❌ Track not found in tracks array');
-    }
-  }, [tracks, setCurrentTrackIndex, selectTrack]);
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenu) {
+        setContextMenu(null);
+      }
+    };
 
-  const handlePlayTrack = useCallback((trackId: string) => {
-    const trackIndex = tracks.findIndex((t) => t.id === trackId);
-    if (trackIndex !== -1) {
-      const track = tracks[trackIndex];
-      // Here, we can decide if we want to autoplay.
-      // For a double-click action, autoplay is desired.
-      selectTrack(track, trackIndex, true);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [tracks, selectTrack]);
+  }, [contextMenu]);
+
+  // Handle context menu
+  const handleContextMenu = useCallback((trackId: string, x: number, y: number) => {
+    // If the right-clicked track is not in the current selection, select only that track
+    const trackIds = selectedTrackIds.includes(trackId) ? selectedTrackIds : [trackId];
+    
+    // Update selection if needed
+    if (!selectedTrackIds.includes(trackId)) {
+      setSelectedTrackIds([trackId]);
+    }
+
+    setContextMenu({ x, y, trackIds });
+  }, [selectedTrackIds]);
+
+  // Handle edit metadata from context menu
+  const handleEditMetadata = useCallback(() => {
+    if (contextMenu && contextMenu.trackIds.length === 1) {
+      const trackId = contextMenu.trackIds[0];
+      const track = tracks.find(t => t.id === trackId);
+      if (track) {
+        setEditTrackModal({ isOpen: true, track });
+      }
+    }
+    setContextMenu(null);
+  }, [contextMenu, tracks]);
+
+  // Handle delete from context menu
+  const handleDeleteFromContextMenu = useCallback(() => {
+    if (contextMenu && contextMenu.trackIds.length > 0) {
+      setSelectedTrackIds(contextMenu.trackIds);
+      setShowDeleteModal(true);
+    }
+    setContextMenu(null);
+  }, [contextMenu]);
+
+  // Handle add to playlist from context menu
+  const handleAddToPlaylist = useCallback(() => {
+    // TODO: Implement add to playlist functionality
+    console.log('Add to playlist:', contextMenu?.trackIds);
+    setContextMenu(null);
+  }, [contextMenu]);
+
+  // Close edit modal
+  const handleCloseEditModal = useCallback(() => {
+    setEditTrackModal({ isOpen: false, track: null });
+  }, []);
+
+  // Handle successful edit
+  const handleEditSuccess = useCallback(() => {
+    handleCloseEditModal();
+    fetchTracks(); // Refresh tracks after edit
+  }, [handleCloseEditModal, fetchTracks]);
 
   // Sorting logic
   const handleSort = useCallback((column: SortColumn) => {
@@ -264,6 +302,85 @@ export default function TracksManager({
 
   const displayTracks = sortedTracks();
 
+  const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
+    console.log('🎵 handleSelectTrack called with trackId:', trackId);
+    console.log('🎵 Available tracks:', tracks);
+    
+    if (event) {
+      // Handle multi-selection with Ctrl/Cmd key
+      if (event.ctrlKey || event.metaKey) {
+        setSelectedTrackIds(prev => {
+          const newSelection = prev.includes(trackId) 
+            ? prev.filter(id => id !== trackId)
+            : [...prev, trackId];
+          
+          // Update anchor to the clicked track if it's being added
+          if (!prev.includes(trackId)) {
+            setSelectionAnchor(trackId);
+          } else if (newSelection.length > 0) {
+            // Keep the anchor if we still have selections, otherwise clear it
+            setSelectionAnchor(newSelection[0]);
+          } else {
+            setSelectionAnchor(null);
+          }
+          
+          return newSelection;
+        });
+        return;
+      }
+      
+      // Handle range selection with Shift key
+      if (event.shiftKey && selectionAnchor && displayTracks.length > 0) {
+        const anchorIndex = displayTracks.findIndex(t => t.id === selectionAnchor);
+        const currentIndex = displayTracks.findIndex(t => t.id === trackId);
+        
+        console.log('🎵 Shift+click selection:', {
+          anchorId: selectionAnchor,
+          anchorIndex,
+          currentId: trackId,
+          currentIndex,
+          displayTracksLength: displayTracks.length
+        });
+        
+        if (anchorIndex !== -1 && currentIndex !== -1) {
+          const start = Math.min(anchorIndex, currentIndex);
+          const end = Math.max(anchorIndex, currentIndex);
+          const rangeIds = displayTracks.slice(start, end + 1).map(t => t.id);
+          console.log('🎵 Range selection:', { start, end, rangeIds });
+          setSelectedTrackIds(rangeIds);
+          return;
+        }
+      }
+    }
+    
+    // Single selection - set as new anchor
+    setSelectedTrackIds([trackId]);
+    setSelectionAnchor(trackId);
+    
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    console.log('🎵 Found trackIndex:', trackIndex);
+    
+    if (trackIndex !== -1) {
+      const track = tracks[trackIndex];
+      console.log('🎵 Selecting track for playback:', track);
+      setCurrentTrackIndex(trackIndex);
+      selectTrack(track, trackIndex); // Also set in PlaybackContext for CommentsProvider
+      console.log('🎵 selectTrack called successfully');
+    } else {
+      console.log('❌ Track not found in tracks array');
+    }
+  }, [tracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, displayTracks]);
+
+  const handlePlayTrack = useCallback((trackId: string) => {
+    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    if (trackIndex !== -1) {
+      const track = tracks[trackIndex];
+      // Here, we can decide if we want to autoplay.
+      // For a double-click action, autoplay is desired.
+      selectTrack(track, trackIndex, true);
+    }
+  }, [tracks, selectTrack]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -300,13 +417,16 @@ export default function TracksManager({
         case 'Escape':
           event.preventDefault();
           setSelectedTrackIds([]);
+          setSelectionAnchor(null);
           break;
 
         case 'a':
         case 'A':
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
-            setSelectedTrackIds(displayTracks.map(track => track.id));
+            const allTrackIds = displayTracks.map(track => track.id);
+            setSelectedTrackIds(allTrackIds);
+            setSelectionAnchor(allTrackIds[0] || null);
           }
           break;
 
@@ -319,16 +439,17 @@ export default function TracksManager({
             const nextIndex = Math.min(currentIndex + 1, displayTracks.length - 1);
             const nextTrack = displayTracks[nextIndex];
             if (nextTrack) {
-              if (event.shiftKey && selectedTrackIds.length > 0) {
-                // Extend selection
-                const startIndex = displayTracks.findIndex(track => track.id === selectedTrackIds[0]);
+              if (event.shiftKey && selectionAnchor) {
+                // Extend selection from anchor
+                const anchorIndex = displayTracks.findIndex(track => track.id === selectionAnchor);
                 const endIndex = nextIndex;
                 const rangeIds = displayTracks
-                  .slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+                  .slice(Math.min(anchorIndex, endIndex), Math.max(anchorIndex, endIndex) + 1)
                   .map(track => track.id);
                 setSelectedTrackIds(rangeIds);
               } else {
                 setSelectedTrackIds([nextTrack.id]);
+                setSelectionAnchor(nextTrack.id);
               }
             }
           }
@@ -343,16 +464,17 @@ export default function TracksManager({
             const prevIndex = Math.max(currentIndex - 1, 0);
             const prevTrack = displayTracks[prevIndex];
             if (prevTrack) {
-              if (event.shiftKey && selectedTrackIds.length > 0) {
-                // Extend selection
-                const startIndex = displayTracks.findIndex(track => track.id === selectedTrackIds[0]);
+              if (event.shiftKey && selectionAnchor) {
+                // Extend selection from anchor
+                const anchorIndex = displayTracks.findIndex(track => track.id === selectionAnchor);
                 const endIndex = prevIndex;
                 const rangeIds = displayTracks
-                  .slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+                  .slice(Math.min(anchorIndex, endIndex), Math.max(anchorIndex, endIndex) + 1)
                   .map(track => track.id);
                 setSelectedTrackIds(rangeIds);
               } else {
                 setSelectedTrackIds([prevTrack.id]);
+                setSelectionAnchor(prevTrack.id);
               }
             }
           }
@@ -387,11 +509,18 @@ export default function TracksManager({
   const handleDeleteTrack = async () => {
     if (selectedTrackIds.length > 0) {
       try {
-        // Delete the first selected track for now
-        await deleteTrack(selectedTrackIds[0]);
+        console.log(`🗑️ Deleting ${selectedTrackIds.length} track(s):`, selectedTrackIds);
+        
+        // Delete all selected tracks
+        const deletePromises = selectedTrackIds.map(trackId => deleteTrack(trackId));
+        await Promise.all(deletePromises);
+        
+        console.log(`✅ Successfully deleted ${selectedTrackIds.length} track(s)`);
         setSelectedTrackIds([]);
+        setSelectionAnchor(null);
       } catch (error) {
-        console.error("Error deleting track:", error);
+        console.error("Error deleting tracks:", error);
+        setError(`Failed to delete tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
     setShowDeleteModal(false);
@@ -894,6 +1023,7 @@ export default function TracksManager({
             sortColumn={sortColumn}
             sortDirection={sortDirection}
             onSort={handleSort}
+            onContextMenu={handleContextMenu}
           />
         </div>
 
@@ -916,12 +1046,41 @@ export default function TracksManager({
         />
       </div>
 
+      {/* Context Menu */}
+      {contextMenu && (
+        <TrackContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          selectedTrackIds={contextMenu.trackIds.map(id => parseInt(id))}
+          onClose={() => setContextMenu(null)}
+          onDelete={handleDeleteFromContextMenu}
+          onEditMetadata={handleEditMetadata}
+          onAddToPlaylist={handleAddToPlaylist}
+        />
+      )}
+
+      {/* Edit Track Modal */}
+      <GenericModal 
+        isOpen={editTrackModal.isOpen} 
+        onClose={handleCloseEditModal}
+        showDefaultCloseButton={false}
+      >
+        {editTrackModal.track && (
+          <EditTrackForm
+            track={editTrackModal.track}
+            closeModal={handleCloseEditModal}
+            fetchTracks={handleEditSuccess}
+          />
+        )}
+      </GenericModal>
+
       <DeleteConfirmationModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDeleteTrack}
         doNotAskAgain={doNotAskAgain}
         setDoNotAskAgain={setDoNotAskAgain}
+        trackCount={selectedTrackIds.length}
       />
 
       {/* Comment Modal */}

@@ -228,7 +228,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   ): Promise<Track | undefined> => {
     try {
       setIsLoading(true);
-      const updatedTrack = await apiService.updateTrackMetadata(trackId, updates);
+      const updatedTrack = await apiService.updateTrackMetadata(String(trackId), updates);
       
       // Update local state
       setTracks(prevTracks => 
@@ -260,7 +260,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   const updateTrackMetadata = useCallback(async (trackId: string, metadata: Partial<Track>) => {
     try {
       setIsLoading(true);
-      const updatedTrack = await apiService.updateTrackMetadata(Number(trackId), metadata);
+      const updatedTrack = await apiService.updateTrackMetadata(trackId, metadata);
       setTracks(prevTracks => 
         prevTracks.map(track => 
           track.id === trackId ? updatedTrack : track
@@ -278,7 +278,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   const deleteTrack = useCallback(async (trackId: string) => {
     try {
       setIsLoading(true);
-      const response = await apiService.deleteTrack(Number(trackId));
+      const response = await apiService.deleteTrack(trackId);
       if (response.error) {
         throw new Error(response.error);
       }
