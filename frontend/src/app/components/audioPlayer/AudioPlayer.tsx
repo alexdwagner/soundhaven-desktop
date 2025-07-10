@@ -734,9 +734,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     if (!isAudioLoaded) {
       console.warn('🎵 AudioPlayer: WaveSurfer audio not yet loaded, cannot play/pause');
-      return;
-    }
-
+        return;
+      }
+      
     try {
       if (isPlayingState) {
         console.log('🎵 AudioPlayer: Pausing WaveSurfer audio');

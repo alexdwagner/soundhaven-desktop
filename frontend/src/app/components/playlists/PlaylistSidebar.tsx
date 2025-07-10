@@ -132,27 +132,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
-        {/* Debug buttons */}
-        <div className="mb-2 space-y-1">
-          <button 
-            className="w-full bg-yellow-600 hover:bg-yellow-700 text-white text-xs py-1 px-2 rounded"
-            onClick={async () => {
-              const result = await apiService.testElectronDetection();
-              console.log('🧪 Electron detection test result:', result);
-            }}
-          >
-            Test Electron Detection
-          </button>
-          <button 
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs py-1 px-2 rounded"
-            onClick={async () => {
-              const result = await apiService.testPlaylistsAPI();
-              console.log('🧪 Playlists API test result:', result);
-            }}
-          >
-            Test Playlists API
-          </button>
-        </div>
+
         
         <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
           + Add Playlist

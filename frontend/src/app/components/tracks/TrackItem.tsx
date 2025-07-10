@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Track } from "../../../../../shared/types";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useSortable } from '@dnd-kit/sortable';
@@ -14,6 +14,7 @@ interface TrackItemProps {
   onSelectTrack: (trackId: string, event?: React.MouseEvent) => void;
   onPlayTrack: (trackId: string) => void;
   isSelected: boolean;
+  selectedTrackIds?: string[]; // Add this to pass all selected track IDs
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
   isDragEnabled?: boolean;
@@ -26,6 +27,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
   onSelectTrack,
   onPlayTrack,
   isSelected,
+  selectedTrackIds = [],
   onRemoveFromPlaylist,
   isPlaylistView = false,
   isDragEnabled = true,
@@ -50,7 +52,22 @@ const TrackItem: React.FC<TrackItemProps> = ({
   // Add debugging
   useEffect(() => {
     console.log(`🔧 [TRACK ITEM] ${track.name} - isDragEnabled: ${isDragEnabled}, isPlaylistView: ${isPlaylistView}, disabled: ${!isDragEnabled}`);
-  }, [isDragEnabled, isPlaylistView, track.name]);
+    console.log(`🔧 [TRACK ITEM] ${track.name} - draggable: always true (for cross-playlist)`);
+    console.log(`🔧 [TRACK ITEM] ${track.name} - @dnd-kit listeners: ${isPlaylistView && isDragEnabled ? 'ACTIVE' : 'INACTIVE'} (for reordering)`);
+    console.log(`🔧 [TRACK ITEM] ${track.name} - custom handlers: ACTIVE (for cross-playlist)`);
+    console.log(`🔧 [TRACK ITEM] ${track.name} - Available listeners:`, Object.keys(listeners || {}));
+  }, [isDragEnabled, isPlaylistView, track.name, listeners]);
+
+
+
+  // Filter out drag-specific listeners but keep others (like pointer events)
+  const nonDragListeners = useMemo(() => {
+    if (!listeners || !isPlaylistView || !isDragEnabled) return {};
+    
+    const { onDragStart, onDragEnd, onDragOver, onDragEnter, onDragLeave, onDrop, ...rest } = listeners;
+    console.log(`🔧 [TRACK ITEM] ${track.name} - Filtered listeners:`, Object.keys(rest));
+    return rest;
+  }, [listeners, isPlaylistView, isDragEnabled, track.name]);
 
   // Apply transform for playlist reordering, disable for cross-component drag
   const style = {
@@ -75,53 +92,58 @@ const TrackItem: React.FC<TrackItemProps> = ({
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>) => {
-    // Only use custom drag system for library view (dragging to playlists)
-    if (isPlaylistView) {
-      // In playlist view, let @dnd-kit handle the drag
-      e.preventDefault();
-      return;
+    console.log(`🔥 [DEBUG] handleDragStart called! isPlaylistView: ${isPlaylistView}, isDragEnabled: ${isDragEnabled}`);
+    console.log(`🔥 [DEBUG] Both @dnd-kit and native drag are active - they will coexist`);
+    
+    // Call @dnd-kit handler first if it exists and conditions are met
+    if (isPlaylistView && isDragEnabled && listeners?.onDragStart) {
+      console.log(`🔥 [DEBUG] Calling @dnd-kit dragStart handler first`);
+      try {
+        listeners.onDragStart(e);
+      } catch (error) {
+        console.error(`🔥 [DEBUG] Error calling @dnd-kit dragStart:`, error);
+      }
     }
-
-    console.log(`[DRAG N DROP] 🎵 Starting drag for track: ${track.id} - ${track.name}`);
-    console.log(`[DRAG N DROP] 🎵 Track object:`, track);
-    console.log(`[DRAG N DROP] 🎵 Mouse position: ${e.clientX}, ${e.clientY}`);
+    
+    // Always set up drag data for cross-playlist functionality
+    // This works alongside @dnd-kit - both systems can handle the same drag
+    const tracksToDrag = isSelected && selectedTrackIds.length > 0 ? selectedTrackIds : [track.id];
+    
+    console.log(`[DRAG N DROP] 🎵 Setting up drag data for ${tracksToDrag.length} track(s) from ${isPlaylistView ? 'playlist' : 'library'}`);
+    console.log(`[DRAG N DROP] 🎵 Track IDs being dragged:`, tracksToDrag);
     
     try {
-      e.dataTransfer.setData("text/plain", track.id.toString());
+      // Always set track data for cross-playlist drops (playlists will read this)
+      e.dataTransfer.setData("text/plain", JSON.stringify(tracksToDrag));
       e.dataTransfer.effectAllowed = "copy";
-      console.log(`[DRAG N DROP] 🎵 DataTransfer set with track ID: ${track.id}`);
+      console.log(`[DRAG N DROP] 🎵 DataTransfer set with ${tracksToDrag.length} track ID(s) for cross-playlist drops`);
       
-      // Create an invisible drag image to hide the default one
-      const dragImage = document.createElement('div');
-      dragImage.style.opacity = '0';
-      dragImage.style.position = 'absolute';
-      dragImage.style.top = '-1000px';
-      document.body.appendChild(dragImage);
-      e.dataTransfer.setDragImage(dragImage, 0, 0);
-      console.log(`[DRAG N DROP] 🎵 Custom drag image created and set`);
-      
-      // Start our custom drag
+      // Start our custom drag state for visual feedback
       startDrag(track, { x: e.clientX, y: e.clientY });
       setIsBeingDragged(true);
-      console.log(`[DRAG N DROP] 🎵 Custom drag state initiated`);
+      console.log(`[DRAG N DROP] 🎵 Custom drag state initiated for visual feedback`);
       
-      // Clean up the drag image element
-      setTimeout(() => {
-        document.body.removeChild(dragImage);
-        console.log(`[DRAG N DROP] 🎵 Drag image cleaned up`);
-      }, 0);
+      // Note: @dnd-kit will also handle this drag if listeners are active
+      // The drop target determines which system processes the drop
+      
     } catch (error) {
       console.error(`[DRAG N DROP] ❌ Error in handleDragStart:`, error);
     }
   };
 
   const handleDragEnd = (e: React.DragEvent<HTMLTableRowElement>) => {
-    // Only handle custom drag end for library view
-    if (isPlaylistView) {
-      return;
+    // Call @dnd-kit handler first if it exists and conditions are met
+    if (isPlaylistView && isDragEnabled && listeners?.onDragEnd) {
+      console.log(`🔥 [DEBUG] Calling @dnd-kit dragEnd handler first`);
+      try {
+        listeners.onDragEnd(e);
+      } catch (error) {
+        console.error(`🔥 [DEBUG] Error calling @dnd-kit dragEnd:`, error);
+      }
     }
-
-    console.log(`[DRAG N DROP] 🎵 Ended drag for track: ${track.id}`);
+    
+    // Use the exact same logic as library tracks
+    console.log(`[DRAG N DROP] 🎵 Ended drag for track: ${track.id} from ${isPlaylistView ? 'playlist' : 'library'}`);
     console.log(`[DRAG N DROP] 🎵 Drop effect: ${e.dataTransfer.dropEffect}`);
     console.log(`[DRAG N DROP] 🎵 DataTransfer types:`, e.dataTransfer.types);
     
@@ -143,6 +165,8 @@ const TrackItem: React.FC<TrackItemProps> = ({
     }
   };
 
+
+
   useEffect(() => {
     console.log("🎨 [TRACK ITEM] Rendering track:", {
       id: track.id,
@@ -162,14 +186,15 @@ const TrackItem: React.FC<TrackItemProps> = ({
     <tr
       ref={setNodeRef}
       style={style}
+      data-track-id={track.id} // Add track ID for drag event listener setup
       {...attributes}
-      {...listeners}
-      draggable={!isPlaylistView} // Only draggable in library view for playlist drops
+      {...nonDragListeners} // Apply non-drag listeners from @dnd-kit
+      draggable={true} // Always enable native dragging for cross-playlist functionality
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
-      onDragStart={!isPlaylistView ? handleDragStart : undefined}
-      onDragEnd={!isPlaylistView ? handleDragEnd : undefined}
+      onDragStart={handleDragStart} // Always attach native drag handlers
+      onDragEnd={handleDragEnd} // Always attach native drag handlers
       className={`transition-all duration-200 select-none ${
         isPlaylistView && isDragging 
           ? "cursor-grabbing" // Grabbing cursor when dragging in playlist

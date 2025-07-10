@@ -892,7 +892,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           ));
         
         return { data: { success: true } };
-      } catch (error) {
+          } catch (error) {
         console.error('[API DEBUG] Error removing track from playlist:', error);
         return { error: 'Failed to remove track from playlist', status: 500 };
       }
@@ -911,37 +911,37 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           // Build update query dynamically based on provided fields
           const updates = [];
           const values = [];
-          
-          if (name !== undefined) {
-            updates.push('name = ?');
-            values.push(name);
-          }
-          
-          if (description !== undefined) {
-            updates.push('description = ?');
-            values.push(description);
-          }
-          
-          if (updates.length === 0) {
-            return { error: 'No valid fields to update', status: 400 };
-          }
-          
-          // Add playlist ID to values array
-          values.push(playlistId);
-          
-          // Execute update
-          await dbAsync.run(
-            `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`,
-            values
-          );
-          
-          // Return updated playlist
-          const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
-          return { data: updatedPlaylist };
-        } catch (error) {
-          console.error('[API DEBUG] Error updating playlist metadata:', error);
-          return { error: 'Failed to update playlist metadata', status: 500 };
+        
+        if (name !== undefined) {
+          updates.push('name = ?');
+          values.push(name);
         }
+        
+        if (description !== undefined) {
+          updates.push('description = ?');
+          values.push(description);
+        }
+        
+        if (updates.length === 0) {
+            return { error: 'No valid fields to update', status: 400 };
+        }
+        
+          // Add playlist ID to values array
+        values.push(playlistId);
+        
+          // Execute update
+        await dbAsync.run(
+          `UPDATE playlists SET ${updates.join(', ')} WHERE id = ?`,
+          values
+        );
+        
+          // Return updated playlist
+        const updatedPlaylist = await dbAsync.get('SELECT * FROM playlists WHERE id = ?', [playlistId]);
+        return { data: updatedPlaylist };
+      } catch (error) {
+        console.error('[API DEBUG] Error updating playlist metadata:', error);
+        return { error: 'Failed to update playlist metadata', status: 500 };
+      }
       }
 
       // Update playlist track order
@@ -970,6 +970,55 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
         console.error('[API DEBUG] Error updating playlist track order:', error);
         return { error: 'Failed to update playlist track order', status: 500 };
       }
+      }
+      
+      // Update playlist order (reorder playlists themselves)
+      if (method === 'PATCH' && apiPath === '/api/playlists/reorder') {
+        const { playlistIds } = body;
+        
+        if (!Array.isArray(playlistIds)) {
+          return { error: 'playlistIds must be an array', status: 400 };
+        }
+        
+        try {
+          // Update order for each playlist
+          await Promise.all(playlistIds.map((playlistId, index) => 
+            dbAsync.run(
+              'UPDATE playlists SET "order" = ? WHERE id = ?',
+              [index, playlistId]
+            )
+          ));
+          
+          // Return the updated playlists in their new order
+          const updatedPlaylists = await dbAsync.all(`
+            SELECT p.*,
+                   u.name as user_name,
+                   u.email as user_email,
+                   GROUP_CONCAT(pt.track_id) as track_ids,
+                   COUNT(DISTINCT pt.track_id) as track_count
+            FROM playlists p 
+            LEFT JOIN users u ON p.user_id = u.id 
+            LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+            GROUP BY p.id
+            ORDER BY p."order", p.created_at
+          `);
+          
+          // Transform playlists to include user object and proper structure
+          const transformedPlaylists = updatedPlaylists.map(playlist => ({
+            ...playlist,
+            user: {
+              id: playlist.user_id,
+              name: playlist.user_name,
+              email: playlist.user_email
+            },
+            tracks: [] // Will be populated when fetching specific playlist
+          }));
+          
+          return { data: transformedPlaylists };
+        } catch (error) {
+          console.error('[API DEBUG] Error updating playlist order:', error);
+          return { error: 'Failed to update playlist order', status: 500 };
+        }
       }
     }
     

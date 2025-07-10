@@ -30,7 +30,8 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const [showOptions, setShowOptions] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isBeingDragged, setIsBeingDragged] = useState(false);
-  const { updatePlaylistMetadata, addTrackToPlaylist } = usePlaylists();
+  const [dragTrackCount, setDragTrackCount] = useState(1); // Track how many tracks are being dragged
+  const { updatePlaylistMetadata, addTrackToPlaylist, addTracksToPlaylist } = usePlaylists();
   const { dragState } = useDrag();
   const optionsRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -93,19 +94,14 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   //   };
 
   const handleDrop = async (e: React.DragEvent<HTMLLIElement>) => {
+    console.log(`🔥 [PLAYLIST DEBUG] ===== DROP EVENT TRIGGERED =====`);
+    console.log(`🔥 [PLAYLIST DEBUG] Drop on playlist ${playlist.id} (${playlist.name})`);
+    console.log(`🔥 [PLAYLIST DEBUG] DataTransfer types:`, e.dataTransfer.types);
+    console.log(`🔥 [PLAYLIST DEBUG] Event target:`, e.target);
+    console.log(`🔥 [PLAYLIST DEBUG] Event currentTarget:`, e.currentTarget);
+    
     console.log(`[DRAG N DROP] 🎯 Drop event triggered on playlist ${playlist.id} (${playlist.name})`);
-    console.log(`[DRAG N DROP] 🎯 Event details:`, {
-      type: e.type,
-      dataTransfer: {
-        types: e.dataTransfer.types,
-        items: Array.from(e.dataTransfer.items).map(item => ({
-          kind: item.kind,
-          type: item.type
-        })),
-        effectAllowed: e.dataTransfer.effectAllowed,
-        dropEffect: e.dataTransfer.dropEffect
-      }
-    });
+    console.log(`[DRAG N DROP] 🎯 DataTransfer types:`, e.dataTransfer.types);
     
     try {
       e.preventDefault();
@@ -113,35 +109,56 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
       setIsDragOver(false);
       console.log(`[DRAG N DROP] 🎯 Drop event prevented and isDragOver reset`);
       
-      const trackId = e.dataTransfer.getData("text/plain");
-      console.log(`[DRAG N DROP] 🎯 Retrieved track ID from dataTransfer: "${trackId}"`);
-      console.log(`[DRAG N DROP] 🎯 Track ID type: ${typeof trackId}, length: ${trackId.length}`);
+      const trackData = e.dataTransfer.getData("text/plain");
+      console.log(`🔥 [PLAYLIST DEBUG] Retrieved track data:`, trackData);
+      console.log(`[DRAG N DROP] 🎯 Retrieved track data from dataTransfer: "${trackData}"`);
+      console.log(`[DRAG N DROP] 🎯 Track data type: ${typeof trackData}, length: ${trackData.length}`);
       
-      if (!trackId || trackId.trim() === '') {
-        console.error(`[DRAG N DROP] ❌ No track ID found in drag data`);
-        console.log(`[DRAG N DROP] ❌ DataTransfer analysis:`, {
-          items: Array.from(e.dataTransfer.items),
-          types: e.dataTransfer.types,
-          files: e.dataTransfer.files
-        });
+      if (!trackData || trackData.trim() === '') {
+        console.error(`[DRAG N DROP] ❌ No track data found in drag data`);
+        console.log(`[DRAG N DROP] ❌ Available types:`, e.dataTransfer.types);
         return;
       }
       
-      console.log(`[DRAG N DROP] 🎯 About to add track ${trackId} to playlist ${playlist.id}...`);
-      console.log(`[DRAG N DROP] 🎯 Playlist object:`, playlist);
-      console.log(`[DRAG N DROP] 🎯 addTrackToPlaylist function:`, typeof addTrackToPlaylist);
+      // Parse track IDs - could be JSON array or single track ID
+      let trackIds: string[] = [];
+      try {
+        // Try to parse as JSON array first
+        const parsed = JSON.parse(trackData);
+        if (Array.isArray(parsed)) {
+          trackIds = parsed;
+        } else {
+          trackIds = [parsed]; // Single track ID
+        }
+      } catch {
+        // Not JSON, assume single track ID
+        trackIds = [trackData];
+      }
       
-      const result = await addTrackToPlaylist(playlist.id, trackId);
-      console.log(`[DRAG N DROP] ✅ Successfully added track ${trackId} to playlist ${playlist.id}`);
-      console.log(`[DRAG N DROP] ✅ Result:`, result);
+      console.log(`🔥 [PLAYLIST DEBUG] Parsed track IDs:`, trackIds);
+      console.log(`[DRAG N DROP] 🎯 Parsed ${trackIds.length} track ID(s):`, trackIds);
+      console.log(`[DRAG N DROP] 🎯 About to add tracks to playlist ${playlist.id}...`);
+      
+      // Use batch function for multiple tracks, single function for one track
+      if (trackIds.length > 1) {
+        const result = await addTracksToPlaylist(playlist.id, trackIds);
+        console.log(`[DRAG N DROP] ✅ Successfully added ${result.successful.length} tracks to playlist ${playlist.id}`);
+        if (result.failed.length > 0) {
+          console.warn(`[DRAG N DROP] ⚠️ Failed to add ${result.failed.length} tracks:`, result.failed);
+        }
+      } else {
+        const result = await addTrackToPlaylist(playlist.id, trackIds[0]);
+        console.log(`[DRAG N DROP] ✅ Successfully added track ${trackIds[0]} to playlist ${playlist.id}`);
+      }
       
     } catch (error) {
-      console.error(`[DRAG N DROP] ❌ Failed to add track to playlist:`, error);
+      console.error(`🔥 [PLAYLIST DEBUG] ===== DROP ERROR =====`);
+      console.error(`[DRAG N DROP] ❌ Failed to add track(s) to playlist:`, error);
       console.error(`[DRAG N DROP] ❌ Error details:`, {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
         playlistId: playlist.id,
-        trackId: e.dataTransfer.getData("text/plain")
+        trackData: e.dataTransfer.getData("text/plain")
       });
     }
   };
@@ -149,14 +166,16 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const handleDragOver = (e: React.DragEvent<HTMLLIElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
+    
+    console.log(`🔥 [PLAYLIST DEBUG] handleDragOver triggered on playlist ${playlist.id} (${playlist.name})`);
+    console.log(`🔥 [PLAYLIST DEBUG] DataTransfer types:`, e.dataTransfer.types);
+    console.log(`🔥 [PLAYLIST DEBUG] isDragOver current state:`, isDragOver);
+    
     if (!isDragOver) {
       console.log(`[DRAG N DROP] 🎯 Drag over playlist ${playlist.id} (${playlist.name})`);
-      console.log(`[DRAG N DROP] 🎯 DataTransfer in dragOver:`, {
-        types: e.dataTransfer.types,
-        effectAllowed: e.dataTransfer.effectAllowed,
-        dropEffect: e.dataTransfer.dropEffect
-      });
+      console.log(`[DRAG N DROP] 🎯 DataTransfer types:`, e.dataTransfer.types);
       setIsDragOver(true);
+      console.log(`🔥 [PLAYLIST DEBUG] Setting isDragOver to true`);
     }
   };
 
@@ -330,7 +349,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
               {isDragOver && (
                 <div className="flex items-center text-green-600 text-sm ml-2">
                   <FaPlus className="mr-1" size={12} />
-                  <span>Add Track</span>
+                  <span>Add Track(s)</span>
                 </div>
               )}
             </div>

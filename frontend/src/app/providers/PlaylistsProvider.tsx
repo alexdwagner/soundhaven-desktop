@@ -27,6 +27,7 @@ interface PlaylistsContextType {
   createPlaylist: (name: string, description?: string) => Promise<Playlist | null>;
   deletePlaylist: (id: string) => Promise<boolean>;
   addTrackToPlaylist: (playlistId: string, trackId: string, force?: boolean) => Promise<boolean>;
+  addTracksToPlaylist: (playlistId: string, trackIds: string[], force?: boolean) => Promise<{ successful: string[], failed: string[] }>;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<boolean>;
   updatePlaylistMetadata: (playlistId: string, updates: { name?: string; description?: string }) => Promise<boolean>;
   updatePlaylistOrder: (playlistIds: string[]) => Promise<Playlist[]>;
@@ -258,6 +259,56 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
     [currentPlaylistId, fetchPlaylistById]
   );
 
+  const addTracksToPlaylist = useCallback(
+    async (playlistId: string, trackIds: string[], force: boolean = false): Promise<{ successful: string[], failed: string[] }> => {
+      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: addTracksToPlaylist called`);
+      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: playlistId="${playlistId}", trackIds=${trackIds.length}, force=${force}`);
+      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: currentPlaylistId="${currentPlaylistId}"`);
+      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService type:`, typeof apiService);
+      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTracksToPlaylist type:`, typeof apiService.addTracksToPlaylist);
+      
+      const successful: string[] = [];
+      const failed: string[] = [];
+
+      for (const trackId of trackIds) {
+        try {
+          console.log(`[DRAG N DROP] �� PlaylistsProvider: Attempting to add track ${trackId} to playlist ${playlistId}`);
+          const result = await apiService.addTrackToPlaylist(playlistId, trackId, force);
+          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTrackToPlaylist returned for ${trackId}:`, result);
+          if (result) {
+            successful.push(trackId);
+          } else {
+            failed.push(trackId);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error adding track ${trackId} to playlist ${playlistId}:`, errorMessage);
+          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Full error object:`, error);
+          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+          failed.push(trackId);
+        }
+      }
+
+      // Refresh the current playlist tracks if this is the current playlist
+      if (currentPlaylistId === playlistId) {
+        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Refreshing current playlist tracks after batch add...`);
+        const updatedPlaylist = await fetchPlaylistById(playlistId);
+        if (updatedPlaylist) {
+          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Updated playlist fetched, tracks count:`, updatedPlaylist.tracks?.length || 0);
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+        } else {
+          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Failed to fetch updated playlist after batch add`);
+        }
+      } else {
+        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Not refreshing tracks - different playlist`);
+      }
+
+      console.log(`[DRAG N DROP] ✅ PlaylistsProvider: Batch add tracks to playlist completed. Successful: ${successful.length}, Failed: ${failed.length}`);
+      return { successful, failed };
+    },
+    [currentPlaylistId, fetchPlaylistById]
+  );
+
   const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string): Promise<boolean> => {
     // Remove token requirement for local-first app
     try {
@@ -308,29 +359,43 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   );
 
   const updatePlaylistOrder = useCallback(async (playlistIds: string[]): Promise<Playlist[]> => {
-    // Remove token requirement for local-first app
+    console.log(`🎯 [PLAYLISTS PROVIDER] updatePlaylistOrder called`);
+    console.log(`🎯 [PLAYLISTS PROVIDER] New playlist order:`, playlistIds);
+    
     try {
+      // Optimistically update the playlist order
+      setPlaylists(prevPlaylists => {
+        const reorderedPlaylists = [...prevPlaylists];
+        reorderedPlaylists.sort((a, b) => {
+          const aIndex = playlistIds.indexOf(a.id);
+          const bIndex = playlistIds.indexOf(b.id);
+          return aIndex - bIndex;
+        });
+        console.log(`🎯 [PLAYLISTS PROVIDER] Optimistic playlist reorder applied`);
+        return reorderedPlaylists;
+      });
+      
+      console.log(`🎯 [PLAYLISTS PROVIDER] Calling apiService.reorderPlaylists...`);
       const updatedPlaylists = await apiService.reorderPlaylists(playlistIds) as any[];
-      // Transform playlists to match ExtendedPlaylist interface
-      const extendedPlaylists: ExtendedPlaylist[] = updatedPlaylists.map(playlist => ({
-        ...playlist,
-        userId: playlist.userId || playlist.user_id?.toString() || '1',
-        tracks: playlist.tracks || [],
-        user: playlist.user || {
-          id: playlist.user_id || 1,
-          name: 'Unknown User',
-          email: 'unknown@example.com'
-        }
-      }));
-      setPlaylists(extendedPlaylists);
+      console.log(`🎯 [PLAYLISTS PROVIDER] ✅ API call successful - playlist order updated in backend`);
+      
+      // DON'T set playlists again - trust the optimistic update
+      // The optimistic update has already applied the correct order
+      
+      console.log(`🎯 [PLAYLISTS PROVIDER] ✅ Playlist order update completed successfully`);
       return updatedPlaylists;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error('Error updating playlist order:', errorMessage);
+      console.error(`🎯 [PLAYLISTS PROVIDER] ❌ Error updating playlist order:`, errorMessage);
       setError(errorMessage);
+      
+      // Revert optimistic update by refetching
+      console.log(`🎯 [PLAYLISTS PROVIDER] Reverting optimistic update by refetching playlists...`);
+      await fetchPlaylists();
+      
       return [];
     }
-  }, []);
+  }, [fetchPlaylists]);
 
   const updatePlaylistTrackOrder = useCallback(async (playlistId: string, trackIds: string[]): Promise<boolean> => {
     console.log(`🎯 [PLAYLISTS PROVIDER] updatePlaylistTrackOrder called for playlist ${playlistId}`);
@@ -363,6 +428,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
     createPlaylist,
     deletePlaylist,
     addTrackToPlaylist,
+    addTracksToPlaylist,
     removeTrackFromPlaylist,
     updatePlaylistMetadata,
     updatePlaylistOrder,

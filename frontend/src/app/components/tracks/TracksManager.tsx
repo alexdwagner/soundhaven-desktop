@@ -657,12 +657,33 @@ export default function TracksManager({
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(true);
+    
+    // Only show the file drop overlay for external file drags
+    // Check if this is an external file drag by looking for files in the dataTransfer
+    const hasFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
+    const hasFileType = e.dataTransfer.types.includes('Files');
+    
+    // Only show overlay for external file drops, not internal track dragging
+    if (hasFiles || hasFileType) {
+      console.log('🔧 [DRAG] External file drag detected, showing overlay');
+      setIsDragOver(true);
+    } else {
+      console.log('🔧 [DRAG] Internal track drag detected, not showing overlay');
+      setIsDragOver(false);
+    }
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    
+    // Only handle drag leave for external file drops
+    const hasFiles = e.dataTransfer.files && e.dataTransfer.files.length > 0;
+    const hasFileType = e.dataTransfer.types.includes('Files');
+    
+    if (hasFiles || hasFileType) {
+      console.log('🔧 [DRAG] External file drag left, hiding overlay');
+      setIsDragOver(false);
+    }
   }, []);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
