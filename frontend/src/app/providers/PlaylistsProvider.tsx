@@ -333,26 +333,27 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   }, []);
 
   const updatePlaylistTrackOrder = useCallback(async (playlistId: string, trackIds: string[]): Promise<boolean> => {
-    // Remove token requirement for local-first app
+    console.log(`🎯 [PLAYLISTS PROVIDER] updatePlaylistTrackOrder called for playlist ${playlistId}`);
+    console.log(`🎯 [PLAYLISTS PROVIDER] New track order:`, trackIds);
+    
     try {
+      console.log(`🎯 [PLAYLISTS PROVIDER] Calling apiService.reorderPlaylistTracks...`);
       await apiService.reorderPlaylistTracks(playlistId, trackIds);
+      console.log(`🎯 [PLAYLISTS PROVIDER] ✅ API call successful - track order updated in backend`);
       
-      // Update local state if this is the current playlist
-      if (currentPlaylistId === playlistId) {
-        const updatedPlaylist = await fetchPlaylistById(playlistId);
-        if (updatedPlaylist) {
-          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
-        }
-      }
-
+      // DON'T refetch - trust the optimistic update that was already applied
+      // The TracksManager has already updated the UI with the correct order
+      // Refetching here causes a race condition where we overwrite the optimistic update
+      
+      console.log(`🎯 [PLAYLISTS PROVIDER] ✅ Track order update completed successfully`);
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error(`Error updating track order for playlist ${playlistId}:`, errorMessage);
+      console.error(`🎯 [PLAYLISTS PROVIDER] ❌ Error updating track order for playlist ${playlistId}:`, errorMessage);
       setError(errorMessage);
       return false;
     }
-  }, [currentPlaylistId, fetchPlaylistById]);
+  }, []);
 
   const contextValue: PlaylistsContextType = {
     playlists,

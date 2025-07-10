@@ -18,6 +18,7 @@ interface TracksTableProps {
   onReorderTracks: (startIndex: number, endIndex: number) => void;
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
+  playlistSortMode?: 'manual' | 'column';
   onContextMenu?: (trackId: string, x: number, y: number) => void;
   sortColumn?: SortColumn | null;
   sortDirection?: SortDirection;
@@ -32,6 +33,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
   onReorderTracks,
   onRemoveFromPlaylist,
   isPlaylistView = false,
+  playlistSortMode = 'manual',
   onContextMenu,
   sortColumn,
   sortDirection = 'asc',
@@ -40,6 +42,12 @@ const TracksTable: React.FC<TracksTableProps> = ({
   // Add ref to track the last drag operation and prevent duplicates
   const lastDragRef = useRef<{ activeId: any; overId: any; timestamp: number } | null>(null);
 
+  // Only allow drag and drop in playlist view when in manual mode
+  const isDragEnabled = isPlaylistView && playlistSortMode === 'manual';
+
+  // Add debugging
+  console.log('🔧 [TRACKS TABLE] isDragEnabled:', isDragEnabled, 'isPlaylistView:', isPlaylistView, 'playlistSortMode:', playlistSortMode);
+
   const handleDragStart = (event: any) => {
     const { active } = event;
     console.log('🔄 [TRACK SORT] Drag started:', { activeId: active.id });
@@ -47,11 +55,17 @@ const TracksTable: React.FC<TracksTableProps> = ({
     console.log('🔄 [TRACK SORT] Tracks in SortableContext:', tracks.map(t => t.id));
   };
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = async (event: any) => {
     const { active, over } = event;
     console.log('🔄 [TRACK SORT] Drag ended:', { activeId: active.id, overId: over?.id });
     console.log('🔄 [TRACK SORT] Full event:', event);
     console.log('🔄 [TRACK SORT] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name })));
+    
+    // Don't process if drag is not enabled
+    if (!isDragEnabled) {
+      console.log('🔄 [TRACK SORT] Drag not enabled, skipping');
+      return;
+    }
     
     // Prevent processing if no valid drop target
     if (!active || !over || active.id === over.id) {
@@ -94,7 +108,17 @@ const TracksTable: React.FC<TracksTableProps> = ({
     console.log('🔄 [TRACK SORT] Moving track from index', oldIndex, 'to', newIndex);
     console.log('🔄 [TRACK SORT] Track being moved:', tracks[oldIndex]?.name);
     
-    onReorderTracks(oldIndex, newIndex);
+    console.log('🔄 [TRACK SORT] About to call onReorderTracks with:', { oldIndex, newIndex });
+    console.log('🔄 [TRACK SORT] onReorderTracks function:', typeof onReorderTracks, onReorderTracks);
+    
+    try {
+      console.log('🔄 [TRACK SORT] Calling onReorderTracks...');
+      await onReorderTracks(oldIndex, newIndex);
+      console.log('🔄 [TRACK SORT] onReorderTracks completed successfully');
+    } catch (error) {
+      console.error('❌ [TRACK SORT] Error in onReorderTracks:', error);
+      console.error('❌ [TRACK SORT] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    }
   };
 
   const getSortIcon = (column: SortColumn) => {
@@ -117,11 +141,21 @@ const TracksTable: React.FC<TracksTableProps> = ({
   };
 
   const SortableHeader: React.FC<{ column: SortColumn; children: React.ReactNode }> = ({ column, children }) => {
-    // Allow sorting in both library and playlist views
-    if (!onSort) {
+    // In playlist view, only allow column sorting when in column mode
+    const isColumnSortingEnabled = !isPlaylistView || playlistSortMode === 'column';
+    
+    if (!onSort || !isColumnSortingEnabled) {
       return (
         <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">
-          {children}
+          <div className="flex items-center">
+            {children}
+            {/* Show appropriate hint based on mode */}
+            {isPlaylistView && column === 'name' && (
+              <span className="ml-2 text-xs text-gray-400 font-normal">
+                {playlistSortMode === 'manual' ? '(Drag to reorder)' : '(Switch to Column Sort)'}
+              </span>
+            )}
+          </div>
         </th>
       );
     }
@@ -135,24 +169,57 @@ const TracksTable: React.FC<TracksTableProps> = ({
         <div className="flex items-center">
           {children}
           {getSortIcon(column)}
-          {/* Show drag hint only in playlist view and only for the first column */}
-          {isPlaylistView && column === 'name' && (
-            <span className="ml-2 text-xs text-blue-600 font-normal">
-              (Drag to reorder)
-            </span>
-          )}
         </div>
       </th>
     );
   };
 
   return (
-    <DndContext 
-      collisionDetection={closestCenter} 
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext items={tracks.map((track) => track.id)} strategy={verticalListSortingStrategy}>
+    <>
+      {isDragEnabled ? (
+        <DndContext 
+          collisionDetection={closestCenter} 
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext 
+            items={tracks.map((track) => track.id)} 
+            strategy={verticalListSortingStrategy}
+          >
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <SortableHeader column="name">Title</SortableHeader>
+                  <SortableHeader column="artistName">Artist</SortableHeader>
+                  <SortableHeader column="albumName">Album</SortableHeader>
+                  <SortableHeader column="year">Year</SortableHeader>
+                  <SortableHeader column="duration">Duration</SortableHeader>
+                  {isPlaylistView && (
+                    <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  )}
+                </tr>
+              </thead>
+
+              <tbody className="bg-white divide-y divide-gray-200">
+                {tracks.map((track, index) => (
+                  <TrackItem
+                    key={track.id}
+                    track={track}
+                    index={index}
+                    onSelectTrack={onSelectTrack}
+                    onPlayTrack={onPlayTrack}
+                    isSelected={selectedTrackIds.includes(track.id)}
+                    onRemoveFromPlaylist={onRemoveFromPlaylist}
+                    isPlaylistView={isPlaylistView}
+                    isDragEnabled={isDragEnabled}
+                    onContextMenu={onContextMenu}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </SortableContext>
+        </DndContext>
+      ) : (
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -178,13 +245,14 @@ const TracksTable: React.FC<TracksTableProps> = ({
                 isSelected={selectedTrackIds.includes(track.id)}
                 onRemoveFromPlaylist={onRemoveFromPlaylist}
                 isPlaylistView={isPlaylistView}
+                isDragEnabled={isDragEnabled}
                 onContextMenu={onContextMenu}
               />
             ))}
           </tbody>
         </table>
-      </SortableContext>
-    </DndContext>
+      )}
+    </>
   );
 };
 

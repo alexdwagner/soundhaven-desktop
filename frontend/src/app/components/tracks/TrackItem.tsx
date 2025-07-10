@@ -16,6 +16,7 @@ interface TrackItemProps {
   isSelected: boolean;
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
+  isDragEnabled?: boolean;
   onContextMenu?: (trackId: string, x: number, y: number) => void;
 }
 
@@ -27,11 +28,13 @@ const TrackItem: React.FC<TrackItemProps> = ({
   isSelected,
   onRemoveFromPlaylist,
   isPlaylistView = false,
+  isDragEnabled = true,
   onContextMenu,
 }) => {
   const { dragState, startDrag, endDrag } = useDrag();
   const [isBeingDragged, setIsBeingDragged] = useState(false);
 
+  // Always call useSortable hook (required by React rules)
   const {
     attributes,
     listeners,
@@ -41,13 +44,18 @@ const TrackItem: React.FC<TrackItemProps> = ({
     isDragging,
   } = useSortable({ 
     id: track.id,
-    disabled: !isPlaylistView // Only enable sortable in playlist view
+    disabled: !isDragEnabled // Only disable based on isDragEnabled
   });
+
+  // Add debugging
+  useEffect(() => {
+    console.log(`🔧 [TRACK ITEM] ${track.name} - isDragEnabled: ${isDragEnabled}, isPlaylistView: ${isPlaylistView}, disabled: ${!isDragEnabled}`);
+  }, [isDragEnabled, isPlaylistView, track.name]);
 
   // Apply transform for playlist reordering, disable for cross-component drag
   const style = {
-    transform: isPlaylistView ? CSS.Transform.toString(transform) : 'none',
-    transition: isPlaylistView ? transition : 'none',
+    transform: (isPlaylistView && isDragEnabled) ? CSS.Transform.toString(transform) : 'none',
+    transition: (isPlaylistView && isDragEnabled) ? transition : 'none',
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -154,8 +162,8 @@ const TrackItem: React.FC<TrackItemProps> = ({
     <tr
       ref={setNodeRef}
       style={style}
-      {...(isPlaylistView ? attributes : {})}
-      {...(isPlaylistView ? listeners : {})}
+      {...attributes}
+      {...listeners}
       draggable={!isPlaylistView} // Only draggable in library view for playlist drops
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
@@ -165,9 +173,9 @@ const TrackItem: React.FC<TrackItemProps> = ({
       className={`transition-all duration-200 select-none ${
         isPlaylistView && isDragging 
           ? "cursor-grabbing" // Grabbing cursor when dragging in playlist
-          : isPlaylistView 
-            ? "cursor-grab" // Grab cursor in playlist view
-            : "cursor-pointer" // Normal pointer in library view
+          : isPlaylistView && isDragEnabled
+            ? "cursor-grab" // Grab cursor in playlist view when drag is enabled
+            : "cursor-pointer" // Normal pointer otherwise
       } ${
         isSelected 
           ? "bg-blue-100 hover:bg-blue-200" // Selected track styling

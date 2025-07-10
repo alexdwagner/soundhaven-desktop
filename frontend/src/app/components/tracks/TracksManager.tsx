@@ -43,11 +43,20 @@ export default function TracksManager({
     error: fetchError
   } = useTracks();
   
-  const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks } = usePlaylists();
+  const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks, currentPlaylistTracks } = usePlaylists();
   
-  // Use playlist tracks if a playlist is selected, otherwise use all tracks
-  const tracks = selectedPlaylistId ? (selectedPlaylistTracks || []) : allTracks;
+  // Use context playlist tracks if available (for optimistic updates), otherwise use prop, otherwise use all tracks
+  const tracks = selectedPlaylistId ? (currentPlaylistTracks.length > 0 ? currentPlaylistTracks : (selectedPlaylistTracks || [])) : allTracks;
   const isPlaylistView = !!selectedPlaylistId;
+  
+  // Debug: Log which data source we're using
+  console.log('🎯 TracksManager tracks source:', {
+    selectedPlaylistId,
+    contextTracksLength: currentPlaylistTracks.length,
+    propTracksLength: selectedPlaylistTracks?.length || 0,
+    allTracksLength: allTracks.length,
+    usingSource: selectedPlaylistId ? (currentPlaylistTracks.length > 0 ? 'context' : 'prop') : 'allTracks'
+  });
   
   const {
     isPlaying,
@@ -64,15 +73,6 @@ export default function TracksManager({
   
   // Ensure tracks is always an array to prevent map errors
   const safeTracks = Array.isArray(tracks) ? tracks : [];
-  
-  console.log('🎯 TracksManager state:', {
-    tracks: tracks,
-    safeTracks: safeTracks,
-    safeTracksLength: safeTracks.length,
-    playbackCurrentTrack: playbackCurrentTrack,
-    isPlaylistView: isPlaylistView,
-    selectedPlaylistId: selectedPlaylistId
-  });
   
   const [selectedTrackIds, setSelectedTrackIds] = useState<string[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null); // Track the anchor point for shift+click
@@ -96,7 +96,21 @@ export default function TracksManager({
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [playlistSortMode, setPlaylistSortMode] = useState<'manual' | 'column'>('manual'); // New state for playlist sorting mode
   const { user, token } = useMockAuth(); // Replace with your actual auth hook
+  
+  console.log('🎯 TracksManager state:', {
+    tracks: tracks,
+    safeTracks: safeTracks,
+    safeTracksLength: safeTracks.length,
+    playbackCurrentTrack: playbackCurrentTrack,
+    isPlaylistView: isPlaylistView,
+    selectedPlaylistId: selectedPlaylistId,
+    selectedPlaylistName: selectedPlaylistName,
+    playlistSortMode: playlistSortMode,
+    selectedPlaylistTracks: selectedPlaylistTracks?.length || 0
+  });
+  
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
   const [commentTime, setCommentTime] = useState(0);
@@ -120,6 +134,14 @@ export default function TracksManager({
 
   // Enhanced reorder handler with optimistic updates and debouncing
   const handleReorderTracks = async (startIndex: number, endIndex: number) => {
+    console.log('🔄 [DRAG] handleReorderTracks called:', { startIndex, endIndex, playlistSortMode, isPlaylistView });
+    
+    // Only allow reordering in manual mode
+    if (isPlaylistView && playlistSortMode !== 'manual') {
+      console.log('🔄 [DRAG] Cannot reorder in column sort mode');
+      return;
+    }
+
     // Prevent simultaneous reordering operations
     if (reorderingTracks) {
       console.log('🔄 [DRAG] Reordering already in progress, skipping...');
@@ -143,6 +165,7 @@ export default function TracksManager({
     }
 
     console.log('🔄 [DRAG] Starting reorder operation:', { startIndex, endIndex, isPlaylistView, selectedPlaylistId });
+    console.log('🔄 [DRAG] Current tracks before reorder:', tracks.map((t, i) => ({ index: i, id: t.id, name: t.name })));
 
     if (!isPlaylistView || !selectedPlaylistId) {
       console.log('❌ [DRAG] Reordering only supported in playlist view');
@@ -161,21 +184,27 @@ export default function TracksManager({
       const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
       reorderedTracks.splice(endIndex, 0, reorderedItem);
 
+      console.log('🔄 [DRAG] Reordered tracks (optimistic):', reorderedTracks.map((t, i) => ({ index: i, id: t.id, name: t.name })));
+
       // Optimistically update the UI
       setCurrentPlaylistTracks(reorderedTracks);
       
       // Prepare track IDs in new order for API call
       const trackIds = reorderedTracks.map(track => track.id);
+      console.log('🔄 [DRAG] Track IDs being sent to API:', trackIds);
       
       // Make the API call
-      await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
+      const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
+      console.log('✅ [DRAG] API call result:', result);
       console.log('✅ [DRAG] Reorder operation completed successfully');
     } catch (error) {
       console.error('❌ [DRAG] Error during reorder operation:', error);
       // Revert optimistic update by refetching
       if (selectedPlaylistId) {
         try {
+          console.log('🔄 [DRAG] Reverting optimistic update by refetching playlist...');
           await fetchPlaylistById(selectedPlaylistId);
+          console.log('🔄 [DRAG] Playlist refetched after error');
         } catch (refetchError) {
           console.error('❌ [DRAG] Failed to revert optimistic update:', refetchError);
         }
@@ -253,16 +282,27 @@ export default function TracksManager({
 
   // Sorting logic
   const handleSort = useCallback((column: SortColumn) => {
+    if (isPlaylistView) {
+      // In playlist view, switch to column sorting mode when user clicks a header
+      setPlaylistSortMode('column');
+    }
+    
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
       setSortDirection('asc');
     }
-  }, [sortColumn, sortDirection]);
+  }, [sortColumn, sortDirection, isPlaylistView]);
 
-  // Apply sorting to tracks
+  // Apply sorting to tracks - only sort if not in playlist manual mode
   const sortedTracks = useCallback(() => {
+    // Don't sort if we're in playlist view and manual mode
+    if (isPlaylistView && playlistSortMode === 'manual') {
+      return safeTracks;
+    }
+    
+    // Don't sort if no sort column is selected
     if (!sortColumn) return safeTracks;
 
     return [...safeTracks].sort((a, b) => {
@@ -298,7 +338,7 @@ export default function TracksManager({
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [safeTracks, sortColumn, sortDirection]);
+  }, [safeTracks, sortColumn, sortDirection, isPlaylistView, playlistSortMode]);
 
   const displayTracks = sortedTracks();
 
@@ -1007,9 +1047,61 @@ export default function TracksManager({
 
         {/* Header */}
         <div className="mb-3">
-          <h1 className="text-lg font-semibold text-gray-900">
-            {getViewTitle()}
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-gray-900">
+              {getViewTitle()}
+            </h1>
+            
+            {/* Sorting Mode Toggle - Only show in playlist view */}
+            {isPlaylistView && (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Sort by:</span>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => {
+                      setPlaylistSortMode('manual');
+                      setSortColumn(null);
+                    }}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      playlistSortMode === 'manual'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    📋 Manual Order
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPlaylistSortMode('column');
+                    }}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      playlistSortMode === 'column'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    🔤 Column Sort
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Sorting Mode Description */}
+          {isPlaylistView && (
+            <div className="mt-2 text-sm text-gray-500">
+              {playlistSortMode === 'manual' ? (
+                <span>💡 Drag and drop tracks to reorder your playlist</span>
+              ) : (
+                <span>💡 Click column headers to sort tracks</span>
+              )}
+              {reorderingTracks && (
+                <span className="ml-2 text-blue-600">
+                  ⏳ Reordering tracks...
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1020,6 +1112,7 @@ export default function TracksManager({
             selectedTrackIds={selectedTrackIds}
             onReorderTracks={handleReorderTracks}
             isPlaylistView={isPlaylistView}
+            playlistSortMode={playlistSortMode}
             sortColumn={sortColumn}
             sortDirection={sortDirection}
             onSort={handleSort}
