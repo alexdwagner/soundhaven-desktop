@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, FC, useCallback } from 'react';
+import React, { useState, FC, useCallback, useEffect } from 'react';
 import { PlaybackContext, PlaybackMode } from '../contexts/PlaybackContext';
 import { Track } from '../../../../shared/types';
 
@@ -16,8 +16,44 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     const [shuffleQueue, setShuffleQueue] = useState<number[]>([]);
     const [spacebarPlaybackEnabled, setSpacebarPlaybackEnabled] = useState(true);
     const [isCommentInputFocused, setIsCommentInputFocused] = useState(false); 
-    const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-    const [volume, setVolume] = useState(1.0);
+    
+    // Initialize volume from localStorage or default to 75%
+    const [volume, setVolume] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('soundhaven-volume');
+            const savedVolume = saved ? parseFloat(saved) : 0.75;
+            console.log('🔊 [PLAYBACK PROVIDER] Loading volume from localStorage:', savedVolume);
+            return savedVolume;
+        }
+        return 0.75;
+    });
+
+    // Initialize playback speed from localStorage or default to 1.0
+    const [playbackSpeed, setPlaybackSpeed] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('soundhaven-playback-speed');
+            const savedSpeed = saved ? parseFloat(saved) : 1.0;
+            console.log('⚡ [PLAYBACK PROVIDER] Loading playback speed from localStorage:', savedSpeed);
+            return savedSpeed;
+        }
+        return 1.0;
+    });
+
+    // Save volume to localStorage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('soundhaven-volume', volume.toString());
+            console.log('🔊 [PLAYBACK PROVIDER] Saved volume to localStorage:', volume);
+        }
+    }, [volume]);
+
+    // Save playback speed to localStorage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('soundhaven-playback-speed', playbackSpeed.toString());
+            console.log('⚡ [PLAYBACK PROVIDER] Saved playback speed to localStorage:', playbackSpeed);
+        }
+    }, [playbackSpeed]);
 
     // Utility function to create shuffled queue
     const createShuffleQueue = useCallback((tracks: Track[], currentIndex?: number) => {

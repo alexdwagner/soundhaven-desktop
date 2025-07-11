@@ -11,6 +11,14 @@ interface AlbumArtPanelProps {
 const AlbumArtPanel: React.FC<AlbumArtPanelProps> = ({ track, show }) => {
   const [isMinimized, setIsMinimized] = useState(false);
   
+  // Helper function to format time (seconds to MM:SS)
+  const formatTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+  
   const getAlbumArtUrl = (track: Track | null): string | null => {
     if (!track?.albumArtPath) return null;
     
@@ -102,6 +110,11 @@ const AlbumArtPanel: React.FC<AlbumArtPanelProps> = ({ track, show }) => {
             {/* Additional track metadata */}
             {track && (
               <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
+                {track.duration && (
+                  <p className="text-xs text-gray-500">
+                    <span className="font-medium">Duration:</span> {formatTime(track.duration)}
+                  </p>
+                )}
                 {track.year && (
                   <p className="text-xs text-gray-500">
                     <span className="font-medium">Year:</span> {track.year}

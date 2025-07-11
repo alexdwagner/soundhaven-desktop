@@ -182,6 +182,14 @@ const TrackItem: React.FC<TrackItemProps> = ({
     });
   }, [track]);
 
+  // Helper function to format time (seconds to MM:SS)
+  function formatTime(seconds: number): string {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
   return (
     <tr
       ref={setNodeRef}
@@ -215,7 +223,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
       <td className="px-3 py-1">{track.artistName ?? track.artist?.name ?? "Unknown Artist"}</td>
       <td className="px-3 py-1">{track.albumName ?? track.album?.name ?? "No Album"}</td>
       <td className="px-3 py-1">{track.year ?? "—"}</td>
-      <td className="px-3 py-1">{track.duration}</td>
+      <td className="px-3 py-1">{formatTime(track.duration)}</td>
       {isPlaylistView && (
         <td className="px-3 py-1">
           <button

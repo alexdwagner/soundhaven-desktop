@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { Track } from '../../../shared/types';
+import { Track } from '../../../../shared/types';
 
 export type PlaybackMode = 'normal' | 'repeat-one' | 'repeat-all' | 'shuffle';
 
@@ -41,7 +41,7 @@ const initialPlaybackContextValue: PlaybackContextValue = {
     setIsCommentInputFocused: () => {},
     playbackSpeed: 1.0,
     setPlaybackSpeed: () => {},
-    volume: 1.0,
+    volume: 0.75, // Set default to 75%
     setVolume: () => {},
 };
 

@@ -17,9 +17,10 @@ interface NavBarProps {
   children: ReactNode;
   onLoginClick: () => void;
   onRegisterClick: () => void;
+  onSettingsClick: () => void;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick }) => {
+const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick, onSettingsClick }) => {
   const { user, loading, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +92,10 @@ const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick
                   >
                     <div className="py-1">
                       <button 
-                        onClick={() => setShowDropdown(false)}
+                        onClick={() => {
+                          setShowDropdown(false);
+                          onSettingsClick();
+                        }}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
                         Settings

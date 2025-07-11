@@ -126,11 +126,27 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string>('');
   const [isPlayingState, setIsPlaying] = useState(isPlaying);
-  const [volumeState, setVolume] = useState(volume);
+  // Convert volume from 0-1 range to 0-100 range for the slider
+  const [volumeState, setVolume] = useState(Math.round(volume * 100));
   const [playbackSpeedState, setPlaybackSpeed] = useState(playbackSpeed);
 
   // Track if WaveSurfer is loaded and ready to play audio
   const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+
+  // Sync internal volume state with external volume prop
+  useEffect(() => {
+    const newVolumeState = Math.round(volume * 100);
+    if (newVolumeState !== volumeState) {
+      setVolume(newVolumeState);
+    }
+  }, [volume]);
+
+  // Sync internal playback speed state with external playback speed prop
+  useEffect(() => {
+    if (playbackSpeed !== playbackSpeedState) {
+      setPlaybackSpeed(playbackSpeed);
+    }
+  }, [playbackSpeed]);
 
   // Sync internal isPlayingState with external isPlaying prop
   useEffect(() => {
@@ -783,11 +799,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     try {
       console.log('🎵 AudioPlayer: Setting volume to:', newVolume);
       waveSurferRef.current.setVolume(newVolume / 100);
-      setVolume(newVolume);
+      onVolumeChange(newVolume / 100); // Sync with prop
     } catch (error) {
       console.error('❌ AudioPlayer: Error during volume change:', error);
     }
-  }, []);
+  }, [onVolumeChange]);
 
   // Handle playback speed change
   const handleSpeedChange = useCallback((newSpeed: number) => {
@@ -799,11 +815,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     try {
       console.log('🎵 AudioPlayer: Setting playback speed to:', newSpeed);
       waveSurferRef.current.setPlaybackRate(newSpeed);
-      setPlaybackSpeed(newSpeed);
+      onPlaybackSpeedChange(newSpeed); // Sync with prop
     } catch (error) {
       console.error('❌ AudioPlayer: Error during speed change:', error);
     }
-  }, []);
+  }, [onPlaybackSpeedChange]);
 
   // Add click handler for regions
   useEffect(() => {

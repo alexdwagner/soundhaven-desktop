@@ -452,6 +452,36 @@ export const apiService = {
   async getPlaylistById(id: string) {
     const { data, error } = await makeRequest<Playlist>(`/api/playlists/${id}`);
     if (error) throw new Error(error);
+    
+    // Transform playlist tracks data to match the Track interface
+    if (data && data.tracks && Array.isArray(data.tracks)) {
+      data.tracks = data.tracks.map((track: any) => ({
+        id: track.id,
+        name: track.name,
+        duration: track.duration,
+        artistId: track.artist_id || track.artistId,
+        artistName: track.artist_name || track.artistName, // Map artist_name to artistName
+        artist: track.artist,
+        albumId: track.album_id || track.albumId,
+        albumName: track.album_name || track.albumName, // Map album_name to albumName
+        album: track.album,
+        albumArtPath: track.album_album_art_path || track.album_art_path || track.albumArtPath || undefined,
+        userId: track.user_id || track.userId,
+        createdAt: track.created_at || track.createdAt,
+        updatedAt: track.updated_at || track.updatedAt,
+        playlists: track.playlists || [],
+        genres: track.genres || [],
+        filePath: track.file_path || track.filePath,
+        // Include metadata fields
+        bitrate: track.bitrate,
+        sampleRate: track.sample_rate || track.sampleRate,
+        channels: track.channels,
+        year: track.year,
+        genre: track.genre,
+        trackNumber: track.track_number || track.trackNumber
+      }));
+    }
+    
     return data;
   },
 

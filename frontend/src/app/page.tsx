@@ -5,6 +5,7 @@ import MainContent from "./components/layout/MainContent";
 import NavBar from "./components/layout/NavBar";
 import Footer from "./components/layout/Footer";
 import AuthModal from "./components/modals/AuthModal";
+import SettingsModal from "./components/modals/SettingsModal";
 import { apiService } from '../services/electronApiService';
 import { useTracks } from "./providers/TracksProvider";
 
@@ -21,6 +22,7 @@ import { useTracks } from "./providers/TracksProvider";
 export default function HomePage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   
   // Get tracks from context
   const { tracks, isLoading, error, fetchTracks } = useTracks();
@@ -49,13 +51,16 @@ export default function HomePage() {
     setShowAuthModal(true);
   };
 
-
+  const handleSettingsClick = () => {
+    setShowSettingsModal(true);
+  };
 
   return (
     <div className="flex-col">
       <NavBar 
         onLoginClick={handleLoginClick}
         onRegisterClick={handleRegisterClick}
+        onSettingsClick={handleSettingsClick}
       >
         <div className="flex items-center">
           <h1 className="text-xl font-bold text-gray-900">SoundHaven</h1>
@@ -73,7 +78,12 @@ export default function HomePage() {
         />
       )}
 
-
+      {showSettingsModal && (
+        <SettingsModal 
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
+      )}
 
       <Footer />
     </div>
