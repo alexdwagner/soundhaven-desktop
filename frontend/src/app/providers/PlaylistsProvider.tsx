@@ -426,9 +426,15 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       await apiService.reorderPlaylistTracks(playlistId, trackIds);
       console.log(`🎯 [PLAYLISTS PROVIDER] ✅ API call successful - track order updated in backend`);
       
-      // DON'T refetch - trust the optimistic update that was already applied
-      // The TracksManager has already updated the UI with the correct order
-      // Refetching here causes a race condition where we overwrite the optimistic update
+      // Refetch the playlist to ensure UI stays in sync with backend
+      if (currentPlaylistId === playlistId) {
+        console.log(`🎯 [PLAYLISTS PROVIDER] Refetching playlist ${playlistId} to sync with backend...`);
+        const updatedPlaylist = await fetchPlaylistById(playlistId);
+        if (updatedPlaylist) {
+          console.log(`🎯 [PLAYLISTS PROVIDER] Setting fresh playlist tracks from backend:`, updatedPlaylist.tracks?.length || 0);
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+        }
+      }
       
       console.log(`🎯 [PLAYLISTS PROVIDER] ✅ Track order update completed successfully`);
       return true;
@@ -438,7 +444,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       setError(errorMessage);
       return false;
     }
-  }, []);
+  }, [currentPlaylistId, fetchPlaylistById]);
 
   const contextValue: PlaylistsContextType = {
     playlists,

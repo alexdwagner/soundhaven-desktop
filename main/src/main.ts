@@ -508,6 +508,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
     
     // Route the request to the appropriate handler
     console.log('API Request:', { endpoint, method, apiPath });
+    console.log('[API DEBUG] About to check playlist handlers, apiPath:', apiPath);
     
     // Handle track endpoints
     if (apiPath.startsWith('/api/tracks')) {
@@ -722,6 +723,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
     
     // Handle playlist endpoints
     if (apiPath.startsWith('/api/playlists')) {
+      console.log('[API DEBUG] Playlist block reached! apiPath:', apiPath, 'method:', method);
       // Get all playlists
       if (method === 'GET' && apiPath === '/api/playlists') {
         try {
@@ -950,30 +952,71 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
 
       // Update playlist track order
       if (method === 'PATCH' && apiPath.match(/^\/api\/playlists\/[^/]+\/track-order$/)) {
+        console.log('[API DEBUG] Track order handler reached! apiPath:', apiPath);
+        console.log('[API DEBUG] Request body:', JSON.stringify(body, null, 2));
+        
         const [, , , playlistId] = apiPath.split('/');
         const { trackIds } = body;
         
+        console.log('[API DEBUG] Extracted playlistId:', playlistId);
+        console.log('[API DEBUG] Extracted trackIds:', trackIds);
+        
         if (!playlistId) {
+          console.error('[API DEBUG] ERROR: Invalid playlist ID');
           return { error: 'Invalid playlist ID', status: 400 };
         }
-      if (!Array.isArray(trackIds)) {
-        return { error: 'trackIds must be an array', status: 400 };
-      }
-      
-      try {
-          // Update order for each track
-        await Promise.all(trackIds.map((trackId, index) => 
-          dbAsync.run(
-            'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
-            [index, playlistId, trackId]
-          )
-        ));
+        if (!Array.isArray(trackIds)) {
+          console.error('[API DEBUG] ERROR: trackIds is not an array:', typeof trackIds, trackIds);
+          return { error: 'trackIds must be an array', status: 400 };
+        }
         
-          return { data: { success: true } };
-      } catch (error) {
-        console.error('[API DEBUG] Error updating playlist track order:', error);
-        return { error: 'Failed to update playlist track order', status: 500 };
-      }
+        try {
+          // Update order for each track using playlist_track_id (for duplicates support)
+          console.log('[API DEBUG] Updating playlist track order for playlist:', playlistId);
+          console.log('[API DEBUG] Received trackIds (playlist_track_ids):', trackIds);
+          
+          // First, let's check what's currently in the database
+          const currentTracks = await dbAsync.all(
+            'SELECT id, track_id, "order" FROM playlist_tracks WHERE playlist_id = ? ORDER BY "order"',
+            [playlistId]
+          );
+          console.log('[API DEBUG] Current tracks in database:', currentTracks);
+          
+          const updatePromises = trackIds.map(async (playlistTrackId, index) => {
+            // Convert to integer to ensure proper database matching
+            const playlistTrackIdInt = parseInt(playlistTrackId, 10);
+            console.log(`[API DEBUG] Updating playlist_track_id ${playlistTrackId} (${playlistTrackIdInt}) to order ${index}`);
+            
+            const result = await dbAsync.run(
+              'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND id = ?',
+              [index, playlistId, playlistTrackIdInt]
+            );
+            console.log(`[API DEBUG] Update result for playlist_track_id ${playlistTrackIdInt}:`, result);
+            
+            // Check if the update actually affected any rows
+            if (result.changes === 0) {
+              console.error(`[API DEBUG] WARNING: No rows updated for playlist_track_id ${playlistTrackIdInt}`);
+            }
+            
+            return result;
+          });
+          
+          const results = await Promise.all(updatePromises);
+          console.log('[API DEBUG] All update results:', results);
+          
+          // Verify the updates by checking the database
+          const verifyQuery = await dbAsync.all(
+            'SELECT id, track_id, "order" FROM playlist_tracks WHERE playlist_id = ? ORDER BY "order"',
+            [playlistId]
+          );
+          console.log('[API DEBUG] Verification query results:', verifyQuery);
+          
+          return { data: { success: true, updatedCount: results.length } };
+        } catch (error) {
+          console.error('[API DEBUG] Error updating playlist track order:', error);
+          console.error('[API DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
+          return { error: 'Failed to update playlist track order', status: 500 };
+        }
       }
       
       // Update playlist order (reorder playlists themselves)

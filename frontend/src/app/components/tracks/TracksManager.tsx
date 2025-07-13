@@ -212,36 +212,28 @@ export default function TracksManager({
       setReorderingTracks(true);
       console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder...');
       
-      // Create a copy of the tracks array for optimistic update
+      // Create a copy of the tracks array to determine new order
       const reorderedTracks = [...tracks];
       const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
       reorderedTracks.splice(endIndex, 0, reorderedItem);
 
-      console.log('🔄 [DRAG] Reordered tracks (optimistic):', reorderedTracks.map((t, i) => ({ index: i, id: t.id, name: t.name })));
+      console.log('🔄 [DRAG] Calculated new track order:', reorderedTracks.map((t, i) => ({ index: i, id: t.id, name: t.name })));
 
-      // Optimistically update the UI
-      setCurrentPlaylistTracks(reorderedTracks);
-      
       // Prepare track IDs in new order for API call
-      const trackIds = reorderedTracks.map(track => track.id);
+      // Use playlist_track_id for playlist view to handle duplicates correctly
+      const trackIds = reorderedTracks.map(track => 
+        isPlaylistView ? (track.playlist_track_id?.toString() || track.id) : track.id
+      );
       console.log('🔄 [DRAG] Track IDs being sent to API:', trackIds);
+      console.log('🔄 [DRAG] Using playlist_track_id for reorder:', isPlaylistView);
       
-      // Make the API call
+      // Make the API call - the PlaylistsProvider will handle refetching fresh data
       const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
       console.log('✅ [DRAG] API call result:', result);
       console.log('✅ [DRAG] Reorder operation completed successfully');
     } catch (error) {
       console.error('❌ [DRAG] Error during reorder operation:', error);
-      // Revert optimistic update by refetching
-      if (selectedPlaylistId) {
-        try {
-          console.log('🔄 [DRAG] Reverting optimistic update by refetching playlist...');
-          await fetchPlaylistById(selectedPlaylistId);
-          console.log('🔄 [DRAG] Playlist refetched after error');
-        } catch (refetchError) {
-          console.error('❌ [DRAG] Failed to revert optimistic update:', refetchError);
-        }
-      }
+      // The PlaylistsProvider will handle error recovery by refetching
     } finally {
       setReorderingTracks(false);
     }
@@ -332,7 +324,7 @@ export default function TracksManager({
         
         return filtered;
       });
-      console.log('📓 [OPTIMISTIC] After setCurrentPlaylistTracks call');
+      console.log('�� [OPTIMISTIC] After setCurrentPlaylistTracks call');
       setSelectedTrackIds(prev => prev.filter(id => id !== trackId));
       
       // Make API call in background

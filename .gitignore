@@ -57,3 +57,6 @@ main/.env
 # Compiled files
 dist/
 build/
+
+# Planning and marketing docs
+docs_internal/
