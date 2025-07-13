@@ -873,16 +873,26 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
       
       // Remove track from playlist
       if (method === 'DELETE' && apiPath.match(/^\/api\/playlists\/[^/]+\/tracks\/[^/]+$/)) {
-        const [, , , playlistId, , trackId] = apiPath.split('/');
-        if (!playlistId || !trackId) {
-          return { error: 'Invalid playlist or track ID', status: 400 };
+        const [, , , playlistId, , playlistTrackId] = apiPath.split('/');
+        if (!playlistId || !playlistTrackId) {
+          return { error: 'Invalid playlist or playlist track ID', status: 400 };
         }
         
+        console.log(`[API DEBUG] Removing playlist_track_id ${playlistTrackId} from playlist ${playlistId}`);
+        
         try {
-          await dbAsync.run(
-          'DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?',
-          [playlistId, trackId]
-        );
+          // Delete by playlist_track_id (the auto-incrementing ID)
+          const result = await dbAsync.run(
+            'DELETE FROM playlist_tracks WHERE playlist_id = ? AND id = ?',
+            [playlistId, playlistTrackId]
+          );
+          
+          console.log(`[API DEBUG] Delete result:`, result);
+          
+          if (result.changes === 0) {
+            console.log(`[API DEBUG] No rows were deleted - playlist_track_id ${playlistTrackId} not found in playlist ${playlistId}`);
+            return { error: 'Track not found in playlist', status: 404 };
+          }
         
           // Reorder remaining tracks
           const tracks = await dbAsync.all(
@@ -890,10 +900,12 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
             [playlistId]
           );
           
+          console.log(`[API DEBUG] Reordering ${tracks.length} remaining tracks`);
+          
           await Promise.all(tracks.map((track, index) => 
             dbAsync.run(
-              'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND track_id = ?',
-              [index, playlistId, track.track_id]
+              'UPDATE playlist_tracks SET "order" = ? WHERE playlist_id = ? AND id = ?',
+              [index, playlistId, track.id]
             )
           ));
         

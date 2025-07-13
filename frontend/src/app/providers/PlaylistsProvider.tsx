@@ -28,7 +28,7 @@ interface PlaylistsContextType {
   deletePlaylist: (id: string) => Promise<boolean>;
   addTrackToPlaylist: (playlistId: string, trackId: string) => Promise<boolean>;
   addTracksToPlaylist: (playlistId: string, trackIds: string[]) => Promise<{ successful: number; failed: number; errors: string[] }>;
-  removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<boolean>;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string, skipRefresh?: boolean) => Promise<boolean>;
   updatePlaylistMetadata: (playlistId: string, updates: { name?: string; description?: string }) => Promise<boolean>;
   updatePlaylistOrder: (playlistIds: string[]) => Promise<Playlist[]>;
   updatePlaylistTrackOrder: (playlistId: string, trackIds: string[]) => Promise<boolean>;
@@ -329,13 +329,13 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
     [apiService, fetchPlaylists, fetchPlaylistById, currentPlaylistId, currentPlaylistTracks.length]
   );
 
-  const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string): Promise<boolean> => {
+  const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string, skipRefresh?: boolean): Promise<boolean> => {
     // Remove token requirement for local-first app
     try {
       await apiService.removeTrackFromPlaylist(playlistId, trackId);
 
-      // Refresh the current playlist tracks if this is the current playlist
-      if (currentPlaylistId === playlistId) {
+      // Only refresh if not skipping (for optimistic updates)
+      if (!skipRefresh && currentPlaylistId === playlistId) {
         const updatedPlaylist = await fetchPlaylistById(playlistId);
         if (updatedPlaylist) {
           setCurrentPlaylistTracks(updatedPlaylist.tracks || []);

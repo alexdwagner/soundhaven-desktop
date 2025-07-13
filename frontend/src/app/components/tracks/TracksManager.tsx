@@ -377,7 +377,7 @@ export default function TracksManager({
       // Remove all selected tracks from playlist in background
       try {
         const results = await Promise.allSettled(
-          contextMenu.trackIds.map(trackId => removeTrackFromPlaylist(selectedPlaylistId!, trackId))
+          contextMenu.trackIds.map(trackId => removeTrackFromPlaylist(selectedPlaylistId!, trackId, true))
         );
         
         const failedRemovals = results.filter(result => result.status === 'rejected' || !result.value);
@@ -690,19 +690,23 @@ export default function TracksManager({
               
               // Optimistic update
               setCurrentPlaylistTracks((prev: Track[]) => {
-                console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+                console.log('🐥 [OPTIMISTIC UPDATE] Before filter:', {
                   prevLength: prev.length,
-                  prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+                  prevTracks: prev.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })),
                   tracksToRemove
                 });
                 
-                const filtered = prev.filter((track: Track) => !tracksToRemove.includes(track.id));
+                // In playlist view, filter by playlist_track_id since that's what we're removing
+                const filtered = prev.filter((track: Track) => {
+                  const trackKey = track.playlist_track_id?.toString() || track.id;
+                  return !tracksToRemove.includes(trackKey);
+                });
                 
-                console.log('📓 [DELETE KEY] Optimistic update result:', {
+                console.log('🐥 [DELETE KEY] Optimistic update result:', {
                   beforeLength: prev.length,
                   afterLength: filtered.length,
                   removedIds: tracksToRemove,
-                  remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
+                  remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id }))
                 });
                 
                 return filtered;
@@ -716,7 +720,7 @@ export default function TracksManager({
               Promise.allSettled(
                 tracksToRemove.map(trackId => {
                   console.log('📓 [API CALL] Removing track:', trackId);
-                  return removeTrackFromPlaylist(selectedPlaylistId!, trackId);
+                  return removeTrackFromPlaylist(selectedPlaylistId!, trackId, true);
                 })
               ).then(results => {
                 console.log('📓 [API RESULTS] All API calls completed:', results);
