@@ -22,7 +22,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   onViewAllTracks,
   onDeletePlaylist,
 }) => {
-  const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists, loading, error: playlistError } = usePlaylists();
+  const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists, loading, error: playlistError, setCurrentPlaylistId, setCurrentPlaylistTracks } = usePlaylists();
   const { user, token } = useAuth();
   
   console.log("🔍 PlaylistSidebar: Component rendering...");
@@ -84,16 +84,31 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   };
 
   const handlePlaylistSelect = async (playlistId: string) => {
+    console.log(`📓 [PLAYLIST SIDEBAR] handlePlaylistSelect called with playlistId: ${playlistId}`);
+    
     try {
       const playlist = await fetchPlaylistById(playlistId);
+      console.log(`📓 [PLAYLIST SIDEBAR] fetchPlaylistById result:`, playlist);
+      
       if (playlist?.tracks) {
+        console.log(`📓 [PLAYLIST SIDEBAR] Setting currentPlaylistId to: ${playlistId}`);
+        console.log(`📓 [PLAYLIST SIDEBAR] Setting currentPlaylistTracks to: ${playlist.tracks.length} tracks`);
+        
+        // Update the PlaylistsProvider context
+        setCurrentPlaylistId(playlistId);
+        setCurrentPlaylistTracks(playlist.tracks);
+        
+        // Update the MainContent state (for props)
         onSelectPlaylist(playlist.tracks, playlistId, playlist.name);
         setSelectedPlaylistId(playlistId);
+        
+        console.log(`📓 [PLAYLIST SIDEBAR] ✅ Playlist selection complete`);
       } else {
+        console.log(`📓 [PLAYLIST SIDEBAR] ❌ No tracks found in playlist`);
         setError("Failed to load playlist tracks");
       }
     } catch (error) {
-      console.error("Error fetching playlist:", error);
+      console.error("📓 [PLAYLIST SIDEBAR] ❌ Error fetching playlist:", error);
       setError("Failed to load playlist");
     }
   };
@@ -102,12 +117,33 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     try {
       await deletePlaylist(playlistId);
       setSelectedPlaylistId(null);
+      
+      // Clear the PlaylistsProvider context if this was the selected playlist
+      if (selectedPlaylistId === playlistId) {
+        setCurrentPlaylistId(null);
+        setCurrentPlaylistTracks([]);
+      }
+      
       onDeletePlaylist(playlistId);
       libraryButtonRef.current?.focus();
     } catch (error) {
       console.error("Error deleting playlist:", error);
       setError("Failed to delete playlist");
     }
+  };
+
+  const handleViewAllTracks = () => {
+    console.log(`📓 [PLAYLIST SIDEBAR] handleViewAllTracks called - clearing playlist selection`);
+    
+    // Clear the PlaylistsProvider context
+    setCurrentPlaylistId(null);
+    setCurrentPlaylistTracks([]);
+    
+    // Clear the MainContent state
+    onViewAllTracks();
+    setSelectedPlaylistId(null);
+    
+    console.log(`📓 [PLAYLIST SIDEBAR] ✅ View all tracks complete`);
   };
 
   const handleDragEnd = (event: any) => {
@@ -137,7 +173,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
         <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
           + Add Playlist
         </button>
-        <button ref={libraryButtonRef} className="w-full hover:bg-gray-700 text-gray-100 font-medium py-1 px-2 rounded text-sm mb-2 text-left transition-colors bg-gray-900" onClick={onViewAllTracks}>
+        <button ref={libraryButtonRef} className="w-full hover:bg-gray-700 text-gray-100 font-medium py-1 px-2 rounded text-sm mb-2 text-left transition-colors bg-gray-900" onClick={handleViewAllTracks}>
           {user ? `${user.name}'s Library` : "My Library"}
         </button>
 

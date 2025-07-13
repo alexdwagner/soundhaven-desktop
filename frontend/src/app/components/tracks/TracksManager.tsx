@@ -45,17 +45,29 @@ export default function TracksManager({
   
   const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks, currentPlaylistTracks } = usePlaylists();
   
-  // Use context playlist tracks if available (for optimistic updates), otherwise use prop, otherwise use all tracks
-  const tracks = selectedPlaylistId ? (currentPlaylistTracks.length > 0 ? currentPlaylistTracks : (selectedPlaylistTracks || [])) : allTracks;
+  // Determine which tracks to display
+  const tracks = selectedPlaylistId ? currentPlaylistTracks : allTracks;
+  
+  console.log(`📓 [TRACKS MANAGER] Tracks determination:`, {
+    selectedPlaylistId,
+    currentPlaylistTracksLength: currentPlaylistTracks.length,
+    allTracksLength: allTracks.length,
+    finalTracksLength: tracks.length,
+    currentPlaylistTracks: currentPlaylistTracks.map(t => ({ id: t.id, name: t.name })),
+    allTracks: allTracks.map(t => ({ id: t.id, name: t.name }))
+  });
+  
   const isPlaylistView = !!selectedPlaylistId;
   
   // Debug: Log which data source we're using
-  console.log('🎯 TracksManager tracks source:', {
+  console.log('📓 TracksManager tracks source:', {
     selectedPlaylistId,
     contextTracksLength: currentPlaylistTracks.length,
     propTracksLength: selectedPlaylistTracks?.length || 0,
     allTracksLength: allTracks.length,
-    usingSource: selectedPlaylistId ? (currentPlaylistTracks.length > 0 ? 'context' : 'prop') : 'allTracks'
+    usingSource: selectedPlaylistId ? 'context' : 'allTracks',
+    actualTracksUsed: tracks.length,
+    trackIds: tracks.map(t => t.id)
   });
   
   const {
@@ -131,6 +143,27 @@ export default function TracksManager({
 
   // Add comments functionality
   const { addMarkerAndComment, fetchCommentsAndMarkers, markers, setMarkers, selectedCommentId } = useComments(waveSurferRef, regionsRef);
+
+  // Handle delete track - moved before keyboard handler to fix hoisting
+  const handleDeleteTrack = useCallback(async () => {
+    if (selectedTrackIds.length > 0) {
+      try {
+        console.log(`🗑️ Deleting ${selectedTrackIds.length} track(s):`, selectedTrackIds);
+        
+        // Delete all selected tracks
+        const deletePromises = selectedTrackIds.map(trackId => deleteTrack(trackId));
+        await Promise.all(deletePromises);
+        
+        console.log(`✅ Successfully deleted ${selectedTrackIds.length} track(s)`);
+        setSelectedTrackIds([]);
+        setSelectionAnchor(null);
+      } catch (error) {
+        console.error("Error deleting tracks:", error);
+        setError(`Failed to delete tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    setShowDeleteModal(false);
+  }, [selectedTrackIds, deleteTrack, setShowDeleteModal]);
 
   // Enhanced reorder handler with optimistic updates and debouncing
   const handleReorderTracks = async (startIndex: number, endIndex: number) => {
@@ -269,6 +302,124 @@ export default function TracksManager({
     setContextMenu(null);
   }, [contextMenu]);
 
+  // Handle remove from playlist
+  const handleRemoveFromPlaylist = useCallback(async (trackId: string) => {
+    if (!selectedPlaylistId) {
+      console.error('Cannot remove track from playlist: no playlist selected');
+      return;
+    }
+
+    try {
+      console.log(`🗑️ Removing track ${trackId} from playlist ${selectedPlaylistId}`);
+      
+      // Optimistic update - immediately remove from UI
+      console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+      setCurrentPlaylistTracks((prev: Track[]) => {
+        console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+          prevLength: prev.length,
+          prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+          tracksToRemove: [trackId]
+        });
+        
+        const filtered = prev.filter((track: Track) => track.id !== trackId);
+        
+        console.log('📓 [DELETE KEY] Optimistic update result:', {
+          beforeLength: prev.length,
+          afterLength: filtered.length,
+          removedIds: [trackId],
+          remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
+        });
+        
+        return filtered;
+      });
+      console.log('📓 [OPTIMISTIC] After setCurrentPlaylistTracks call');
+      setSelectedTrackIds(prev => prev.filter(id => id !== trackId));
+      
+      // Make API call in background
+      const success = await removeTrackFromPlaylist(selectedPlaylistId, trackId);
+      
+      if (success) {
+        console.log(`✅ Successfully removed track ${trackId} from playlist`);
+      } else {
+        console.error(`❌ Failed to remove track ${trackId} from playlist - reverting UI`);
+        // Revert optimistic update by refetching
+        const updatedPlaylist = await fetchPlaylistById(selectedPlaylistId);
+        if (updatedPlaylist) {
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error removing track from playlist:', error);
+      // Revert optimistic update by refetching
+      try {
+        const updatedPlaylist = await fetchPlaylistById(selectedPlaylistId);
+        if (updatedPlaylist) {
+          setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+        }
+      } catch (revertError) {
+        console.error('Failed to revert optimistic update:', revertError);
+      }
+    }
+  }, [selectedPlaylistId, removeTrackFromPlaylist, fetchPlaylistById]);
+
+  // Handle remove from playlist via context menu
+  const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
+    if (contextMenu && contextMenu.trackIds.length > 0) {
+      console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+        trackIds: contextMenu.trackIds,
+        currentPlaylistTracksLength: currentPlaylistTracks.length
+      });
+      
+      // Optimistic update - immediately remove all tracks from UI
+      setCurrentPlaylistTracks((prev: Track[]) => {
+        const filtered = prev.filter((track: Track) => !contextMenu.trackIds.includes(track.id));
+        console.log('📓 [CONTEXT MENU] Optimistic update result:', {
+          beforeLength: prev.length,
+          afterLength: filtered.length,
+          removedIds: contextMenu.trackIds
+        });
+        return filtered;
+      });
+      setSelectedTrackIds(prev => prev.filter(id => !contextMenu.trackIds.includes(id)));
+      
+      // Remove all selected tracks from playlist in background
+      try {
+        const results = await Promise.allSettled(
+          contextMenu.trackIds.map(trackId => removeTrackFromPlaylist(selectedPlaylistId!, trackId))
+        );
+        
+        const failedRemovals = results.filter(result => result.status === 'rejected' || !result.value);
+        
+        if (failedRemovals.length > 0) {
+          console.error(`❌ Failed to remove ${failedRemovals.length} tracks from playlist - reverting UI`);
+          // Revert optimistic update by refetching
+          if (selectedPlaylistId) {
+            const updatedPlaylist = await fetchPlaylistById(selectedPlaylistId);
+            if (updatedPlaylist) {
+              setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+            }
+          }
+        } else {
+          console.log(`✅ Successfully removed ${contextMenu.trackIds.length} tracks from playlist`);
+        }
+      } catch (error) {
+        console.error('Error removing tracks from playlist:', error);
+        // Revert optimistic update by refetching
+        if (selectedPlaylistId) {
+          try {
+            const updatedPlaylist = await fetchPlaylistById(selectedPlaylistId);
+            if (updatedPlaylist) {
+              setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+            }
+          } catch (revertError) {
+            console.error('Failed to revert optimistic update:', revertError);
+          }
+        }
+      }
+    }
+    setContextMenu(null);
+  }, [contextMenu, removeTrackFromPlaylist, selectedPlaylistId, fetchPlaylistById]);
+
   // Close edit modal
   const handleCloseEditModal = useCallback(() => {
     setEditTrackModal({ isOpen: false, track: null });
@@ -344,7 +495,9 @@ export default function TracksManager({
 
   const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
     console.log('🎵 handleSelectTrack called with trackId:', trackId);
-    console.log('🎵 Available tracks:', tracks);
+    console.log('🎵 Available tracks:', tracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
+    console.log('🎵 isPlaylistView:', isPlaylistView);
+    console.log('🎵 Current selectedTrackIds:', selectedTrackIds);
     
     if (event) {
       // Handle multi-selection with Ctrl/Cmd key
@@ -353,6 +506,8 @@ export default function TracksManager({
           const newSelection = prev.includes(trackId) 
             ? prev.filter(id => id !== trackId)
             : [...prev, trackId];
+          
+          console.log('🎵 Ctrl/Cmd+click selection:', { prev, trackId, newSelection });
           
           // Update anchor to the clicked track if it's being added
           if (!prev.includes(trackId)) {
@@ -371,21 +526,45 @@ export default function TracksManager({
       
       // Handle range selection with Shift key
       if (event.shiftKey && selectionAnchor && displayTracks.length > 0) {
-        const anchorIndex = displayTracks.findIndex(t => t.id === selectionAnchor);
-        const currentIndex = displayTracks.findIndex(t => t.id === trackId);
+        // For range selection, find tracks by the same ID logic as handlePlayTrack
+        let anchorIndex = -1;
+        let currentIndex = -1;
+        
+        if (isPlaylistView) {
+          anchorIndex = displayTracks.findIndex(t => {
+            const playlistTrackId = t.playlist_track_id?.toString();
+            const regularTrackId = t.id.toString();
+            return playlistTrackId === selectionAnchor || regularTrackId === selectionAnchor;
+          });
+          currentIndex = displayTracks.findIndex(t => {
+            const playlistTrackId = t.playlist_track_id?.toString();
+            const regularTrackId = t.id.toString();
+            return playlistTrackId === trackId || regularTrackId === trackId;
+          });
+        } else {
+          anchorIndex = displayTracks.findIndex(t => t.id.toString() === selectionAnchor);
+          currentIndex = displayTracks.findIndex(t => t.id.toString() === trackId);
+        }
         
         console.log('🎵 Shift+click selection:', {
           anchorId: selectionAnchor,
           anchorIndex,
           currentId: trackId,
           currentIndex,
-          displayTracksLength: displayTracks.length
+          displayTracksLength: displayTracks.length,
+          isPlaylistView
         });
         
         if (anchorIndex !== -1 && currentIndex !== -1) {
           const start = Math.min(anchorIndex, currentIndex);
           const end = Math.max(anchorIndex, currentIndex);
-          const rangeIds = displayTracks.slice(start, end + 1).map(t => t.id);
+          const rangeIds = displayTracks.slice(start, end + 1).map(t => {
+            if (isPlaylistView) {
+              return (t.playlist_track_id || t.id).toString();
+            } else {
+              return t.id.toString();
+            }
+          });
           console.log('🎵 Range selection:', { start, end, rangeIds });
           setSelectedTrackIds(rangeIds);
           return;
@@ -393,33 +572,85 @@ export default function TracksManager({
       }
     }
     
-    // Single selection - set as new anchor
+    // Single selection
     setSelectedTrackIds([trackId]);
     setSelectionAnchor(trackId);
     
-    const trackIndex = tracks.findIndex((t) => t.id === trackId);
+    // Find the track for playback using the same logic as handlePlayTrack
+    let trackIndex = -1;
+    
+    if (isPlaylistView) {
+      trackIndex = tracks.findIndex((t) => {
+        const playlistTrackId = t.playlist_track_id?.toString();
+        const regularTrackId = t.id.toString();
+        return playlistTrackId === trackId || regularTrackId === trackId;
+      });
+    } else {
+      trackIndex = tracks.findIndex((t) => t.id.toString() === trackId);
+    }
+    
+    console.log('🎵 Looking for track with ID:', trackId);
     console.log('🎵 Found trackIndex:', trackIndex);
+    console.log('🎵 Track found:', trackIndex !== -1 ? tracks[trackIndex] : 'NOT FOUND');
     
     if (trackIndex !== -1) {
       const track = tracks[trackIndex];
-      console.log('🎵 Selecting track for playback:', track);
       setCurrentTrackIndex(trackIndex);
-      selectTrack(track, trackIndex); // Also set in PlaybackContext for CommentsProvider
-      console.log('🎵 selectTrack called successfully');
+      // Don't autoplay on selection, only on double-click (handlePlayTrack)
+      selectTrack(track, trackIndex, false);
     } else {
       console.log('❌ Track not found in tracks array');
     }
-  }, [tracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, displayTracks]);
+  }, [tracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, displayTracks, isPlaylistView]);
 
   const handlePlayTrack = useCallback((trackId: string) => {
-    const trackIndex = tracks.findIndex((t) => t.id === trackId);
-    if (trackIndex !== -1) {
-      const track = tracks[trackIndex];
-      // Here, we can decide if we want to autoplay.
-      // For a double-click action, autoplay is desired.
-      selectTrack(track, trackIndex, true);
+    console.log('🎵 [HANDLE PLAY TRACK] === START ===');
+    console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
+    console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
+    console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
+    
+    // For playlist view, trackId might be playlist_track_id, for library view it's track.id
+    let trackIndex = -1;
+    let foundTrack = null;
+    
+    if (isPlaylistView) {
+      // In playlist view, trackId could be playlist_track_id (number) or track.id (string)
+      trackIndex = tracks.findIndex((t) => {
+        const playlistTrackId = t.playlist_track_id?.toString();
+        const regularTrackId = t.id.toString();
+        return playlistTrackId === trackId || regularTrackId === trackId;
+      });
+    } else {
+      // In library view, trackId is always track.id
+      trackIndex = tracks.findIndex((t) => t.id.toString() === trackId);
     }
-  }, [tracks, selectTrack]);
+    
+    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex:', trackIndex);
+    
+    if (trackIndex !== -1) {
+      foundTrack = tracks[trackIndex];
+      console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
+        index: trackIndex,
+        id: foundTrack.id,
+        name: foundTrack.name,
+        playlist_track_id: foundTrack.playlist_track_id,
+        filePath: foundTrack.filePath
+      });
+      
+      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with autoplay=true');
+      selectTrack(foundTrack, trackIndex, true);
+      console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
+    } else {
+      console.error('❌ [HANDLE PLAY TRACK] Track not found for playback:', trackId);
+      console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', tracks.map(t => ({
+        id: t.id,
+        playlist_track_id: t.playlist_track_id,
+        name: t.name
+      })));
+    }
+    
+    console.log('🎵 [HANDLE PLAY TRACK] === END ===');
+  }, [tracks, selectTrack, isPlaylistView]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -443,7 +674,102 @@ export default function TracksManager({
         case 'Backspace':
           if (selectedTrackIds.length > 0) {
             event.preventDefault();
-            setShowDeleteModal(true);
+            console.log('📓 [KEYBOARD DELETE] Delete key pressed!', {
+              selectedTrackIds,
+              isPlaylistView,
+              selectedPlaylistId,
+              currentPlaylistTracksLength: currentPlaylistTracks.length,
+              tracksLength: tracks.length
+            });
+            
+            if (isPlaylistView) {
+              console.log('📓 [PLAYLIST DELETE] Processing playlist deletion...');
+              
+              // In playlist view, remove from playlist (optimistic)
+              console.log('📓 [DELETE KEY] Before optimistic update:', {
+                selectedTrackIds,
+                currentPlaylistTracksLength: currentPlaylistTracks.length,
+                selectedPlaylistTracksLength: selectedPlaylistTracks?.length || 0,
+                tracksLength: tracks.length
+              });
+              
+              const tracksToRemove = selectedTrackIds.slice(); // Copy array
+              console.log('📓 [TRACKS TO REMOVE]', tracksToRemove);
+              
+              // Optimistic update
+              setCurrentPlaylistTracks((prev: Track[]) => {
+                console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+                  prevLength: prev.length,
+                  prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+                  tracksToRemove
+                });
+                
+                const filtered = prev.filter((track: Track) => !tracksToRemove.includes(track.id));
+                
+                console.log('📓 [DELETE KEY] Optimistic update result:', {
+                  beforeLength: prev.length,
+                  afterLength: filtered.length,
+                  removedIds: tracksToRemove,
+                  remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
+                });
+                
+                return filtered;
+              });
+              
+              console.log('📓 [SELECTION CLEAR] Clearing selected track IDs');
+              setSelectedTrackIds([]);
+              
+              // Remove tracks from playlist in background
+              console.log('📓 [API CALLS] Starting background API calls...');
+              Promise.allSettled(
+                tracksToRemove.map(trackId => {
+                  console.log('📓 [API CALL] Removing track:', trackId);
+                  return removeTrackFromPlaylist(selectedPlaylistId!, trackId);
+                })
+              ).then(results => {
+                console.log('📓 [API RESULTS] All API calls completed:', results);
+                
+                const failedRemovals = results.filter(result => result.status === 'rejected' || !result.value);
+                
+                if (failedRemovals.length > 0) {
+                  console.error('📓 [API FAILURE] Failed to remove tracks:', {
+                    failedCount: failedRemovals.length,
+                    totalCount: tracksToRemove.length,
+                    failures: failedRemovals
+                  });
+                  
+                  // Revert optimistic update by refetching
+                  if (selectedPlaylistId) {
+                    console.log('📓 [REVERT] Reverting optimistic update...');
+                    fetchPlaylistById(selectedPlaylistId).then(updatedPlaylist => {
+                      if (updatedPlaylist) {
+                        console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+                          tracksCount: updatedPlaylist.tracks?.length || 0
+                        });
+                        setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+                      } else {
+                        console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
+                      }
+                    }).catch(error => {
+                      console.error('📓 [REVERT ERROR] Error refetching playlist:', error);
+                    });
+                  }
+                } else {
+                  console.log('📓 [API SUCCESS] Successfully removed all tracks:', {
+                    removedCount: tracksToRemove.length,
+                    trackIds: tracksToRemove
+                  });
+                }
+              }).catch(error => {
+                console.error('📓 [API ERROR] Unexpected error in Promise.allSettled:', error);
+              });
+            } else {
+              console.log('📓 [LIBRARY DELETE] Processing library deletion...');
+              // In library view, delete tracks entirely
+              handleDeleteTrack();
+            }
+          } else {
+            console.log('📓 [NO SELECTION] No tracks selected for deletion');
           }
           break;
 
@@ -526,45 +852,25 @@ export default function TracksManager({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedTrackIds, displayTracks, handlePlayTrack, togglePlayback]);
+  }, [selectedTrackIds, displayTracks, handlePlayTrack, togglePlayback, isPlaylistView, selectedPlaylistId, removeTrackFromPlaylist, fetchPlaylistById, setCurrentPlaylistTracks]);
 
-  // Auto-select first track for testing
-  useEffect(() => {
-    console.log('🎵 Auto-select useEffect triggered:', {
-      displayTracksLength: displayTracks.length,
-      playbackCurrentTrack: playbackCurrentTrack,
-      firstTrack: displayTracks[0]
-    });
-    
-    if (displayTracks.length > 0 && !playbackCurrentTrack) {
-      console.log('🎵 Auto-selecting first track for testing:', displayTracks[0]);
-      handleSelectTrack(displayTracks[0].id);
-    } else if (displayTracks.length === 0) {
-      console.log('❌ No tracks available for auto-select');
-    } else if (playbackCurrentTrack) {
-      console.log('❌ Track already selected:', playbackCurrentTrack);
-    }
-  }, [displayTracks, playbackCurrentTrack, handleSelectTrack]);
-
-  const handleDeleteTrack = async () => {
-    if (selectedTrackIds.length > 0) {
-      try {
-        console.log(`🗑️ Deleting ${selectedTrackIds.length} track(s):`, selectedTrackIds);
-        
-        // Delete all selected tracks
-        const deletePromises = selectedTrackIds.map(trackId => deleteTrack(trackId));
-        await Promise.all(deletePromises);
-        
-        console.log(`✅ Successfully deleted ${selectedTrackIds.length} track(s)`);
-        setSelectedTrackIds([]);
-        setSelectionAnchor(null);
-      } catch (error) {
-        console.error("Error deleting tracks:", error);
-        setError(`Failed to delete tracks: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-    setShowDeleteModal(false);
-  };
+  // Auto-select first track for testing - DISABLED to prevent interference with manual selection
+  // useEffect(() => {
+  //   console.log('🎵 Auto-select useEffect triggered:', {
+  //     displayTracksLength: displayTracks.length,
+  //     playbackCurrentTrack: playbackCurrentTrack,
+  //     firstTrack: displayTracks[0]
+  //   });
+  //   
+  //   if (displayTracks.length > 0 && !playbackCurrentTrack) {
+  //     console.log('🎵 Auto-selecting first track for testing:', displayTracks[0]);
+  //     handleSelectTrack(displayTracks[0].id);
+  //   } else if (displayTracks.length === 0) {
+  //     console.log('❌ No tracks available for auto-select');
+  //   } else if (playbackCurrentTrack) {
+  //     console.log('❌ Track already selected:', playbackCurrentTrack);
+  //   }
+  // }, [displayTracks, playbackCurrentTrack, handleSelectTrack]);
 
   const handleSeek = (time: number) => {
     // This will be handled by the AudioPlayer component
@@ -1132,6 +1438,7 @@ export default function TracksManager({
             onPlayTrack={handlePlayTrack}
             selectedTrackIds={selectedTrackIds}
             onReorderTracks={handleReorderTracks}
+            onRemoveFromPlaylist={isPlaylistView ? handleRemoveFromPlaylist : undefined}
             isPlaylistView={isPlaylistView}
             playlistSortMode={playlistSortMode}
             sortColumn={sortColumn}
@@ -1170,6 +1477,8 @@ export default function TracksManager({
           onDelete={handleDeleteFromContextMenu}
           onEditMetadata={handleEditMetadata}
           onAddToPlaylist={handleAddToPlaylist}
+          onRemoveFromPlaylist={isPlaylistView ? handleRemoveFromPlaylistContextMenu : undefined}
+          isPlaylistView={isPlaylistView}
         />
       )}
 

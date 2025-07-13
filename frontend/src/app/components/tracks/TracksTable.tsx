@@ -87,8 +87,8 @@ const TracksTable: React.FC<TracksTableProps> = ({
     // Update the last drag tracking
     lastDragRef.current = { activeId: active.id, overId: over.id, timestamp: now };
 
-    const oldIndex = tracks.findIndex((track) => track.id === active.id);
-    const newIndex = tracks.findIndex((track) => track.id === over.id);
+    const oldIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === active.id);
+    const newIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === over.id);
     
     console.log('🔄 [TRACK SORT] Track lookup results:', {
       activeId: active.id,
@@ -183,7 +183,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
           onDragEnd={handleDragEnd}
         >
           <SortableContext 
-            items={tracks.map((track) => track.id)} 
+            items={tracks.map((track) => track.playlist_track_id || track.id)} 
             strategy={verticalListSortingStrategy}
           >
             <table className="min-w-full divide-y divide-gray-200">
@@ -201,21 +201,24 @@ const TracksTable: React.FC<TracksTableProps> = ({
               </thead>
 
               <tbody className="bg-white divide-y divide-gray-200">
-                {tracks.map((track, index) => (
-                  <TrackItem
-                    key={track.id}
-                    track={track}
-                    index={index}
-                    onSelectTrack={onSelectTrack}
-                    onPlayTrack={onPlayTrack}
-                    isSelected={selectedTrackIds.includes(track.id)}
-                    selectedTrackIds={selectedTrackIds}
-                    onRemoveFromPlaylist={onRemoveFromPlaylist}
-                    isPlaylistView={isPlaylistView}
-                    isDragEnabled={isDragEnabled}
-                    onContextMenu={onContextMenu}
-                  />
-                ))}
+                {tracks.map((track, index) => {
+                  const uniqueKey = track.playlist_track_id || track.id;
+                  return (
+                    <TrackItem
+                      key={uniqueKey}
+                      track={track}
+                      index={index}
+                      onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
+                      onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
+                      isSelected={selectedTrackIds.includes(uniqueKey.toString())}
+                      selectedTrackIds={selectedTrackIds}
+                      onRemoveFromPlaylist={onRemoveFromPlaylist}
+                      isPlaylistView={isPlaylistView}
+                      isDragEnabled={isDragEnabled}
+                      onContextMenu={onContextMenu}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </SortableContext>
@@ -236,21 +239,24 @@ const TracksTable: React.FC<TracksTableProps> = ({
           </thead>
 
           <tbody className="bg-white divide-y divide-gray-200">
-            {tracks.map((track, index) => (
-              <TrackItem
-                key={track.id}
-                track={track}
-                index={index}
-                onSelectTrack={onSelectTrack}
-                onPlayTrack={onPlayTrack}
-                isSelected={selectedTrackIds.includes(track.id)}
-                selectedTrackIds={selectedTrackIds}
-                onRemoveFromPlaylist={onRemoveFromPlaylist}
-                isPlaylistView={isPlaylistView}
-                isDragEnabled={isDragEnabled}
-                onContextMenu={onContextMenu}
-              />
-            ))}
+            {tracks.map((track, index) => {
+              const uniqueKey = track.playlist_track_id || track.id;
+              return (
+                <TrackItem
+                  key={uniqueKey}
+                  track={track}
+                  index={index}
+                  onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
+                  onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
+                  isSelected={selectedTrackIds.includes(uniqueKey.toString())}
+                  selectedTrackIds={selectedTrackIds}
+                  onRemoveFromPlaylist={onRemoveFromPlaylist}
+                  isPlaylistView={isPlaylistView}
+                  isDragEnabled={isDragEnabled}
+                  onContextMenu={onContextMenu}
+                />
+              );
+            })}
           </tbody>
         </table>
       )}

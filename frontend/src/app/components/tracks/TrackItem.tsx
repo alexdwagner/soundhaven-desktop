@@ -45,7 +45,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     transition,
     isDragging,
   } = useSortable({ 
-    id: track.id,
+    id: track.playlist_track_id || track.id,
     disabled: !isDragEnabled // Only disable based on isDragEnabled
   });
 
@@ -77,17 +77,21 @@ const TrackItem: React.FC<TrackItemProps> = ({
   };
 
   const handleClick = (event: React.MouseEvent) => {
-    onSelectTrack(track.id, event);
+    const uniqueKey = track.playlist_track_id || track.id;
+    onSelectTrack(uniqueKey.toString(), event);
   };
 
   const handleDoubleClick = () => {
-    onPlayTrack(track.id);
+    const uniqueKey = track.playlist_track_id || track.id;
+    console.log('🎵 [TRACK ITEM] handleDoubleClick called for track:', track.name, 'with uniqueKey:', uniqueKey);
+    onPlayTrack(uniqueKey.toString());
   };
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     if (onContextMenu) {
-      onContextMenu(track.id, event.clientX, event.clientY);
+      const uniqueKey = track.playlist_track_id || track.id;
+      onContextMenu(uniqueKey.toString(), event.clientX, event.clientY);
     }
   };
 

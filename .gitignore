@@ -1,59 +1,59 @@
-# Node dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
 
-# Editor files
-.idea/
-.vscode/
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
 .DS_Store
-*.swp
-*.swo
+*.pem
 
-# Build output
-dist/
-out/
-main/dist/
-frontend/.next/
-frontend/.vercel/
-frontend/.turbo/
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# SQLite database & Drizzle migrations
-main/soundhaven.db
-main/soundhaven.db-journal
-migrations/
-main/migrations/
+# local env files
+.env*.local
 
-# User uploaded audio files
-main/uploads/
+# vercel
+.vercel
 
-# Compiled TypeScript
+# typescript
 *.tsbuildinfo
-*.d.ts
-frontend/.next/
+next-env.d.ts
 
-# Secrets & environment variables
+# Marketing materials (private)
+LANDING_PAGE_COPY.md%
+
+# Main directory ignores
+main/node_modules/
+main/dist/
+main/uploads/
+main/db.sqlite
+main/soundhaven.db
+main/.env
+
+# Environment files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+main/.env
 
-# Development roadmap (private)
-ROADMAP.md
+# Database files
+*.db
+*.sqlite
+*.sqlite3
 
-# Electron cache
-.cache/
-electron-build/
-
-/soundhaven-backend/
+# Compiled files
+dist/
+build/

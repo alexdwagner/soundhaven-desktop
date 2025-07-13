@@ -132,6 +132,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Track if WaveSurfer is loaded and ready to play audio
   const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+  
+  // Track if we should auto-play once audio is loaded
+  const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
   // Sync internal volume state with external volume prop
   useEffect(() => {
@@ -172,6 +175,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       } catch (error) {
         console.error('❌ AudioPlayer: Error auto-pausing WaveSurfer audio:', error);
       }
+    } else if (isPlaying && !isAudioLoaded) {
+      console.log('🎵 AudioPlayer: Audio not loaded yet, setting shouldAutoPlay flag');
+      setShouldAutoPlay(true);
     }
   }, [isPlaying, isAudioLoaded]);
 
@@ -485,6 +491,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         setIsAudioLoaded(true); // Audio is loaded and ready to play
         setDuration(wavesurfer.getDuration());
         
+        // Check if we should auto-play now that audio is loaded
+        if (shouldAutoPlay) {
+          console.log('🎵 AudioPlayer: Auto-playing because shouldAutoPlay flag is set');
+          setShouldAutoPlay(false); // Reset flag
+          const playPromise = wavesurfer.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(error => {
+              if (error.name !== 'AbortError') {
+                console.error('❌ AudioPlayer: Error auto-playing on ready:', error);
+              }
+            });
+          }
+        }
+        
         // Add markers after WaveSurfer is ready
         if (markers && markers.length > 0) {
           console.log('🎯 Adding markers after WaveSurfer ready:', markers.length);
@@ -672,11 +692,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [markers, setRegionCommentMap]);
 
-  // Initialize WaveSurfer
+  // Set audio URL based on track file path
   useEffect(() => {
-    // Early return if no track is provided
+    console.log('🎵 AudioPlayer: Track changed effect triggered');
+    console.log('🎵 AudioPlayer: Track object:', track);
+    console.log('🎵 AudioPlayer: Track filePath:', track?.filePath);
+    console.log('🎵 AudioPlayer: Track filePath type:', typeof track?.filePath);
+    console.log('🎵 AudioPlayer: Track keys:', track ? Object.keys(track) : 'null');
+    
     if (!track) {
-      console.log('AudioPlayer: No track provided, skipping WaveSurfer initialization');
+      console.log('AudioPlayer: No track provided, clearing audio');
+      setAudioUrl('');
+      setIsReady(false);
+      setIsAudioLoaded(false);
+      setCurrentTime(0);
+      setDuration(0);
+      
       // Clear regions if no track
       if (regionsRef.current) {
         console.log('AudioPlayer: Clearing regions - no track');
@@ -698,6 +729,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     
     if (!waveformRef.current || !track?.filePath) {
       console.log('AudioPlayer: Missing waveformRef or filePath, returning early');
+      console.log('AudioPlayer: waveformRef.current:', !!waveformRef.current);
+      console.log('AudioPlayer: track?.filePath:', track?.filePath);
       return;
     }
 
@@ -713,7 +746,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const fileName = track.filePath.replace('/uploads/', '');
     const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
     
-    console.log('AudioPlayer: Setting audioUrl to audio server URL:', audioServerUrl);
+    console.log('🎵 AudioPlayer: Setting audioUrl to audio server URL:', audioServerUrl);
     setAudioUrl(audioServerUrl);
   }, [track?.filePath]);
 
@@ -722,6 +755,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (audioUrl) {
       console.log('🎵 AudioPlayer: Audio URL changed, resetting states');
       setIsAudioLoaded(false);
+      // DON'T reset shouldAutoPlay flag - it needs to survive track changes
       setCurrentTime(0);
       setDuration(0);
     }

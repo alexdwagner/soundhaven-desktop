@@ -1,5 +1,5 @@
 export interface Track {
-  id: number;
+  id: string;
   name: string;
   duration: number;
   artistId?: number | null;
@@ -19,5 +19,7 @@ export interface Track {
   trackNumber?: number;
   createdAt: Date | number | string;
   updatedAt: Date | number | string;
+  // Unique ID for playlist track entries (when track is in a playlist)
+  playlist_track_id?: number;
   // Optionally, add more fields as needed
 } 

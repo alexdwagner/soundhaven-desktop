@@ -87,20 +87,53 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     }, []);
 
     const selectTrack = useCallback((track: Track | null, index: number | null, autoPlay: boolean = false) => {
-        console.log("🎵 [PLAYBACK] Selecting track:", track?.name, "autoPlay:", autoPlay);
+        console.log("🎵 [PLAYBACK] === selectTrack START ===");
+        console.log("🎵 [PLAYBACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay);
+        console.log("🎵 [PLAYBACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
+        console.log("🎵 [PLAYBACK] Current isPlaying:", isPlaying);
+        
         if (track === null) {
+            console.log("🎵 [PLAYBACK] Setting track to null");
             setCurrentTrack(null);
             setCurrentTrackIndex(null);
             setIsPlaying(false);
-        } else if (currentTrack?.id === track.id && isPlaying) {
-            setIsPlaying(false);
         } else {
-            setCurrentTrack(track);
-            setCurrentTrackIndex(index);
-            // Auto-play if requested (used for sequential playback)
-            setIsPlaying(autoPlay);
+            // For playlist tracks, we need to compare both track ID and index to handle duplicates
+            const currentTrackId = currentTrack?.id;
+            const newTrackId = track.id;
+            const currentIndex = currentTrackIndex;
+            const newIndex = index;
+            
+            // Check if this is the same track AND same position (for duplicates)
+            const isSameTrackAndIndex = currentTrackId === newTrackId && currentIndex === newIndex;
+            
+            console.log("🎵 [PLAYBACK] Comparison:", {
+                currentTrackId,
+                newTrackId,
+                currentIndex,
+                newIndex,
+                isSameTrackAndIndex,
+                isPlaying
+            });
+            
+            if (isSameTrackAndIndex && isPlaying && !autoPlay) {
+                console.log("🎵 [PLAYBACK] Same track and index already playing - pausing");
+                setIsPlaying(false);
+            } else {
+                console.log("🎵 [PLAYBACK] Setting new track:", {
+                    trackName: track.name,
+                    trackId: track.id,
+                    index: index,
+                    willAutoPlay: autoPlay
+                });
+                setCurrentTrack(track);
+                setCurrentTrackIndex(index);
+                setIsPlaying(autoPlay);
+            }
         }
-    }, [currentTrack?.id, isPlaying]);
+        
+        console.log("🎵 [PLAYBACK] === selectTrack END ===");
+    }, [currentTrack, currentTrackIndex, isPlaying]);
 
     const nextTrack = useCallback((tracks: Track[], autoPlay: boolean = false) => {
         console.log("🎵 [PLAYBACK] nextTrack called, mode:", playbackMode, "autoPlay:", autoPlay);

@@ -26,8 +26,8 @@ interface PlaylistsContextType {
   fetchPlaylistById: (id: string) => Promise<ExtendedPlaylist | null>;
   createPlaylist: (name: string, description?: string) => Promise<Playlist | null>;
   deletePlaylist: (id: string) => Promise<boolean>;
-  addTrackToPlaylist: (playlistId: string, trackId: string, force?: boolean) => Promise<boolean>;
-  addTracksToPlaylist: (playlistId: string, trackIds: string[], force?: boolean) => Promise<{ successful: string[], failed: string[] }>;
+  addTrackToPlaylist: (playlistId: string, trackId: string) => Promise<boolean>;
+  addTracksToPlaylist: (playlistId: string, trackIds: string[]) => Promise<{ successful: number; failed: number; errors: string[] }>;
   removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<boolean>;
   updatePlaylistMetadata: (playlistId: string, updates: { name?: string; description?: string }) => Promise<boolean>;
   updatePlaylistOrder: (playlistIds: string[]) => Promise<Playlist[]>;
@@ -139,13 +139,27 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   }, []);
 
   const fetchPlaylistById = useCallback(async (id: string): Promise<ExtendedPlaylist | null> => {
-    // Remove token requirement for local-first app
+    console.log(`📓 [PLAYLIST PROVIDER] fetchPlaylistById called with id: ${id}`);
+    
     try {
+      console.log(`📓 [PLAYLIST PROVIDER] Calling apiService.getPlaylistById...`);
       const playlist = await apiService.getPlaylistById(id) as ExtendedPlaylist;
+      console.log(`📓 [PLAYLIST PROVIDER] apiService.getPlaylistById raw result:`, playlist);
+      
+      if (playlist) {
+        console.log(`📓 [PLAYLIST PROVIDER] Playlist found: ${playlist.name}`);
+        console.log(`📓 [PLAYLIST PROVIDER] Playlist tracks count: ${playlist.tracks?.length || 0}`);
+        console.log(`📓 [PLAYLIST PROVIDER] Playlist tracks:`, playlist.tracks?.map(t => ({ id: t.id, name: t.name })));
+        console.log(`📓 [PLAYLIST PROVIDER] Playlist structure keys:`, Object.keys(playlist));
+      } else {
+        console.log(`📓 [PLAYLIST PROVIDER] ❌ No playlist returned from API`);
+      }
+      
       return playlist;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error(`Error fetching playlist ${id}:`, errorMessage);
+      console.error(`📓 [PLAYLIST PROVIDER] ❌ Error fetching playlist ${id}:`, errorMessage);
+      console.error(`📓 [PLAYLIST PROVIDER] ❌ Full error:`, error);
       setError(errorMessage);
       return null;
     }
@@ -219,94 +233,100 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   }, []);
 
   const addTrackToPlaylist = useCallback(
-    async (playlistId: string, trackId: string, force: boolean = false): Promise<boolean> => {
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: addTrackToPlaylist called`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: playlistId="${playlistId}", trackId="${trackId}", force=${force}`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: currentPlaylistId="${currentPlaylistId}"`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService type:`, typeof apiService);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTrackToPlaylist type:`, typeof apiService.addTrackToPlaylist);
+    async (playlistId: string, trackId: string): Promise<boolean> => {
+      console.log(`📓 [PLAYLIST PROVIDER] addTrackToPlaylist called`);
+      console.log(`📓 [PLAYLIST PROVIDER] playlistId="${playlistId}", trackId="${trackId}"`);
+      console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistId="${currentPlaylistId}"`);
+      console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistTracks.length=${currentPlaylistTracks.length}`);
       
       try {
-        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Calling apiService.addTrackToPlaylist...`);
-        const result = await apiService.addTrackToPlaylist(playlistId, trackId, force);
-        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTrackToPlaylist returned:`, result);
-
-        // Refresh the current playlist tracks if this is the current playlist
+        console.log(`📓 [PLAYLIST PROVIDER] Calling apiService.addTrackToPlaylist`);
+        const result = await apiService.addTrackToPlaylist(playlistId, trackId);
+        console.log(`📓 [PLAYLIST PROVIDER] apiService.addTrackToPlaylist result:`, result);
+        
+        // Always refresh playlists to get fresh data
+        console.log(`📓 [PLAYLIST PROVIDER] Refreshing main playlists array...`);
+        await fetchPlaylists();
+        console.log(`📓 [PLAYLIST PROVIDER] Main playlists array refreshed`);
+        
+        // Also refresh current playlist tracks if we're viewing this playlist
         if (currentPlaylistId === playlistId) {
-          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Refreshing current playlist tracks...`);
+          console.log(`📓 [PLAYLIST PROVIDER] Refreshing current playlist tracks for playlist ${playlistId}...`);
           const updatedPlaylist = await fetchPlaylistById(playlistId);
+          console.log(`📓 [PLAYLIST PROVIDER] fetchPlaylistById result:`, updatedPlaylist);
+          
           if (updatedPlaylist) {
-            console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Updated playlist fetched, tracks count:`, updatedPlaylist.tracks?.length || 0);
+            console.log(`📓 [PLAYLIST PROVIDER] Updated playlist tracks count: ${updatedPlaylist.tracks?.length || 0}`);
+            console.log(`📓 [PLAYLIST PROVIDER] Updated playlist tracks:`, updatedPlaylist.tracks?.map(t => ({ id: t.id, name: t.name })));
             setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+            console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistTracks updated to length: ${updatedPlaylist.tracks?.length || 0}`);
           } else {
-            console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Failed to fetch updated playlist`);
+            console.log(`📓 [PLAYLIST PROVIDER] ❌ fetchPlaylistById returned null/undefined`);
           }
         } else {
-          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Not refreshing tracks - different playlist`);
+          console.log(`📓 [PLAYLIST PROVIDER] Not refreshing tracks - different playlist (current: ${currentPlaylistId}, target: ${playlistId})`);
         }
-
-        console.log(`[DRAG N DROP] ✅ PlaylistsProvider: Successfully added track to playlist`);
+        
         return true;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error adding track ${trackId} to playlist ${playlistId}:`, errorMessage);
-        console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Full error object:`, error);
-        console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
-        setError(errorMessage);
+        console.error(`📓 [PLAYLIST PROVIDER] ❌ Error adding track ${trackId} to playlist ${playlistId}:`, error);
         return false;
       }
     },
-    [currentPlaylistId, fetchPlaylistById]
+    [apiService, fetchPlaylists, fetchPlaylistById, currentPlaylistId, currentPlaylistTracks.length]
   );
 
   const addTracksToPlaylist = useCallback(
-    async (playlistId: string, trackIds: string[], force: boolean = false): Promise<{ successful: string[], failed: string[] }> => {
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: addTracksToPlaylist called`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: playlistId="${playlistId}", trackIds=${trackIds.length}, force=${force}`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: currentPlaylistId="${currentPlaylistId}"`);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService type:`, typeof apiService);
-      console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTracksToPlaylist type:`, typeof apiService.addTracksToPlaylist);
+    async (playlistId: string, trackIds: string[]): Promise<{ successful: number; failed: number; errors: string[] }> => {
+      console.log(`📓 [PLAYLIST PROVIDER] addTracksToPlaylist called`);
+      console.log(`📓 [PLAYLIST PROVIDER] playlistId="${playlistId}", trackIds.length=${trackIds.length}`);
+      console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistId="${currentPlaylistId}"`);
+      console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistTracks.length=${currentPlaylistTracks.length}`);
       
-      const successful: string[] = [];
-      const failed: string[] = [];
-
+      const results = { successful: 0, failed: 0, errors: [] as string[] };
+      
       for (const trackId of trackIds) {
         try {
-          console.log(`[DRAG N DROP] �� PlaylistsProvider: Attempting to add track ${trackId} to playlist ${playlistId}`);
-          const result = await apiService.addTrackToPlaylist(playlistId, trackId, force);
-          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: apiService.addTrackToPlaylist returned for ${trackId}:`, result);
-          if (result) {
-            successful.push(trackId);
-          } else {
-            failed.push(trackId);
-          }
+          console.log(`📓 [PLAYLIST PROVIDER] Adding track ${trackId} to playlist ${playlistId}...`);
+          await apiService.addTrackToPlaylist(playlistId, trackId);
+          results.successful++;
+          console.log(`📓 [PLAYLIST PROVIDER] ✅ Successfully added track ${trackId}`);
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error adding track ${trackId} to playlist ${playlistId}:`, errorMessage);
-          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Full error object:`, error);
-          console.error(`[DRAG N DROP] ❌ PlaylistsProvider: Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
-          failed.push(trackId);
+          results.failed++;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          results.errors.push(`${trackId}: ${errorMessage}`);
+          console.error(`📓 [PLAYLIST PROVIDER] ❌ Error adding track ${trackId} to playlist ${playlistId}:`, errorMessage);
+          console.error(`📓 [PLAYLIST PROVIDER] ❌ Full error object:`, error);
         }
       }
-
-      // Refresh the current playlist tracks if this is the current playlist
+      
+      // Always refresh playlists to get fresh data
+      console.log(`📓 [PLAYLIST PROVIDER] Refreshing main playlists array after batch add...`);
+      await fetchPlaylists();
+      console.log(`📓 [PLAYLIST PROVIDER] Main playlists array refreshed after batch add`);
+      
+      // Also refresh current playlist tracks if we're viewing this playlist
       if (currentPlaylistId === playlistId) {
-        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Refreshing current playlist tracks after batch add...`);
+        console.log(`📓 [PLAYLIST PROVIDER] Refreshing current playlist tracks for playlist ${playlistId} after batch add...`);
         const updatedPlaylist = await fetchPlaylistById(playlistId);
+        console.log(`📓 [PLAYLIST PROVIDER] fetchPlaylistById result after batch add:`, updatedPlaylist);
+        
         if (updatedPlaylist) {
-          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Updated playlist fetched, tracks count:`, updatedPlaylist.tracks?.length || 0);
+          console.log(`📓 [PLAYLIST PROVIDER] Updated playlist tracks count after batch add: ${updatedPlaylist.tracks?.length || 0}`);
+          console.log(`📓 [PLAYLIST PROVIDER] Updated playlist tracks after batch add:`, updatedPlaylist.tracks?.map(t => ({ id: t.id, name: t.name })));
           setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+          console.log(`📓 [PLAYLIST PROVIDER] currentPlaylistTracks updated after batch add to length: ${updatedPlaylist.tracks?.length || 0}`);
         } else {
-          console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Failed to fetch updated playlist after batch add`);
+          console.log(`📓 [PLAYLIST PROVIDER] ❌ fetchPlaylistById returned null/undefined after batch add`);
         }
       } else {
-        console.log(`[DRAG N DROP] 🎯 PlaylistsProvider: Not refreshing tracks - different playlist`);
+        console.log(`📓 [PLAYLIST PROVIDER] Not refreshing tracks after batch add - different playlist (current: ${currentPlaylistId}, target: ${playlistId})`);
       }
-
-      console.log(`[DRAG N DROP] ✅ PlaylistsProvider: Batch add tracks to playlist completed. Successful: ${successful.length}, Failed: ${failed.length}`);
-      return { successful, failed };
+      
+      console.log(`📓 [PLAYLIST PROVIDER] ✅ Batch add tracks to playlist completed. Successful: ${results.successful}, Failed: ${results.failed}`);
+      return results;
     },
-    [currentPlaylistId, fetchPlaylistById]
+    [apiService, fetchPlaylists, fetchPlaylistById, currentPlaylistId, currentPlaylistTracks.length]
   );
 
   const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string): Promise<boolean> => {

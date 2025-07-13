@@ -784,7 +784,8 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
                  a.name as artist_name,
                    al.name as album_name,
                    al.album_art_path as album_album_art_path,
-                   pt."order" as playlist_order
+                   pt."order" as playlist_order,
+                   pt.id as playlist_track_id
             FROM playlist_tracks pt
             JOIN tracks t ON pt.track_id = t.id
           LEFT JOIN artists a ON t.artist_id = a.id
@@ -844,25 +845,28 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           return { error: 'Invalid playlist or track ID', status: 400 };
         }
         
+        console.log(`[API DEBUG] Adding track ${trackId} to playlist ${playlistId}`);
+        
         try {
           // Get the current highest order
           const result = await dbAsync.get(
-            'SELECT MAX("order") as maxOrder FROM playlist_tracks WHERE playlist_id = ?',
+            'SELECT MAX("order") as max_order FROM playlist_tracks WHERE playlist_id = ?',
             [playlistId]
           );
-          const nextOrder = (result?.maxOrder || -1) + 1;
+          const nextOrder = (result?.max_order || 0) + 1;
           
-          // Add the track
+          // Insert the track into the playlist (duplicates are now allowed)
           await dbAsync.run(
-            'INSERT INTO playlist_tracks (playlist_id, track_id, "order") VALUES (?, ?, ?)',
-            [playlistId, trackId, nextOrder]
+            'INSERT INTO playlist_tracks (track_id, playlist_id, "order") VALUES (?, ?, ?)',
+            [trackId, playlistId, nextOrder]
           );
-        
-        return { data: { success: true } };
-      } catch (error) {
-        console.error('[API DEBUG] Error adding track to playlist:', error);
-        return { error: 'Failed to add track to playlist', status: 500 };
-      }
+          
+          console.log(`[API DEBUG] Successfully added track ${trackId} to playlist ${playlistId} at order ${nextOrder}`);
+          return { success: true, order: nextOrder };
+        } catch (error) {
+          console.error(`[API DEBUG] Error adding track to playlist:`, error);
+          return { error: 'Failed to add track to playlist', status: 500 };
+        }
       }
       
       // Remove track from playlist
@@ -1084,7 +1088,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           const now = Math.floor(Date.now() / 1000);
           
           await dbAsync.run(
-            'INSERT INTO comments (id, content, track_id, user_id, created_at, time) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO comments (id, content, track_id, user_id, created_at, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
             [commentId, content, trackId, userId, now, time]
           );
           

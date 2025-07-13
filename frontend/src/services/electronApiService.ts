@@ -450,39 +450,68 @@ export const apiService = {
   },
 
   async getPlaylistById(id: string) {
-    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${id}`);
-    if (error) throw new Error(error);
+    console.log(`📓 [ELECTRON API] getPlaylistById called with id: ${id}`);
     
-    // Transform playlist tracks data to match the Track interface
-    if (data && data.tracks && Array.isArray(data.tracks)) {
-      data.tracks = data.tracks.map((track: any) => ({
-        id: track.id,
-        name: track.name,
-        duration: track.duration,
-        artistId: track.artist_id || track.artistId,
-        artistName: track.artist_name || track.artistName, // Map artist_name to artistName
-        artist: track.artist,
-        albumId: track.album_id || track.albumId,
-        albumName: track.album_name || track.albumName, // Map album_name to albumName
-        album: track.album,
-        albumArtPath: track.album_album_art_path || track.album_art_path || track.albumArtPath || undefined,
-        userId: track.user_id || track.userId,
-        createdAt: track.created_at || track.createdAt,
-        updatedAt: track.updated_at || track.updatedAt,
-        playlists: track.playlists || [],
-        genres: track.genres || [],
-        filePath: track.file_path || track.filePath,
-        // Include metadata fields
-        bitrate: track.bitrate,
-        sampleRate: track.sample_rate || track.sampleRate,
-        channels: track.channels,
-        year: track.year,
-        genre: track.genre,
-        trackNumber: track.track_number || track.trackNumber
-      }));
+    try {
+      console.log(`📓 [ELECTRON API] Making request to /api/playlists/${id}`);
+      const { data, error } = await makeRequest<ExtendedPlaylist>(`/api/playlists/${id}`);
+      console.log(`📓 [ELECTRON API] Raw API response:`, { data, error });
+      
+      if (error) {
+        console.error(`📓 [ELECTRON API] ❌ API returned error:`, error);
+        throw new Error(error);
+      }
+      
+      if (data) {
+        console.log(`📓 [ELECTRON API] ✅ Playlist data received:`, data);
+        console.log(`📓 [ELECTRON API] Playlist name: ${data.name}`);
+        console.log(`📓 [ELECTRON API] Playlist tracks count: ${data.tracks?.length || 0}`);
+        
+        // Map track properties from snake_case to camelCase (similar to getTracks)
+        const mappedTracks = data.tracks?.map((track: any) => ({
+          id: track.id,
+          name: track.name,
+          duration: track.duration,
+          artistId: track.artist_id || track.artistId,
+          artistName: track.artist_name || track.artistName,
+          artist: track.artist,
+          albumId: track.album_id || track.albumId,
+          albumName: track.album_name || track.albumName,
+          album: track.album,
+          albumArtPath: track.album_album_art_path || track.album_art_path || track.albumArtPath || undefined,
+          userId: track.user_id || track.userId,
+          createdAt: track.created_at || track.createdAt,
+          updatedAt: track.updated_at || track.updatedAt,
+          playlists: track.playlists || [],
+          genres: track.genres || [],
+          filePath: track.file_path || track.filePath, // This is the key fix!
+          bitrate: track.bitrate,
+          sampleRate: track.sample_rate || track.sampleRate,
+          channels: track.channels,
+          year: track.year,
+          genre: track.genre,
+          trackNumber: track.track_number || track.trackNumber,
+          playlist_track_id: track.playlist_track_id
+        })) || [];
+        
+        console.log(`📓 [ELECTRON API] Mapped tracks:`, mappedTracks.map(t => ({ id: t.id, name: t.name, filePath: t.filePath })));
+        
+        const mappedPlaylist = {
+          ...data,
+          tracks: mappedTracks
+        };
+        
+        console.log(`📓 [ELECTRON API] Returning mapped playlist data`);
+        return mappedPlaylist;
+      } else {
+        console.log(`📓 [ELECTRON API] ❌ No data in API response`);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error(`📓 [ELECTRON API] ❌ Exception in getPlaylistById:`, error);
+      throw error;
     }
-    
-    return data;
   },
 
   async createPlaylist(playlistData: { name: string; description?: string }) {
@@ -522,32 +551,23 @@ export const apiService = {
     if (error) throw new Error(error);
   },
 
-  async addTrackToPlaylist(playlistId: string, trackId: string, force: boolean = false) {
+  async addTrackToPlaylist(playlistId: string, trackId: string): Promise<boolean> {
     console.log(`[DRAG N DROP] 🌐 ElectronAPI: addTrackToPlaylist called`);
-    console.log(`[DRAG N DROP] 🌐 ElectronAPI: playlistId="${playlistId}", trackId="${trackId}", force=${force}`);
-    
-    const endpoint = `/api/playlists/${playlistId}/tracks/${trackId}${force ? '?force=true' : ''}`;
-    console.log(`[DRAG N DROP] 🌐 ElectronAPI: Making request to endpoint: ${endpoint}`);
+    console.log(`[DRAG N DROP] 🌐 ElectronAPI: playlistId="${playlistId}", trackId="${trackId}"`);
     
     try {
-      const { data, error } = await makeRequest<any>(endpoint, {
+      const { data, error } = await makeRequest(`/api/playlists/${playlistId}/tracks/${trackId}`, {
         method: 'POST',
       });
-      
-      console.log(`[DRAG N DROP] 🌐 ElectronAPI: makeRequest response:`, { 
-        data, 
-        error, 
-        dataType: typeof data,
-        hasData: !!data 
-      });
+      console.log(`[DRAG N DROP] 🌐 ElectronAPI: makeRequest response:`, { data, error });
       
       if (error) {
-        console.error(`[DRAG N DROP] ❌ ElectronAPI: Request error: ${error}`);
+        console.error(`[DRAG N DROP] ❌ ElectronAPI: Request error:`, error);
         throw new Error(error);
       }
       
       console.log(`[DRAG N DROP] ✅ ElectronAPI: Successfully added track to playlist`);
-      return data;
+      return true;
     } catch (error) {
       console.error(`[DRAG N DROP] ❌ ElectronAPI: Exception in addTrackToPlaylist:`, error);
       throw error;

@@ -67,6 +67,8 @@ export interface User {
     year?: number | null;
     genre?: string | null;
     trackNumber?: number | null;
+    // Unique ID for playlist track entries (when track is in a playlist)
+    playlist_track_id?: number;
   }
   
   export interface Playlist {

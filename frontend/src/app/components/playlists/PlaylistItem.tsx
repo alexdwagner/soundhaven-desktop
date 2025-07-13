@@ -94,72 +94,41 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   //   };
 
   const handleDrop = async (e: React.DragEvent<HTMLLIElement>) => {
-    console.log(`🔥 [PLAYLIST DEBUG] ===== DROP EVENT TRIGGERED =====`);
-    console.log(`🔥 [PLAYLIST DEBUG] Drop on playlist ${playlist.id} (${playlist.name})`);
-    console.log(`🔥 [PLAYLIST DEBUG] DataTransfer types:`, e.dataTransfer.types);
-    console.log(`🔥 [PLAYLIST DEBUG] Event target:`, e.target);
-    console.log(`🔥 [PLAYLIST DEBUG] Event currentTarget:`, e.currentTarget);
-    
-    console.log(`[DRAG N DROP] 🎯 Drop event triggered on playlist ${playlist.id} (${playlist.name})`);
-    console.log(`[DRAG N DROP] 🎯 DataTransfer types:`, e.dataTransfer.types);
+    console.log(`📓 [PLAYLIST ITEM] ===== DROP EVENT TRIGGERED =====`);
+    console.log(`📓 [PLAYLIST ITEM] Drop on playlist ${playlist.id} (${playlist.name})`);
+    console.log(`📓 [PLAYLIST ITEM] Current playlist tracks count: ${playlist.tracks?.length || 0}`);
     
     try {
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
-      console.log(`[DRAG N DROP] 🎯 Drop event prevented and isDragOver reset`);
       
       const trackData = e.dataTransfer.getData("text/plain");
-      console.log(`🔥 [PLAYLIST DEBUG] Retrieved track data:`, trackData);
-      console.log(`[DRAG N DROP] 🎯 Retrieved track data from dataTransfer: "${trackData}"`);
-      console.log(`[DRAG N DROP] 🎯 Track data type: ${typeof trackData}, length: ${trackData.length}`);
+      console.log(`📓 [PLAYLIST ITEM] Raw track data from drag:`, trackData);
       
-      if (!trackData || trackData.trim() === '') {
-        console.error(`[DRAG N DROP] ❌ No track data found in drag data`);
-        console.log(`[DRAG N DROP] ❌ Available types:`, e.dataTransfer.types);
+      if (!trackData) {
+        console.log(`📓 [PLAYLIST ITEM] ❌ No track data found in drag event`);
         return;
       }
       
-      // Parse track IDs - could be JSON array or single track ID
-      let trackIds: string[] = [];
-      try {
-        // Try to parse as JSON array first
-        const parsed = JSON.parse(trackData);
-        if (Array.isArray(parsed)) {
-          trackIds = parsed;
-        } else {
-          trackIds = [parsed]; // Single track ID
-        }
-      } catch {
-        // Not JSON, assume single track ID
-        trackIds = [trackData];
-      }
+      const trackIds = JSON.parse(trackData);
+      console.log(`📓 [PLAYLIST ITEM] Parsed track IDs:`, trackIds);
+      console.log(`📓 [PLAYLIST ITEM] Track IDs count: ${trackIds.length}`);
       
-      console.log(`🔥 [PLAYLIST DEBUG] Parsed track IDs:`, trackIds);
-      console.log(`[DRAG N DROP] 🎯 Parsed ${trackIds.length} track ID(s):`, trackIds);
-      console.log(`[DRAG N DROP] 🎯 About to add tracks to playlist ${playlist.id}...`);
-      
-      // Use batch function for multiple tracks, single function for one track
-      if (trackIds.length > 1) {
+      if (trackIds.length > 0) {
+        console.log(`📓 [PLAYLIST ITEM] 🎯 Adding ${trackIds.length} tracks to playlist ${playlist.id}`);
         const result = await addTracksToPlaylist(playlist.id, trackIds);
-        console.log(`[DRAG N DROP] ✅ Successfully added ${result.successful.length} tracks to playlist ${playlist.id}`);
-        if (result.failed.length > 0) {
-          console.warn(`[DRAG N DROP] ⚠️ Failed to add ${result.failed.length} tracks:`, result.failed);
+        console.log(`📓 [PLAYLIST ITEM] ✅ Add tracks result:`, result);
+        console.log(`📓 [PLAYLIST ITEM] Successfully added ${result.successful} tracks to playlist ${playlist.id}`);
+        if (result.failed > 0) {
+          console.log(`📓 [PLAYLIST ITEM] ⚠️ Failed to add ${result.failed} tracks:`, result.errors);
         }
       } else {
-        const result = await addTrackToPlaylist(playlist.id, trackIds[0]);
-        console.log(`[DRAG N DROP] ✅ Successfully added track ${trackIds[0]} to playlist ${playlist.id}`);
+        console.log(`📓 [PLAYLIST ITEM] ⚠️ No tracks to add to playlist ${playlist.id}`);
       }
       
     } catch (error) {
-      console.error(`🔥 [PLAYLIST DEBUG] ===== DROP ERROR =====`);
-      console.error(`[DRAG N DROP] ❌ Failed to add track(s) to playlist:`, error);
-      console.error(`[DRAG N DROP] ❌ Error details:`, {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        playlistId: playlist.id,
-        trackData: e.dataTransfer.getData("text/plain")
-      });
+      console.error(`📓 [PLAYLIST ITEM] ❌ Error in handleDrop:`, error);
     }
   };
 

@@ -96,14 +96,14 @@ async function setupDatabase() {
       )
     `);
 
-    // Create playlist_tracks table - UPDATED to use TEXT for track_id and CASCADE DELETE
+    // Create playlist_tracks table - UPDATED to allow duplicate tracks with auto-incrementing ID
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS playlist_tracks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         track_id TEXT NOT NULL,
         playlist_id TEXT NOT NULL,
         "order" INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT (unixepoch()),
-        PRIMARY KEY (track_id, playlist_id),
         FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
         FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
       )

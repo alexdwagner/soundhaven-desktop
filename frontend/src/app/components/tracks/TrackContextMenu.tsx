@@ -11,6 +11,8 @@ interface TrackContextMenuProps {
   onDelete: () => void;
   onEditMetadata: () => void;
   onAddToPlaylist: () => void;
+  onRemoveFromPlaylist?: () => void;
+  isPlaylistView?: boolean;
 }
 
 const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
@@ -20,7 +22,9 @@ const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
   onClose,
   onDelete,
   onEditMetadata,
-  onAddToPlaylist
+  onAddToPlaylist,
+  onRemoveFromPlaylist,
+  isPlaylistView
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -85,8 +89,25 @@ const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
         </span>
       </button>
 
+      {onRemoveFromPlaylist && (
+        <>
       <div className="border-t border-gray-100 my-1" />
+          <button
+            onClick={() => {
+              onRemoveFromPlaylist();
+              onClose();
+            }}
+            className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center space-x-2 text-sm text-red-600"
+          >
+            <FaTrash />
+            <span>Remove from playlist</span>
+          </button>
+        </>
+      )}
 
+      {!isPlaylistView && (
+        <>
+          <div className="border-t border-gray-100 my-1" />
       <button
         onClick={() => {
           onDelete();
@@ -97,6 +118,8 @@ const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
         <FaTrash />
         <span>Delete {isMultiple ? 'tracks' : 'track'}</span>
       </button>
+        </>
+      )}
     </div>
   );
 };
