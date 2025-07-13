@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef } from 'react';
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import TrackItem from "./TrackItem";
@@ -41,6 +41,15 @@ const TracksTable: React.FC<TracksTableProps> = ({
 }) => {
   // Add ref to track the last drag operation and prevent duplicates
   const lastDragRef = useRef<{ activeId: any; overId: any; timestamp: number } | null>(null);
+
+  // Configure sensors to require mouse movement before starting drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px of movement before starting drag
+      },
+    })
+  );
 
   // Only allow drag and drop in playlist view when in manual mode
   const isDragEnabled = isPlaylistView && playlistSortMode === 'manual';
@@ -176,8 +185,9 @@ const TracksTable: React.FC<TracksTableProps> = ({
 
   return (
     <>
-      {isDragEnabled ? (
+      {false && isDragEnabled ? ( // Temporarily disable DndContext
         <DndContext 
+          sensors={sensors}
           collisionDetection={closestCenter} 
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
@@ -186,7 +196,9 @@ const TracksTable: React.FC<TracksTableProps> = ({
             items={tracks.map((track) => track.playlist_track_id || track.id)} 
             strategy={verticalListSortingStrategy}
           >
-            <table className="min-w-full divide-y divide-gray-200">
+            <table 
+              className="min-w-full divide-y divide-gray-200"
+            >
               <thead className="bg-gray-50">
                 <tr>
                   <SortableHeader column="name">Title</SortableHeader>

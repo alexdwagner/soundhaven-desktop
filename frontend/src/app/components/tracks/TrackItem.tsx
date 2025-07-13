@@ -46,7 +46,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     isDragging,
   } = useSortable({ 
     id: track.playlist_track_id || track.id,
-    disabled: !isDragEnabled // Only disable based on isDragEnabled
+    disabled: true // Disable entirely to prevent click interference
   });
 
   // Add debugging
@@ -71,19 +71,29 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   // Apply transform for playlist reordering, disable for cross-component drag
   const style = {
-    transform: (isPlaylistView && isDragEnabled) ? CSS.Transform.toString(transform) : 'none',
-    transition: (isPlaylistView && isDragEnabled) ? transition : 'none',
-    opacity: isDragging ? 0.5 : 1,
+    // Disable @dnd-kit transforms to prevent click interference
+    // transform: (isPlaylistView && isDragEnabled) ? CSS.Transform.toString(transform) : 'none',
+    // transition: (isPlaylistView && isDragEnabled) ? transition : 'none',
+    // opacity: isDragging ? 0.5 : 1,
   };
 
   const handleClick = (event: React.MouseEvent) => {
     const uniqueKey = track.playlist_track_id || track.id;
+    console.log('🐥 [TRACK ITEM] Track clicked:', {
+      trackName: track.name,
+      trackId: track.id,
+      playlistTrackId: track.playlist_track_id,
+      uniqueKey,
+      isSelected,
+      selectedTrackIds,
+      event: event.type
+    });
     onSelectTrack(uniqueKey.toString(), event);
   };
 
   const handleDoubleClick = () => {
     const uniqueKey = track.playlist_track_id || track.id;
-    console.log('🎵 [TRACK ITEM] handleDoubleClick called for track:', track.name, 'with uniqueKey:', uniqueKey);
+    console.log('🐥 [TRACK ITEM] handleDoubleClick called for track:', track.name, 'with uniqueKey:', uniqueKey);
     onPlayTrack(uniqueKey.toString());
   };
 
@@ -199,20 +209,23 @@ const TrackItem: React.FC<TrackItemProps> = ({
       ref={setNodeRef}
       style={style}
       data-track-id={track.id} // Add track ID for drag event listener setup
-      {...attributes}
-      {...nonDragListeners} // Apply non-drag listeners from @dnd-kit
+      // Remove all @dnd-kit attributes and listeners to prevent click interference
+      // {...attributes}
+      // Remove @dnd-kit listeners that interfere with clicks
+      // {...nonDragListeners} // Apply non-drag listeners from @dnd-kit
       draggable={true} // Always enable native dragging for cross-playlist functionality
-      onClick={handleClick}
+      onClick={(e) => {
+        console.log('🐥 [TRACK ITEM] Track clicked:', track.name);
+        handleClick(e);
+      }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onDragStart={handleDragStart} // Always attach native drag handlers
       onDragEnd={handleDragEnd} // Always attach native drag handlers
       className={`transition-all duration-200 select-none ${
-        isPlaylistView && isDragging 
-          ? "cursor-grabbing" // Grabbing cursor when dragging in playlist
-          : isPlaylistView && isDragEnabled
-            ? "cursor-grab" // Grab cursor in playlist view when drag is enabled
-            : "cursor-pointer" // Normal pointer otherwise
+        isPlaylistView && isDragEnabled
+          ? "cursor-grab" // Grab cursor in playlist view when drag is enabled
+          : "cursor-pointer" // Normal pointer otherwise
       } ${
         isSelected 
           ? "bg-blue-100 hover:bg-blue-200" // Selected track styling
@@ -223,7 +236,11 @@ const TrackItem: React.FC<TrackItemProps> = ({
           : ""
       }`}
     >
-      <td className="px-3 py-1">{track.name}</td>
+      <td 
+        className="px-3 py-1"
+      >
+        {track.name}
+      </td>
       <td className="px-3 py-1">{track.artistName ?? track.artist?.name ?? "Unknown Artist"}</td>
       <td className="px-3 py-1">{track.albumName ?? track.album?.name ?? "No Album"}</td>
       <td className="px-3 py-1">{track.year ?? "—"}</td>

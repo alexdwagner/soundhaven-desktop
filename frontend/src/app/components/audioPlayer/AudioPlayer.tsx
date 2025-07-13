@@ -356,7 +356,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         } catch (destroyError: any) {
           // Silently ignore ALL errors during destroy
           // AbortError is expected when destroying during audio loading
-        } finally {
+          } finally {
           // Always restore console methods after a delay
           setTimeout(() => {
             console.error = originalConsoleError;
@@ -393,17 +393,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       console.log('🎵 AudioPlayer: Creating WaveSurfer instance for immediate audio playback...');
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: '#4F46E5',
-        progressColor: '#7C3AED',
+          waveColor: '#4F46E5',
+          progressColor: '#7C3AED',
         cursorColor: '#1F2937',
-        barWidth: 2,
+          barWidth: 2,
         barRadius: 3,
         cursorWidth: 1,
         height: 128,
         barGap: 3,
         responsive: true,
-        normalize: true,
-        backend: 'WebAudio',
+          normalize: true,
+          backend: 'WebAudio',
         // Ensure we see the full waveform
         minPxPerSec: 1, // Allow very zoomed out view to see entire track
         maxCanvasWidth: 4000, // Allow wide canvas for full track view
@@ -418,7 +418,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             }
           ]
         },
-        plugins: [
+          plugins: [
           RegionsPlugin.create({
             dragSelection: {
               slop: 5
@@ -483,11 +483,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         hasRegions: !!wavesurfer.regions,
         regionsPlugin: !!regionsPlugin
       });
-
-      // Set up event listeners
+        
+        // Set up event listeners
       wavesurfer.on('ready', () => {
         console.log('🎵 AudioPlayer: WaveSurfer ready event - audio can play immediately');
-        setIsReady(true);
+          setIsReady(true);
         setIsAudioLoaded(true); // Audio is loaded and ready to play
         setDuration(wavesurfer.getDuration());
         
@@ -506,33 +506,33 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         }
         
         // Add markers after WaveSurfer is ready
-        if (markers && markers.length > 0) {
+          if (markers && markers.length > 0) {
           console.log('🎯 Adding markers after WaveSurfer ready:', markers.length);
           addMarkersToWaveform();
-        }
-      });
-
+          }
+        });
+        
       // WaveSurfer events handle audio playback
       wavesurfer.on('play', () => {
         console.log('🎵 AudioPlayer: WaveSurfer play event');
-        setIsPlaying(true);
-      });
-
+          setIsPlaying(true);
+        });
+        
       wavesurfer.on('pause', () => {
         console.log('🎵 AudioPlayer: WaveSurfer pause event');
-        setIsPlaying(false);
-      });
-
+          setIsPlaying(false);
+        });
+        
       wavesurfer.on('finish', () => {
         console.log('🎵 AudioPlayer: WaveSurfer finish event');
-        setIsPlaying(false);
+          setIsPlaying(false);
         onNext();
-      });
-
+        });
+        
       wavesurfer.on('timeupdate', (currentTime: number) => {
-        setCurrentTime(currentTime);
-      });
-
+          setCurrentTime(currentTime);
+        });
+        
       wavesurfer.on('loading', (progress: number) => {
         // console.log('🎵 AudioPlayer: WaveSurfer loading progress:', {
         //   progress: progress,
@@ -604,7 +604,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       console.log('🎵 AudioPlayer: WaveSurfer initialization completed successfully');
 
-    } catch (error) {
+          } catch (error) {
       console.error('🎵 AudioPlayer: WaveSurfer error occurred:', error);
       
       // Check if it's a CORS or network error
@@ -612,7 +612,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         console.error('❌ AudioPlayer: CORS error detected, cannot use fallback');
       } else if (error.message && error.message.includes('fetch')) {
         console.error('❌ AudioPlayer: Network error detected');
-      } else {
+            } else {
         console.error('❌ AudioPlayer: Non-local file error, cannot use fallback:', error);
       }
       
@@ -681,7 +681,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             [regionId]: marker.commentId
           }));
           console.log(`✅ Updated regionCommentMap: ${regionId} -> ${marker.commentId}`);
-        } catch (error) {
+      } catch (error) {
           console.error(`❌ Error creating region for marker ${index + 1}:`, marker, error);
         }
       });
@@ -791,7 +791,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       if (isPlayingState) {
         console.log('🎵 AudioPlayer: Pausing WaveSurfer audio');
         waveSurferRef.current.pause();
-      } else {
+            } else {
         console.log('🎵 AudioPlayer: Playing WaveSurfer audio');
         const playPromise = waveSurferRef.current.play();
         if (playPromise && typeof playPromise.catch === 'function') {

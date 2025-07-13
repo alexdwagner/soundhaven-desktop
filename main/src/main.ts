@@ -862,13 +862,13 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
             'INSERT INTO playlist_tracks (track_id, playlist_id, "order") VALUES (?, ?, ?)',
             [trackId, playlistId, nextOrder]
           );
-          
+        
           console.log(`[API DEBUG] Successfully added track ${trackId} to playlist ${playlistId} at order ${nextOrder}`);
           return { success: true, order: nextOrder };
-        } catch (error) {
+      } catch (error) {
           console.error(`[API DEBUG] Error adding track to playlist:`, error);
-          return { error: 'Failed to add track to playlist', status: 500 };
-        }
+        return { error: 'Failed to add track to playlist', status: 500 };
+      }
       }
       
       // Remove track from playlist
@@ -968,9 +968,9 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
         if (!Array.isArray(trackIds)) {
           console.error('[API DEBUG] ERROR: trackIds is not an array:', typeof trackIds, trackIds);
           return { error: 'trackIds must be an array', status: 400 };
-        }
-        
-        try {
+      }
+      
+      try {
           // Update order for each track using playlist_track_id (for duplicates support)
           console.log('[API DEBUG] Updating playlist track order for playlist:', playlistId);
           console.log('[API DEBUG] Received trackIds (playlist_track_ids):', trackIds);
@@ -1012,7 +1012,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           console.log('[API DEBUG] Verification query results:', verifyQuery);
           
           return { data: { success: true, updatedCount: results.length } };
-        } catch (error) {
+      } catch (error) {
           console.error('[API DEBUG] Error updating playlist track order:', error);
           console.error('[API DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
           return { error: 'Failed to update playlist track order', status: 500 };
@@ -1025,12 +1025,12 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
         
         if (!Array.isArray(playlistIds)) {
           return { error: 'playlistIds must be an array', status: 400 };
-        }
-        
-        try {
+      }
+      
+      try {
           // Update order for each playlist
           await Promise.all(playlistIds.map((playlistId, index) => 
-            dbAsync.run(
+          dbAsync.run(
               'UPDATE playlists SET "order" = ? WHERE id = ?',
               [index, playlistId]
             )
@@ -1062,7 +1062,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           }));
           
           return { data: transformedPlaylists };
-        } catch (error) {
+      } catch (error) {
           console.error('[API DEBUG] Error updating playlist order:', error);
           return { error: 'Failed to update playlist order', status: 500 };
         }

@@ -211,7 +211,7 @@ export default function TracksManager({
     try {
       setReorderingTracks(true);
       console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder...');
-      
+
       // Create a copy of the tracks array to determine new order
       const reorderedTracks = [...tracks];
       const [reorderedItem] = reorderedTracks.splice(startIndex, 1);
@@ -230,7 +230,7 @@ export default function TracksManager({
       // Make the API call - the PlaylistsProvider will handle refetching fresh data
       const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
       console.log('✅ [DRAG] API call result:', result);
-      console.log('✅ [DRAG] Reorder operation completed successfully');
+        console.log('✅ [DRAG] Reorder operation completed successfully');
     } catch (error) {
       console.error('❌ [DRAG] Error during reorder operation:', error);
       // The PlaylistsProvider will handle error recovery by refetching
@@ -324,7 +324,7 @@ export default function TracksManager({
         
         return filtered;
       });
-      console.log('�� [OPTIMISTIC] After setCurrentPlaylistTracks call');
+      console.log('📓 [OPTIMISTIC] After setCurrentPlaylistTracks call');
       setSelectedTrackIds(prev => prev.filter(id => id !== trackId));
       
       // Make API call in background
@@ -332,7 +332,7 @@ export default function TracksManager({
       
       if (success) {
         console.log(`✅ Successfully removed track ${trackId} from playlist`);
-      } else {
+    } else {
         console.error(`❌ Failed to remove track ${trackId} from playlist - reverting UI`);
         // Revert optimistic update by refetching
         const updatedPlaylist = await fetchPlaylistById(selectedPlaylistId);
@@ -486,20 +486,20 @@ export default function TracksManager({
   const displayTracks = sortedTracks();
 
   const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
-    console.log('🎵 handleSelectTrack called with trackId:', trackId);
-    console.log('🎵 Available tracks:', tracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
-    console.log('🎵 isPlaylistView:', isPlaylistView);
-    console.log('🎵 Current selectedTrackIds:', selectedTrackIds);
+    console.log('🐥 [TRACKS MANAGER] handleSelectTrack called with trackId:', trackId);
+    console.log('🐥 [TRACKS MANAGER] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
+    console.log('🐥 [TRACKS MANAGER] isPlaylistView:', isPlaylistView);
+    console.log('🐥 [TRACKS MANAGER] Current selectedTrackIds:', selectedTrackIds);
     
     if (event) {
-      // Handle multi-selection with Ctrl/Cmd key
-      if (event.ctrlKey || event.metaKey) {
+      // Handle multi-selection with Ctrl/Cmd/Option key
+      if (event.ctrlKey || event.metaKey || event.altKey) {
         setSelectedTrackIds(prev => {
           const newSelection = prev.includes(trackId) 
             ? prev.filter(id => id !== trackId)
             : [...prev, trackId];
           
-          console.log('🎵 Ctrl/Cmd+click selection:', { prev, trackId, newSelection });
+          console.log('🐥 Multi-select click (Ctrl/Cmd/Option):', { prev, trackId, newSelection });
           
           // Update anchor to the clicked track if it's being added
           if (!prev.includes(trackId)) {
@@ -588,8 +588,8 @@ export default function TracksManager({
     if (trackIndex !== -1) {
       const track = tracks[trackIndex];
       setCurrentTrackIndex(trackIndex);
-      // Don't autoplay on selection, only on double-click (handlePlayTrack)
-      selectTrack(track, trackIndex, false);
+      // Single-click should ONLY select the track for deletion, not load it into audio player
+      // selectTrack(track, trackIndex, false); // REMOVED - only double-click should load tracks
     } else {
       console.log('❌ Track not found in tracks array');
     }
@@ -666,7 +666,7 @@ export default function TracksManager({
         case 'Backspace':
           if (selectedTrackIds.length > 0) {
             event.preventDefault();
-            console.log('📓 [KEYBOARD DELETE] Delete key pressed!', {
+            console.log('🐥 [KEYBOARD DELETE] Delete key pressed!', {
               selectedTrackIds,
               isPlaylistView,
               selectedPlaylistId,
@@ -675,7 +675,7 @@ export default function TracksManager({
             });
             
             if (isPlaylistView) {
-              console.log('📓 [PLAYLIST DELETE] Processing playlist deletion...');
+              console.log('🐥 [PLAYLIST DELETE] Processing playlist deletion...');
               
               // In playlist view, remove from playlist (optimistic)
               console.log('📓 [DELETE KEY] Before optimistic update:', {
@@ -686,7 +686,7 @@ export default function TracksManager({
               });
               
               const tracksToRemove = selectedTrackIds.slice(); // Copy array
-              console.log('📓 [TRACKS TO REMOVE]', tracksToRemove);
+              console.log('🐥 [TRACKS TO REMOVE]', tracksToRemove);
               
               // Optimistic update
               setCurrentPlaylistTracks((prev: Track[]) => {
@@ -964,7 +964,7 @@ export default function TracksManager({
     // Only show overlay for external file drops, not internal track dragging
     if (hasFiles || hasFileType) {
       console.log('🔧 [DRAG] External file drag detected, showing overlay');
-      setIsDragOver(true);
+    setIsDragOver(true);
     } else {
       console.log('🔧 [DRAG] Internal track drag detected, not showing overlay');
       setIsDragOver(false);
@@ -980,7 +980,7 @@ export default function TracksManager({
     
     if (hasFiles || hasFileType) {
       console.log('🔧 [DRAG] External file drag left, hiding overlay');
-      setIsDragOver(false);
+    setIsDragOver(false);
     }
   }, []);
 
@@ -1367,9 +1367,9 @@ export default function TracksManager({
         {/* Header */}
         <div className="mb-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-gray-900">
-              {getViewTitle()}
-            </h1>
+          <h1 className="text-lg font-semibold text-gray-900">
+            {getViewTitle()}
+          </h1>
             
             {/* Sorting Mode Toggle - Only show in playlist view */}
             {isPlaylistView && (
