@@ -46,7 +46,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px of movement before starting drag
+        distance: 15, // Require 15px of movement before starting drag (increased from 8px)
       },
     })
   );
@@ -185,7 +185,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
 
   return (
     <>
-      {false && isDragEnabled ? ( // Temporarily disable DndContext
+      {isDragEnabled ? ( // Re-enable DndContext for playlist track reordering
         <DndContext 
           sensors={sensors}
           collisionDetection={closestCenter} 

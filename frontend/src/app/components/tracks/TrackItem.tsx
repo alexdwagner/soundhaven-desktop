@@ -46,7 +46,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     isDragging,
   } = useSortable({ 
     id: track.playlist_track_id || track.id,
-    disabled: true // Disable entirely to prevent click interference
+    disabled: !isDragEnabled // Only disable when drag is not enabled
   });
 
   // Add debugging
@@ -71,10 +71,10 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   // Apply transform for playlist reordering, disable for cross-component drag
   const style = {
-    // Disable @dnd-kit transforms to prevent click interference
-    // transform: (isPlaylistView && isDragEnabled) ? CSS.Transform.toString(transform) : 'none',
-    // transition: (isPlaylistView && isDragEnabled) ? transition : 'none',
-    // opacity: isDragging ? 0.5 : 1,
+    // Re-enable @dnd-kit transforms for playlist reordering when enabled
+    transform: (isPlaylistView && isDragEnabled) ? CSS.Transform.toString(transform) : 'none',
+    transition: (isPlaylistView && isDragEnabled) ? transition : 'none',
+    opacity: isDragging ? 0.5 : 1,
   };
 
   const handleClick = (event: React.MouseEvent) => {
@@ -209,10 +209,9 @@ const TrackItem: React.FC<TrackItemProps> = ({
       ref={setNodeRef}
       style={style}
       data-track-id={track.id} // Add track ID for drag event listener setup
-      // Remove all @dnd-kit attributes and listeners to prevent click interference
-      // {...attributes}
-      // Remove @dnd-kit listeners that interfere with clicks
-      // {...nonDragListeners} // Apply non-drag listeners from @dnd-kit
+      // Re-enable @dnd-kit attributes and listeners when drag is enabled for playlist reordering
+      {...(isPlaylistView && isDragEnabled ? attributes : {})}
+      {...(isPlaylistView && isDragEnabled ? listeners : {})}
       draggable={true} // Always enable native dragging for cross-playlist functionality
       onClick={(e) => {
         console.log('🐥 [TRACK ITEM] Track clicked:', track.name);
