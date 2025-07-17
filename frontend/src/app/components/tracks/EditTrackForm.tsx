@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Track } from '../../../../../shared/types';
+import { Track, Tag } from '../../../../../shared/types';
 import { useTracks } from '../../hooks/UseTracks';
+import InlineTagInput from './InlineTagInput';
 
 interface EditTrackFormProps {
   track: Track;
@@ -12,6 +13,7 @@ const EditTrackForm: React.FC<EditTrackFormProps> = ({ track, closeModal, fetchT
   const { updateTrackMetadata } = useTracks();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [trackTags, setTrackTags] = useState<Tag[]>(track.tags || []);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -29,6 +31,10 @@ const EditTrackForm: React.FC<EditTrackFormProps> = ({ track, closeModal, fetchT
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleTagsChange = (newTags: Tag[]) => {
+    setTrackTags(newTags);
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,7 +67,7 @@ const EditTrackForm: React.FC<EditTrackFormProps> = ({ track, closeModal, fetchT
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-lg mx-auto">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Edit Track Metadata</h2>
       
       {error && (
@@ -171,6 +177,19 @@ const EditTrackForm: React.FC<EditTrackFormProps> = ({ track, closeModal, fetchT
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter genre"
           />
+        </div>
+
+        {/* Tags Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tags
+          </label>
+          <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+            <InlineTagInput
+              track={{ ...track, tags: trackTags }}
+              onTagsChange={handleTagsChange}
+            />
+          </div>
         </div>
 
         {/* Action Buttons */}

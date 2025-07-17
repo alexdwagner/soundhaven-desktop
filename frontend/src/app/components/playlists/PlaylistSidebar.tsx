@@ -166,8 +166,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   console.log("🔍 PlaylistSidebar: About to render component");
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
-      <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
+    <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
 
         
         <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
@@ -193,7 +192,6 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
           </ul>
         </SortableContext>
       </div>
-    </DndContext>
   );
 };
 

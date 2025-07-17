@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Playlist } from "../../../../../shared/types";
 import { usePlaylists } from "../../providers/PlaylistsProvider";
 import { FaEllipsisH, FaEdit, FaTrash, FaPlus } from "react-icons/fa";
-import { useDrag } from "@/app/contexts/DragContext";
+import { useDroppable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -32,7 +32,6 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const [isBeingDragged, setIsBeingDragged] = useState(false);
   const [dragTrackCount, setDragTrackCount] = useState(1); // Track how many tracks are being dragged
   const { updatePlaylistMetadata, addTrackToPlaylist, addTracksToPlaylist } = usePlaylists();
-  const { dragState } = useDrag();
   const optionsRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const dragTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -47,6 +46,39 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     transition,
     isDragging,
   } = useSortable({ id: playlist.id });
+
+  // Droppable functionality for receiving tracks
+  const {
+    isOver,
+    setNodeRef: setDropRef,
+  } = useDroppable({
+    id: playlist.id, // Use same ID as sortable to avoid conflicts
+    data: {
+      type: 'playlist',
+      playlistId: playlist.id,
+      playlistName: playlist.name
+    }
+  });
+
+  // Debug logging for isOver state
+  useEffect(() => {
+    if (isOver) {
+      console.log(`🎯 [PLAYLIST ITEM] ${playlist.name} - isOver: TRUE (should show green styling)`);
+    }
+  }, [isOver, playlist.name]);
+
+  // Combine the refs for both sortable and droppable functionality
+  const combineRefs = (...refs: any[]) => {
+    return (node: any) => {
+      refs.forEach(ref => {
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref && typeof ref === 'object') {
+          ref.current = node;
+        }
+      });
+    };
+  };
 
   // Handle clicking outside the options menu to close it
   useEffect(() => {
@@ -102,6 +134,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
+      setDragTrackCount(1); // Reset drag count
       
       const trackData = e.dataTransfer.getData("text/plain");
       console.log(`📓 [PLAYLIST ITEM] Raw track data from drag:`, trackData);
@@ -111,12 +144,30 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
         return;
       }
       
-      const trackIds = JSON.parse(trackData);
-      console.log(`📓 [PLAYLIST ITEM] Parsed track IDs:`, trackIds);
+      const dragData = JSON.parse(trackData);
+      console.log(`📓 [PLAYLIST ITEM] Parsed drag data:`, dragData);
+      
+      // Handle the new drag data structure from TrackItem
+      let trackIds: string[] = [];
+      
+      if (dragData.type === 'track' && dragData.selectedTrackIds) {
+        // New format: object with selectedTrackIds array
+        trackIds = dragData.selectedTrackIds;
+        console.log(`📓 [PLAYLIST ITEM] Using selectedTrackIds from new format:`, trackIds);
+      } else if (Array.isArray(dragData)) {
+        // Legacy format: direct array of track IDs
+        trackIds = dragData;
+        console.log(`📓 [PLAYLIST ITEM] Using legacy array format:`, trackIds);
+      } else {
+        console.log(`📓 [PLAYLIST ITEM] ❌ Unrecognized drag data format:`, dragData);
+        return;
+      }
+      
+      console.log(`📓 [PLAYLIST ITEM] Final track IDs to add:`, trackIds);
       console.log(`📓 [PLAYLIST ITEM] Track IDs count: ${trackIds.length}`);
       
       if (trackIds.length > 0) {
-        console.log(`📓 [PLAYLIST ITEM] 🎯 Adding ${trackIds.length} tracks to playlist ${playlist.id}`);
+        console.log(`📓 [PLAYLIST ITEM] �� Adding ${trackIds.length} tracks to playlist ${playlist.id}`);
         const result = await addTracksToPlaylist(playlist.id, trackIds);
         console.log(`📓 [PLAYLIST ITEM] ✅ Add tracks result:`, result);
         console.log(`📓 [PLAYLIST ITEM] Successfully added ${result.successful} tracks to playlist ${playlist.id}`);
@@ -143,6 +194,28 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     if (!isDragOver) {
       console.log(`[DRAG N DROP] 🎯 Drag over playlist ${playlist.id} (${playlist.name})`);
       console.log(`[DRAG N DROP] 🎯 DataTransfer types:`, e.dataTransfer.types);
+      
+      // Try to get track count for visual feedback
+      try {
+        const trackData = e.dataTransfer.getData("text/plain");
+        if (trackData) {
+          const dragData = JSON.parse(trackData);
+          let trackCount = 1;
+          
+          if (dragData.type === 'track' && dragData.selectedTrackIds) {
+            trackCount = dragData.selectedTrackIds.length;
+          } else if (Array.isArray(dragData)) {
+            trackCount = dragData.length;
+          }
+          
+          setDragTrackCount(trackCount);
+          console.log(`[DRAG N DROP] 🎯 Dragging ${trackCount} track(s)`);
+        }
+      } catch (error) {
+        // Ignore parsing errors during drag over
+        setDragTrackCount(1);
+      }
+      
       setIsDragOver(true);
       console.log(`🔥 [PLAYLIST DEBUG] Setting isDragOver to true`);
     }
@@ -162,6 +235,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
     if (isLeavingElement) {
       console.log(`[DRAG N DROP] 🎯 Actually leaving playlist ${playlist.id}, setting isDragOver to false`);
       setIsDragOver(false);
+      setDragTrackCount(1); // Reset drag count
     }
   };
 
@@ -270,23 +344,30 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    border: isDragOver ? '2px dashed #4F46E5' : '2px solid transparent',
-    backgroundColor: isSelected ? 'rgba(79, 70, 229, 0.3)' : (isDragOver ? 'rgba(79, 70, 229, 0.1)' : 'transparent'),
+    transition: 'all 0.2s ease-in-out',
+    border: (isDragOver || isOver) ? '2px solid #10B981' : '2px solid transparent', // Solid border for both drag states
+    backgroundColor: isSelected 
+      ? 'rgba(79, 70, 229, 0.3)' 
+      : (isDragOver || isOver)
+        ? 'rgba(16, 185, 129, 0.15)' // Slightly more visible green background
+        : 'transparent',
     opacity: isDragging ? 0.5 : 1,
     cursor: isDragging ? 'grabbing' : 'grab',
+    scale: (isDragOver || isOver) ? 1.03 : 1, // Slightly more prominent scale change
+    boxShadow: (isDragOver || isOver) ? '0 4px 12px rgba(16, 185, 129, 0.3)' : 'none', // More visible shadow
   };
 
   return (
     <li
-      ref={setNodeRef}
+      ref={combineRefs(setNodeRef, setDropRef)}
       style={style}
       {...attributes}
       {...listeners}
-      className={`relative group rounded-md transition-all duration-150 ease-in-out ${isBeingDragged ? 'shadow-lg' : ''}`}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      className={`relative group rounded-lg transition-all duration-200 ease-in-out hover:bg-gray-50 ${
+        isBeingDragged ? 'shadow-md' : ''
+      } ${
+        (isOver || isDragOver) ? 'bg-green-50 ring-2 ring-green-400 shadow-lg' : '' // Combined and more prominent styling
+      }`}
       onContextMenu={handleContextMenu}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -318,7 +399,9 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
               {isDragOver && (
                 <div className="flex items-center text-green-600 text-sm ml-2">
                   <FaPlus className="mr-1" size={12} />
-                  <span>Add Track(s)</span>
+                  <span>
+                    Add {dragTrackCount === 1 ? 'Track' : `${dragTrackCount} Tracks`}
+                  </span>
                 </div>
               )}
             </div>

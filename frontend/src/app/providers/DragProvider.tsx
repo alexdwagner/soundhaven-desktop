@@ -77,14 +77,14 @@ export const DragProvider: React.FC<DragProviderProps> = ({ children }) => {
   return (
     <DragContext.Provider value={{ dragState, startDrag, updateDragPosition, endDrag }}>
       {children}
-      {/* DragPreview disabled - user doesn't want track name overlay when dragging */}
-      {/* {dragState.draggedTrack && (
+      {/* DragPreview for visual feedback during drag operations */}
+      {dragState.draggedTrack && (
         <DragPreview
           track={dragState.draggedTrack}
           position={dragState.dragPosition}
           isDragging={dragState.isDragging}
         />
-      )} */}
+      )}
     </DragContext.Provider>
   );
 }; 

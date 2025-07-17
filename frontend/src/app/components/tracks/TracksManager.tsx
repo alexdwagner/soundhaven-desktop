@@ -25,12 +25,14 @@ interface TracksManagerProps {
   selectedPlaylistTracks?: Track[];
   selectedPlaylistId?: string | null;
   selectedPlaylistName?: string | null;
+  onRegisterReorderHandler?: (handler: (startIndex: number, endIndex: number) => void) => void;
 }
 
 export default function TracksManager({ 
   selectedPlaylistTracks, 
   selectedPlaylistId,
-  selectedPlaylistName 
+  selectedPlaylistName,
+  onRegisterReorderHandler
 }: TracksManagerProps) {
   console.log('🎯 TracksManager component rendering...');
   
@@ -133,6 +135,7 @@ export default function TracksManager({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number }[]>([]);
   const [reorderingTracks, setReorderingTracks] = useState(false);
+  const reorderingRef = useRef(false);
   const [showDebugTools, setShowDebugTools] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
@@ -166,7 +169,7 @@ export default function TracksManager({
   }, [selectedTrackIds, deleteTrack, setShowDeleteModal]);
 
   // Enhanced reorder handler with optimistic updates and debouncing
-  const handleReorderTracks = async (startIndex: number, endIndex: number) => {
+  const handleReorderTracks = useCallback(async (startIndex: number, endIndex: number) => {
     console.log('🔄 [DRAG] handleReorderTracks called:', { startIndex, endIndex, playlistSortMode, isPlaylistView });
     
     // Only allow reordering in manual mode
@@ -176,7 +179,7 @@ export default function TracksManager({
     }
 
     // Prevent simultaneous reordering operations
-    if (reorderingTracks) {
+    if (reorderingRef.current) {
       console.log('🔄 [DRAG] Reordering already in progress, skipping...');
       return;
     }
@@ -210,6 +213,7 @@ export default function TracksManager({
 
     try {
       setReorderingTracks(true);
+      reorderingRef.current = true;
       console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder...');
 
       // Create a copy of the tracks array to determine new order
@@ -230,14 +234,25 @@ export default function TracksManager({
       // Make the API call - the PlaylistsProvider will handle refetching fresh data
       const result = await updatePlaylistTrackOrder(selectedPlaylistId, trackIds);
       console.log('✅ [DRAG] API call result:', result);
-        console.log('✅ [DRAG] Reorder operation completed successfully');
+      console.log('✅ [DRAG] Reorder operation completed successfully');
+      
+
     } catch (error) {
       console.error('❌ [DRAG] Error during reorder operation:', error);
       // The PlaylistsProvider will handle error recovery by refetching
     } finally {
       setReorderingTracks(false);
+      reorderingRef.current = false;
     }
-  };
+  }, [isPlaylistView, playlistSortMode, tracks, selectedPlaylistId, setReorderingTracks, updatePlaylistTrackOrder]);
+
+  // Register the reorder handler with MainContent once
+  useEffect(() => {
+    if (onRegisterReorderHandler) {
+      console.log('🔧 [TRACKS MANAGER] Registering reorder handler with MainContent');
+      onRegisterReorderHandler(handleReorderTracks);
+    }
+  }, [onRegisterReorderHandler, handleReorderTracks]);
 
   // Close context menu when clicking outside
   useEffect(() => {

@@ -177,6 +177,82 @@ async function ensureTestTrack() {
   }
 }
 
+async function ensureTestTags() {
+  console.log('🏷️ Ensuring test tags exist...');
+  
+  const testTags = [
+    { name: 'Rock', color: '#EF4444', type: 'manual' },
+    { name: 'Upbeat', color: '#F59E0B', type: 'auto', confidence: 0.85 },
+    { name: 'Guitar', color: '#8B5CF6', type: 'auto', confidence: 0.92 },
+    { name: 'Energetic', color: '#10B981', type: 'auto', confidence: 0.78 },
+    { name: 'Favorite', color: '#3B82F6', type: 'manual' },
+    { name: 'Vocals', color: '#EC4899', type: 'auto', confidence: 0.88 },
+    { name: '2000s', color: '#6B7280', type: 'system' },
+    { name: 'Pop', color: '#14B8A6', type: 'manual' },
+  ];
+
+  for (const tagData of testTags) {
+    try {
+      // Check if tag already exists
+      const existingTag = await dbAsync.get('SELECT id FROM tags WHERE name = ?', [tagData.name]);
+      
+      if (!existingTag) {
+        const tagId = uuidv4();
+        const now = Math.floor(Date.now() / 1000);
+        
+        await dbAsync.run(
+          'INSERT INTO tags (id, name, color, type, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [tagId, tagData.name, tagData.color, tagData.type, tagData.confidence || null, now]
+        );
+        
+        console.log(`🏷️ Created test tag: ${tagData.name} (${tagData.type})`);
+      }
+    } catch (error) {
+      console.error(`🏷️ Error creating test tag ${tagData.name}:`, error);
+    }
+  }
+}
+
+async function assignSampleTagsToTestTrack() {
+  console.log('🔗 Assigning sample tags to test track...');
+  
+  try {
+    // Get the test track
+    const testTrack = await dbAsync.get('SELECT id FROM tracks WHERE name = ?', ['Careless Whisper']);
+    if (!testTrack) {
+      console.log('🔗 No test track found, skipping tag assignment');
+      return;
+    }
+    
+    // Get some sample tags
+    const sampleTags = await dbAsync.all('SELECT id FROM tags LIMIT 4');
+    
+    for (const tag of sampleTags) {
+      try {
+        // Check if association already exists
+        const existing = await dbAsync.get(
+          'SELECT * FROM track_tags WHERE track_id = ? AND tag_id = ?',
+          [testTrack.id, tag.id]
+        );
+        
+        if (!existing) {
+          const now = Math.floor(Date.now() / 1000);
+          await dbAsync.run(
+            'INSERT INTO track_tags (track_id, tag_id, created_at) VALUES (?, ?, ?)',
+            [testTrack.id, tag.id, now]
+          );
+          
+          console.log(`🔗 Assigned tag ${tag.id} to test track`);
+        }
+      } catch (error) {
+        console.error(`🔗 Error assigning tag ${tag.id} to test track:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('🔗 Error assigning sample tags:', error);
+  }
+}
+
 // Auth handler functions
 const authHandlers = {
   async register(credentials: { name: string; email: string; password: string }) {
@@ -534,7 +610,23 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
             GROUP BY t.id
           `);
           
-          return { data: result };
+          // Fetch tags for each track
+          const tracksWithTags = await Promise.all(result.map(async (track) => {
+            const tags = await dbAsync.all(`
+              SELECT t.*, tt.created_at as assigned_at
+              FROM tags t
+              JOIN track_tags tt ON t.id = tt.tag_id
+              WHERE tt.track_id = ?
+              ORDER BY t.name
+            `, [track.id]);
+            
+            return {
+              ...track,
+              tags: tags
+            };
+          }));
+          
+          return { data: tracksWithTags };
         } catch (error) {
           console.error('[TRACKS DEBUG] Error fetching tracks:', error);
           throw error;
@@ -1086,26 +1178,26 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
       // Get comments for a track
       if (method === 'GET') {
         const trackId = url.searchParams.get('trackId');
-      const page = parseInt(url.searchParams.get('page') || '1', 10);
-      const limit = parseInt(url.searchParams.get('limit') || '10', 10);
-      
+        const page = parseInt(url.searchParams.get('page') || '1', 10);
+        const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+        
         if (!trackId) {
-        return { error: 'Missing trackId parameter', status: 400 };
-      }
+          return { error: 'Missing trackId parameter', status: 400 };
+        }
         
         try {
-        const comments = await dbAsync.all(
-          'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
-          [trackId, limit, (page - 1) * limit]
-        );
-        
+          const comments = await dbAsync.all(
+            'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+            [trackId, limit, (page - 1) * limit]
+          );
+          
           const total = await dbAsync.get(
             'SELECT COUNT(*) as count FROM comments WHERE track_id = ?',
             [trackId]
           );
           
           return {
-              data: {
+            data: {
               comments,
               pagination: {
                 total: total.count,
@@ -1115,31 +1207,31 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
               }
             }
           };
-      } catch (error) {
-        console.error('[API DEBUG] Error fetching comments:', error);
-        return { error: 'Failed to fetch comments', status: 500 };
-      }
+        } catch (error) {
+          console.error('[API DEBUG] Error fetching comments:', error);
+          return { error: 'Failed to fetch comments', status: 500 };
+        }
       }
       
       // Create new comment
       if (method === 'POST') {
         const { trackId, userId, content, time } = body;
         
-      if (!trackId) {
-        return { error: 'Missing trackId', status: 400 };
-      }
-      if (!userId) {
-        return { error: 'Missing userId', status: 400 };
-      }
-      if (!content) {
-        return { error: 'Missing content', status: 400 };
-      }
-      if (typeof time !== 'number') {
-        return { error: 'Missing or invalid time', status: 400 };
-      }
-      
-      try {
-      const commentId = uuidv4();
+        if (!trackId) {
+          return { error: 'Missing trackId', status: 400 };
+        }
+        if (!userId) {
+          return { error: 'Missing userId', status: 400 };
+        }
+        if (!content) {
+          return { error: 'Missing content', status: 400 };
+        }
+        if (typeof time !== 'number') {
+          return { error: 'Missing or invalid time', status: 400 };
+        }
+        
+        try {
+          const commentId = uuidv4();
           const now = Math.floor(Date.now() / 1000);
           
           await dbAsync.run(
@@ -1156,6 +1248,245 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
         } catch (error) {
           console.error('[API DEBUG] Error creating comment:', error);
           return { error: 'Failed to create comment', status: 500 };
+        }
+      }
+    }
+
+    // Handle tag endpoints
+    if (apiPath.startsWith('/api/tags')) {
+      // Get all tags
+      if (method === 'GET' && apiPath === '/api/tags') {
+        try {
+          const tags = await dbAsync.all(`
+            SELECT t.*, 
+                   COUNT(tt.track_id) as usage_count
+            FROM tags t
+            LEFT JOIN track_tags tt ON t.id = tt.tag_id
+            GROUP BY t.id
+            ORDER BY t.name
+          `);
+          
+          return { data: tags };
+        } catch (error) {
+          console.error('[API DEBUG] Error fetching tags:', error);
+          return { error: 'Failed to fetch tags', status: 500 };
+        }
+      }
+
+      // Create new tag
+      if (method === 'POST' && apiPath === '/api/tags') {
+        const { name, color, type = 'manual', confidence } = body;
+        
+        if (!name) {
+          return { error: 'Tag name is required', status: 400 };
+        }
+        
+        if (!['manual', 'auto', 'system'].includes(type)) {
+          return { error: 'Invalid tag type', status: 400 };
+        }
+        
+        try {
+          const tagId = uuidv4();
+          const now = Math.floor(Date.now() / 1000);
+          
+          await dbAsync.run(
+            'INSERT INTO tags (id, name, color, type, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [tagId, name, color || '#6B7280', type, confidence, now]
+          );
+          
+          const tag = await dbAsync.get('SELECT * FROM tags WHERE id = ?', [tagId]);
+          return { data: tag };
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+            return { error: 'Tag name already exists', status: 409 };
+          }
+          console.error('[API DEBUG] Error creating tag:', error);
+          return { error: 'Failed to create tag', status: 500 };
+        }
+      }
+
+      // Update tag
+      if (method === 'PATCH' && apiPath.match(/^\/api\/tags\/[^/]+$/)) {
+        const [, , , tagId] = apiPath.split('/');
+        const { name, color, type, confidence } = body;
+        
+        if (!tagId) {
+          return { error: 'Invalid tag ID', status: 400 };
+        }
+        
+        try {
+          const existingTag = await dbAsync.get('SELECT * FROM tags WHERE id = ?', [tagId]);
+          if (!existingTag) {
+            return { error: 'Tag not found', status: 404 };
+          }
+          
+          const updates: string[] = [];
+          const values: any[] = [];
+          
+          if (name !== undefined) {
+            updates.push('name = ?');
+            values.push(name);
+          }
+          if (color !== undefined) {
+            updates.push('color = ?');
+            values.push(color);
+          }
+          if (type !== undefined) {
+            if (!['manual', 'auto', 'system'].includes(type)) {
+              return { error: 'Invalid tag type', status: 400 };
+            }
+            updates.push('type = ?');
+            values.push(type);
+          }
+          if (confidence !== undefined) {
+            updates.push('confidence = ?');
+            values.push(confidence);
+          }
+          
+          if (updates.length === 0) {
+            return { error: 'No valid fields to update', status: 400 };
+          }
+          
+          values.push(tagId);
+          await dbAsync.run(
+            `UPDATE tags SET ${updates.join(', ')} WHERE id = ?`,
+            values
+          );
+          
+          const updatedTag = await dbAsync.get('SELECT * FROM tags WHERE id = ?', [tagId]);
+          return { data: updatedTag };
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+            return { error: 'Tag name already exists', status: 409 };
+          }
+          console.error('[API DEBUG] Error updating tag:', error);
+          return { error: 'Failed to update tag', status: 500 };
+        }
+      }
+
+      // Delete tag
+      if (method === 'DELETE' && apiPath.match(/^\/api\/tags\/[^/]+$/)) {
+        const [, , , tagId] = apiPath.split('/');
+        
+        if (!tagId) {
+          return { error: 'Invalid tag ID', status: 400 };
+        }
+        
+        try {
+          const existingTag = await dbAsync.get('SELECT * FROM tags WHERE id = ?', [tagId]);
+          if (!existingTag) {
+            return { error: 'Tag not found', status: 404 };
+          }
+          
+          // Delete tag (this will cascade to track_tags due to foreign key constraints)
+          await dbAsync.run('DELETE FROM tags WHERE id = ?', [tagId]);
+          
+          return { data: { success: true, deletedTagId: tagId } };
+        } catch (error) {
+          console.error('[API DEBUG] Error deleting tag:', error);
+          return { error: 'Failed to delete tag', status: 500 };
+        }
+      }
+
+      // Get tags for a specific track
+      if (method === 'GET' && apiPath.match(/^\/api\/tags\/track\/[^/]+$/)) {
+        const [, , , , trackId] = apiPath.split('/');
+        
+        if (!trackId) {
+          return { error: 'Invalid track ID', status: 400 };
+        }
+        
+        try {
+          const tags = await dbAsync.all(`
+            SELECT t.*, tt.created_at as assigned_at
+            FROM tags t
+            JOIN track_tags tt ON t.id = tt.tag_id
+            WHERE tt.track_id = ?
+            ORDER BY t.name
+          `, [trackId]);
+          
+          return { data: tags };
+        } catch (error) {
+          console.error('[API DEBUG] Error fetching track tags:', error);
+          return { error: 'Failed to fetch track tags', status: 500 };
+        }
+      }
+
+      // Add tag to track
+      if (method === 'POST' && apiPath.match(/^\/api\/tags\/track\/[^/]+$/)) {
+        const [, , , , trackId] = apiPath.split('/');
+        const { tagId } = body;
+        
+        if (!trackId || !tagId) {
+          return { error: 'Track ID and tag ID are required', status: 400 };
+        }
+        
+        try {
+          // Check if track exists
+          const track = await dbAsync.get('SELECT id FROM tracks WHERE id = ?', [trackId]);
+          if (!track) {
+            return { error: 'Track not found', status: 404 };
+          }
+          
+          // Check if tag exists
+          const tag = await dbAsync.get('SELECT id FROM tags WHERE id = ?', [tagId]);
+          if (!tag) {
+            return { error: 'Tag not found', status: 404 };
+          }
+          
+          // Check if association already exists
+          const existing = await dbAsync.get(
+            'SELECT * FROM track_tags WHERE track_id = ? AND tag_id = ?',
+            [trackId, tagId]
+          );
+          if (existing) {
+            return { error: 'Tag already assigned to track', status: 409 };
+          }
+          
+          // Create association
+          const now = Math.floor(Date.now() / 1000);
+          await dbAsync.run(
+            'INSERT INTO track_tags (track_id, tag_id, created_at) VALUES (?, ?, ?)',
+            [trackId, tagId, now]
+          );
+          
+          // Return the tag with assignment info
+          const assignedTag = await dbAsync.get(`
+            SELECT t.*, tt.created_at as assigned_at
+            FROM tags t
+            JOIN track_tags tt ON t.id = tt.tag_id
+            WHERE tt.track_id = ? AND tt.tag_id = ?
+          `, [trackId, tagId]);
+          
+          return { data: assignedTag };
+        } catch (error) {
+          console.error('[API DEBUG] Error adding tag to track:', error);
+          return { error: 'Failed to add tag to track', status: 500 };
+        }
+      }
+
+      // Remove tag from track
+      if (method === 'DELETE' && apiPath.match(/^\/api\/tags\/track\/[^/]+\/[^/]+$/)) {
+        const [, , , , trackId, tagId] = apiPath.split('/');
+        
+        if (!trackId || !tagId) {
+          return { error: 'Track ID and tag ID are required', status: 400 };
+        }
+        
+        try {
+          const result = await dbAsync.run(
+            'DELETE FROM track_tags WHERE track_id = ? AND tag_id = ?',
+            [trackId, tagId]
+          );
+          
+          if (result.changes === 0) {
+            return { error: 'Tag not found on track', status: 404 };
+          }
+          
+          return { data: { success: true, removedTagId: tagId } };
+        } catch (error) {
+          console.error('[API DEBUG] Error removing tag from track:', error);
+          return { error: 'Failed to remove tag from track', status: 500 };
         }
       }
     }
@@ -1187,6 +1518,14 @@ app.whenReady().then(async () => {
     // Create test track
     await ensureTestTrack();
     console.log('🎵 Test track ensured');
+    
+    // Create test tags
+    await ensureTestTags();
+    console.log('🏷️ Test tags ensured');
+    
+    // Assign sample tags to test track
+    await assignSampleTagsToTestTrack();
+    console.log('🔗 Sample tags assigned');
     
     // Run database integrity check
     await checkDatabaseIntegrity();

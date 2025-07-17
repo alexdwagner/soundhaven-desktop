@@ -4,6 +4,8 @@ import React, { ReactNode, useState, useRef, useEffect } from "react";
 import { FaBars } from "react-icons/fa";
 import { usePlaylists } from "@/app/hooks/UsePlaylists";
 import { useAuth } from "@/app/contexts/AuthContext";
+import SearchBar from "./SearchBar";
+import { Track, Playlist } from "../../../../../shared/types";
 
 // Define a local User type that matches what we expect from the API
 interface User {
@@ -18,9 +20,25 @@ interface NavBarProps {
   onLoginClick: () => void;
   onRegisterClick: () => void;
   onSettingsClick: () => void;
+  // Search props
+  tracks?: Track[];
+  playlists?: Playlist[];
+  onTrackSelect?: (track: Track) => void;
+  onPlaylistSelect?: (playlist: Playlist) => void;
+  onSearchResults?: (tracks: Track[], playlists: Playlist[]) => void;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick, onSettingsClick }) => {
+const NavBar: React.FC<NavBarProps> = ({ 
+  children, 
+  onLoginClick, 
+  onRegisterClick, 
+  onSettingsClick,
+  tracks = [],
+  playlists = [],
+  onTrackSelect = () => {},
+  onPlaylistSelect = () => {},
+  onSearchResults = () => {}
+}) => {
   const { user, loading, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +91,17 @@ const NavBar: React.FC<NavBarProps> = ({ children, onLoginClick, onRegisterClick
           <div className="flex items-center">
             {children}
           </div>
+          
+          {/* Search Bar - Only show when user is logged in */}
+          {user && (
+            <SearchBar
+              tracks={tracks}
+              playlists={playlists}
+              onTrackSelect={onTrackSelect}
+              onPlaylistSelect={onPlaylistSelect}
+              onSearchResults={onSearchResults}
+            />
+          )}
           
           <div className="flex items-center">
             {user ? (

@@ -152,6 +152,30 @@ async function setupDatabase() {
       )
     `);
 
+    // Create tags table
+    await dbAsync.run(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT,
+        type TEXT NOT NULL CHECK (type IN ('manual', 'auto', 'system')),
+        confidence REAL,
+        created_at INTEGER DEFAULT (unixepoch())
+      )
+    `);
+
+    // Create track_tags table for many-to-many relationship
+    await dbAsync.run(`
+      CREATE TABLE IF NOT EXISTS track_tags (
+        track_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()),
+        PRIMARY KEY (track_id, tag_id),
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create comments table - UPDATED to use TEXT for track_id and CASCADE DELETE
     await dbAsync.run(`
       CREATE TABLE IF NOT EXISTS comments (

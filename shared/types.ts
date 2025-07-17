@@ -44,7 +44,16 @@ export interface User {
     tracks: Track[];
   }
   
-  export interface Track {
+  export interface Tag {
+    id: string;
+    name: string;
+    color?: string;
+    type: 'manual' | 'auto' | 'system'; // manual = user-added, auto = AI-generated, system = genre/artist/etc
+    confidence?: number; // for AI-generated tags
+    createdAt: string | number;
+  }
+
+export interface Track {
     id: string;
     name: string;
     duration: number;
@@ -59,6 +68,7 @@ export interface User {
     updatedAt: string | number;
     playlists?: Playlist[];
     genres?: Genre[];
+    tags?: Tag[]; // Add tags support
     filePath: string;
     // Audio metadata
     bitrate?: number | null;
@@ -67,6 +77,8 @@ export interface User {
     year?: number | null;
     genre?: string | null;
     trackNumber?: number | null;
+    // Album art
+    albumArtPath?: string;
     // Unique ID for playlist track entries (when track is in a playlist)
     playlist_track_id?: number;
   }

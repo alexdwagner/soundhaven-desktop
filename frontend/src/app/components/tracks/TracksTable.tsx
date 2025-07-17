@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useRef } from 'react';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import React from 'react';
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import TrackItem from "./TrackItem";
+import ColumnVisibilityControl from "./ColumnVisibilityControl";
 import { Track } from "../../../../../shared/types";
+import { ColumnVisibility, useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 
-export type SortColumn = 'name' | 'artistName' | 'albumName' | 'year' | 'duration';
+export type SortColumn = 'name' | 'artistName' | 'albumName' | 'year' | 'duration' | 'tags';
 export type SortDirection = 'asc' | 'desc';
 
 interface TracksTableProps {
@@ -39,96 +40,18 @@ const TracksTable: React.FC<TracksTableProps> = ({
   sortDirection = 'asc',
   onSort,
 }) => {
-  // Add ref to track the last drag operation and prevent duplicates
-  const lastDragRef = useRef<{ activeId: any; overId: any; timestamp: number } | null>(null);
+  // Column visibility hook
+  const { columnVisibility, toggleColumn, resetToDefault } = useColumnVisibility();
 
-  // Configure sensors to require mouse movement before starting drag
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 15, // Require 15px of movement before starting drag (increased from 8px)
-      },
-    })
-  );
-
-  // Only allow drag and drop in playlist view when in manual mode
-  const isDragEnabled = isPlaylistView && playlistSortMode === 'manual';
-
+  // Enable drag for both library and playlist tracks
+  // - Library tracks: can be dragged to playlists (cross-playlist operations)
+  // - Playlist tracks: can be reordered (when in manual mode) or dragged to other playlists
+  const isDragEnabled = isPlaylistView ? playlistSortMode === 'manual' : true; // Always enabled for library view
+  
   // Add debugging
   console.log('🔧 [TRACKS TABLE] isDragEnabled:', isDragEnabled, 'isPlaylistView:', isPlaylistView, 'playlistSortMode:', playlistSortMode);
 
-  const handleDragStart = (event: any) => {
-    const { active } = event;
-    console.log('🔄 [TRACK SORT] Drag started:', { activeId: active.id });
-    console.log('🔄 [TRACK SORT] Active element:', active);
-    console.log('🔄 [TRACK SORT] Tracks in SortableContext:', tracks.map(t => t.id));
-  };
 
-  const handleDragEnd = async (event: any) => {
-    const { active, over } = event;
-    console.log('🔄 [TRACK SORT] Drag ended:', { activeId: active.id, overId: over?.id });
-    console.log('🔄 [TRACK SORT] Full event:', event);
-    console.log('🔄 [TRACK SORT] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name })));
-    
-    // Don't process if drag is not enabled
-    if (!isDragEnabled) {
-      console.log('🔄 [TRACK SORT] Drag not enabled, skipping');
-      return;
-    }
-    
-    // Prevent processing if no valid drop target
-    if (!active || !over || active.id === over.id) {
-      console.log('🔄 [TRACK SORT] No valid drop or same position, skipping');
-      return;
-    }
-
-    // Prevent duplicate operations within a short timeframe
-    const now = Date.now();
-    const lastDrag = lastDragRef.current;
-    if (lastDrag && 
-        lastDrag.activeId === active.id && 
-        lastDrag.overId === over.id && 
-        now - lastDrag.timestamp < 500) { // 500ms debounce
-      console.log('🔄 [TRACK SORT] Duplicate drag detected, skipping');
-      return;
-    }
-
-    // Update the last drag tracking
-    lastDragRef.current = { activeId: active.id, overId: over.id, timestamp: now };
-
-    const oldIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === active.id);
-    const newIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === over.id);
-    
-    console.log('🔄 [TRACK SORT] Track lookup results:', {
-      activeId: active.id,
-      overId: over.id,
-      oldIndex,
-      newIndex,
-      activeTrack: tracks[oldIndex],
-      overTrack: tracks[newIndex]
-    });
-    
-    // Validate indices
-    if (oldIndex === -1 || newIndex === -1) {
-      console.error('🔄 [TRACK SORT] Invalid track indices:', { oldIndex, newIndex, activeId: active.id, overId: over.id });
-      return;
-    }
-
-    console.log('🔄 [TRACK SORT] Moving track from index', oldIndex, 'to', newIndex);
-    console.log('🔄 [TRACK SORT] Track being moved:', tracks[oldIndex]?.name);
-    
-    console.log('🔄 [TRACK SORT] About to call onReorderTracks with:', { oldIndex, newIndex });
-    console.log('🔄 [TRACK SORT] onReorderTracks function:', typeof onReorderTracks, onReorderTracks);
-    
-    try {
-      console.log('🔄 [TRACK SORT] Calling onReorderTracks...');
-      await onReorderTracks(oldIndex, newIndex);
-      console.log('🔄 [TRACK SORT] onReorderTracks completed successfully');
-    } catch (error) {
-      console.error('❌ [TRACK SORT] Error in onReorderTracks:', error);
-      console.error('❌ [TRACK SORT] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    }
-  };
 
   const getSortIcon = (column: SortColumn) => {
     if (!onSort) return null;
@@ -183,96 +106,69 @@ const TracksTable: React.FC<TracksTableProps> = ({
     );
   };
 
+  const renderTableHeader = () => (
+    <thead className="bg-gray-50">
+      <tr>
+        {columnVisibility.name && <SortableHeader column="name">Title</SortableHeader>}
+        {columnVisibility.artistName && <SortableHeader column="artistName">Artist</SortableHeader>}
+        {columnVisibility.albumName && <SortableHeader column="albumName">Album</SortableHeader>}
+        {columnVisibility.year && <SortableHeader column="year">Year</SortableHeader>}
+        {columnVisibility.duration && <SortableHeader column="duration">Duration</SortableHeader>}
+        {columnVisibility.tags && <SortableHeader column="tags">Tags</SortableHeader>}
+        {isPlaylistView && (
+          <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+        )}
+      </tr>
+    </thead>
+  );
+
+  const renderTableBody = () => (
+    <tbody className="bg-white divide-y divide-gray-200">
+      {tracks.map((track, index) => {
+        const uniqueKey = track.playlist_track_id || track.id;
+        return (
+          <TrackItem
+            key={uniqueKey}
+            track={track}
+            index={index}
+            onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
+            onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
+            isSelected={selectedTrackIds.includes(uniqueKey.toString())}
+            selectedTrackIds={selectedTrackIds}
+            allTracks={tracks}
+            onRemoveFromPlaylist={onRemoveFromPlaylist}
+            isPlaylistView={isPlaylistView}
+            isDragEnabled={isDragEnabled}
+            onContextMenu={onContextMenu}
+            columnVisibility={columnVisibility}
+          />
+        );
+      })}
+    </tbody>
+  );
+
   return (
-    <>
-      {isDragEnabled ? ( // Re-enable DndContext for playlist track reordering
-        <DndContext 
-          sensors={sensors}
-          collisionDetection={closestCenter} 
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext 
-            items={tracks.map((track) => track.playlist_track_id || track.id)} 
-            strategy={verticalListSortingStrategy}
-          >
-            <table 
-              className="min-w-full divide-y divide-gray-200"
-            >
-              <thead className="bg-gray-50">
-                <tr>
-                  <SortableHeader column="name">Title</SortableHeader>
-                  <SortableHeader column="artistName">Artist</SortableHeader>
-                  <SortableHeader column="albumName">Album</SortableHeader>
-                  <SortableHeader column="year">Year</SortableHeader>
-                  <SortableHeader column="duration">Duration</SortableHeader>
-                  {isPlaylistView && (
-                    <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  )}
-                </tr>
-              </thead>
+    <div className="space-y-2">
+      {/* Column Visibility Controls */}
+      <div className="flex justify-end">
+        <ColumnVisibilityControl
+          columnVisibility={columnVisibility}
+          onToggleColumn={toggleColumn}
+          onResetToDefault={resetToDefault}
+        />
+      </div>
 
-              <tbody className="bg-white divide-y divide-gray-200">
-                {tracks.map((track, index) => {
-                  const uniqueKey = track.playlist_track_id || track.id;
-                  return (
-                    <TrackItem
-                      key={uniqueKey}
-                      track={track}
-                      index={index}
-                      onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
-                      onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
-                      isSelected={selectedTrackIds.includes(uniqueKey.toString())}
-                      selectedTrackIds={selectedTrackIds}
-                      onRemoveFromPlaylist={onRemoveFromPlaylist}
-                      isPlaylistView={isPlaylistView}
-                      isDragEnabled={isDragEnabled}
-                      onContextMenu={onContextMenu}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
-          </SortableContext>
-        </DndContext>
-      ) : (
+      {/* Table */}
+      <SortableContext 
+        items={tracks.map((track) => track.playlist_track_id || track.id)} 
+        strategy={verticalListSortingStrategy}
+      >
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <SortableHeader column="name">Title</SortableHeader>
-              <SortableHeader column="artistName">Artist</SortableHeader>
-              <SortableHeader column="albumName">Album</SortableHeader>
-              <SortableHeader column="year">Year</SortableHeader>
-              <SortableHeader column="duration">Duration</SortableHeader>
-              {isPlaylistView && (
-                <th className="px-3 py-1 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-              )}
-            </tr>
-          </thead>
-
-          <tbody className="bg-white divide-y divide-gray-200">
-            {tracks.map((track, index) => {
-              const uniqueKey = track.playlist_track_id || track.id;
-              return (
-                <TrackItem
-                  key={uniqueKey}
-                  track={track}
-                  index={index}
-                  onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
-                  onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
-                  isSelected={selectedTrackIds.includes(uniqueKey.toString())}
-                  selectedTrackIds={selectedTrackIds}
-                  onRemoveFromPlaylist={onRemoveFromPlaylist}
-                  isPlaylistView={isPlaylistView}
-                  isDragEnabled={isDragEnabled}
-                  onContextMenu={onContextMenu}
-                />
-              );
-            })}
-          </tbody>
+          {renderTableHeader()}
+          {renderTableBody()}
         </table>
-      )}
-    </>
+      </SortableContext>
+    </div>
   );
 };
 
