@@ -3,11 +3,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaSearch, FaTimes, FaCog, FaFilter } from 'react-icons/fa';
 import { useSearch, SearchFilters } from '../../hooks/useSearch';
-import { Track, Playlist } from '../../../../../shared/types';
+import { Track, Playlist, _Comment as Comment } from '../../../../../shared/types';
 
 interface SearchBarProps {
   tracks: Track[];
   playlists: Playlist[];
+  comments?: Comment[];
   onTrackSelect: (track: Track) => void;
   onPlaylistSelect: (playlist: Playlist) => void;
   onSearchResults: (tracks: Track[], playlists: Playlist[]) => void;
@@ -16,6 +17,7 @@ interface SearchBarProps {
 const SearchBar: React.FC<SearchBarProps> = ({
   tracks,
   playlists,
+  comments = [],
   onTrackSelect,
   onPlaylistSelect,
   onSearchResults
@@ -24,6 +26,12 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const onSearchResultsRef = useRef(onSearchResults);
+  
+  // Update ref when callback changes
+  useEffect(() => {
+    onSearchResultsRef.current = onSearchResults;
+  }, [onSearchResults]);
 
   const {
     filters,
@@ -33,17 +41,31 @@ const SearchBar: React.FC<SearchBarProps> = ({
     searchResults,
     isSearching,
     isActive,
-    debouncedQuery
-  } = useSearch(tracks, playlists);
+    triggerSearch,
+    searchQuery
+  } = useSearch(tracks, playlists, comments);
 
-  // Update parent component with search results
+  console.log('🔍 [SearchBar] Props received:', {
+    tracksCount: tracks.length,
+    playlistsCount: playlists.length,
+    commentsCount: comments.length,
+    firstTrack: tracks[0] ? { id: tracks[0].id, name: tracks[0].name } : null
+  });
+
+  // Call parent callback when search results change
   useEffect(() => {
+    console.log('🔍 [SearchBar] Search results changed, updating parent:', {
+      isActive,
+      tracksCount: searchResults.tracks.length,
+      playlistsCount: searchResults.playlists.length
+    });
+    
     if (isActive) {
-      onSearchResults(searchResults.tracks, searchResults.playlists);
+      onSearchResultsRef.current(searchResults.tracks, searchResults.playlists);
     } else {
-      onSearchResults([], []);
+      onSearchResultsRef.current([], []);
     }
-  }, [searchResults, isActive, onSearchResults]);
+  }, [isActive, searchResults.totalResults]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -101,6 +123,14 @@ const SearchBar: React.FC<SearchBarProps> = ({
     inputRef.current?.focus();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerSearch();
+      setShowResults(true);
+    }
+  };
+
   const getMatchedFieldsText = (trackId: string) => {
     const fields = searchResults.matchedFields[trackId];
     if (!fields || fields.length === 0) return '';
@@ -120,8 +150,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
           type="text"
           value={filters.query}
           onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           onFocus={() => setShowResults(filters.query.length > 0)}
-          placeholder="Search tracks, artists, albums, genres, playlists, tags... (Cmd+F)"
+          placeholder="Search tracks, artists, albums, genres, playlists, tags, comments... (Press Enter to search)"
           className="block w-full pl-10 pr-20 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
         />
         
@@ -213,6 +244,16 @@ const SearchBar: React.FC<SearchBarProps> = ({
               />
               Tags
             </label>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.includeComments}
+                onChange={(e) => updateFilters({ includeComments: e.target.checked })}
+                className="mr-2"
+              />
+              Comments
+            </label>
           </div>
 
           {/* Tag type filters */}
@@ -285,7 +326,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
             <>
               {/* Results summary */}
               <div className="p-3 border-b border-gray-100 bg-gray-50 text-sm text-gray-600">
-                Found {searchResults.totalResults} results for "{debouncedQuery}"
+                Found {searchResults.totalResults} results for "{searchQuery}"
               </div>
 
               {/* Track results */}

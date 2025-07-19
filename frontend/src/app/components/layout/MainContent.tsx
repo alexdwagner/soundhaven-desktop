@@ -5,12 +5,20 @@ import { DndContext, closestCenter, PointerSensor, MouseSensor, useSensor, useSe
 import PlaylistSidebar from "../playlists/PlaylistSidebar";
 import TracksManager from "../tracks/TracksManager";
 import TrackItem from "../tracks/TrackItem";
-import { Track } from "../../../../../shared/types";
+import { Track, Playlist } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 
-export default function MainContent() {
+interface MainContentProps {
+  searchResults?: {
+    tracks: Track[];
+    playlists: Playlist[];
+    isActive: boolean;
+  };
+}
+
+export default function MainContent({ searchResults }: MainContentProps) {
   const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState<Track[]>([]);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [selectedPlaylistName, setSelectedPlaylistName] = useState<string | null>(null);
@@ -286,6 +294,7 @@ export default function MainContent() {
               selectedPlaylistId={selectedPlaylistId}
               selectedPlaylistName={selectedPlaylistName}
               onRegisterReorderHandler={handleRegisterReorderHandler}
+              searchResults={searchResults}
             />
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Track, Playlist, Tag } from '../../../../shared/types';
+import { Track, Playlist, Tag, _Comment as Comment } from '../../../../shared/types';
 
 export interface SearchFilters {
   query: string;
@@ -9,6 +9,7 @@ export interface SearchFilters {
   includeGenres: boolean;
   includePlaylists: boolean;
   includeTags: boolean;
+  includeComments: boolean;
   tagTypes?: ('manual' | 'auto' | 'system')[];
 }
 
@@ -29,27 +30,38 @@ const defaultFilters: SearchFilters = {
   includeGenres: true,
   includePlaylists: true,
   includeTags: true,
+  includeComments: true,
   tagTypes: ['manual', 'auto', 'system']
 };
 
-export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
+export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments: Comment[] = []) {
+  console.log('🔍 [useSearch] Hook called with:', { 
+    tracksCount: tracks.length, 
+    playlistsCount: playlists.length, 
+    commentsCount: comments.length 
+  });
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // Manual search query (only updates on Enter)
 
-  // Debounced search query
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(filters.query);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [filters.query]);
+  // Manual search function
+  const triggerSearch = () => {
+    console.log('🔍 [useSearch] MANUAL SEARCH TRIGGERED:', {
+      query: filters.query,
+      filters: Object.entries(filters).filter(([, value]) => value).map(([key]) => key),
+      availableData: {
+        tracks: tracks.length,
+        playlists: playlists.length,
+        comments: comments.length
+      },
+      timestamp: new Date().toISOString()
+    });
+    setSearchQuery(filters.query);
+  };
 
   // Main search function
   const searchResults = useMemo((): SearchResult => {
-    if (!debouncedQuery.trim()) {
+    if (!searchQuery.trim()) {
       return {
         tracks: [],
         playlists: [],
@@ -60,7 +72,7 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
 
     setIsSearching(true);
 
-    const query = debouncedQuery.toLowerCase().trim();
+    const query = searchQuery.toLowerCase().trim();
     const searchTerms = query.split(/\s+/);
     
     const matchedTracks: Track[] = [];
@@ -120,6 +132,28 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
         }
       }
 
+      // Search in comments (with error handling)
+      if (filters.includeComments && Array.isArray(comments) && comments.length > 0) {
+        try {
+          const trackComments = comments.filter(comment => 
+            comment && comment.trackId && comment.trackId.toString() === track.id.toString()
+          );
+          const matchingComments = trackComments.filter(comment => 
+            comment && comment.content && 
+            searchTerms.some(term => comment.content.toLowerCase().includes(term))
+          );
+
+          if (matchingComments.length > 0) {
+            const commentPreview = matchingComments[0].content.substring(0, 30) + '...';
+            fieldsMatched.push(`comments (${matchingComments.length} found: "${commentPreview}")`);
+            hasMatch = true;
+          }
+        } catch (error) {
+          console.warn('🔍 [useSearch] Error searching comments:', error);
+          // Continue without comments search if there's an error
+        }
+      }
+
       if (hasMatch) {
         matchedTracks.push(track);
         matchedFields[track.id] = fieldsMatched;
@@ -137,13 +171,26 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
 
     setIsSearching(false);
 
+    console.log('🔍 [useSearch] Search completed:', {
+      query: searchQuery,
+      searchTerms,
+      totalTracks: tracks.length,
+      totalPlaylists: playlists.length,
+      totalComments: comments.length,
+      matchedTracks: matchedTracks.length,
+      matchedPlaylists: matchedPlaylists.length,
+      totalResults: matchedTracks.length + matchedPlaylists.length,
+      activeFilters: Object.entries(filters).filter(([, value]) => value).map(([key]) => key),
+      includeComments: filters.includeComments
+    });
+
     return {
       tracks: matchedTracks,
       playlists: matchedPlaylists,
       matchedFields,
       totalResults: matchedTracks.length + matchedPlaylists.length
     };
-  }, [debouncedQuery, tracks, playlists, filters]);
+  }, [searchQuery, tracks, playlists, comments, filters]);
 
   // Update search query
   const setQuery = (query: string) => {
@@ -161,7 +208,7 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
   };
 
   // Check if search is active
-  const isActive = debouncedQuery.trim().length > 0;
+  const isActive = searchQuery.trim().length > 0;
 
   return {
     filters,
@@ -171,6 +218,7 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = []) {
     searchResults,
     isSearching,
     isActive,
-    debouncedQuery
+    triggerSearch,
+    searchQuery
   };
 } 

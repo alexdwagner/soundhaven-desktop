@@ -967,7 +967,7 @@ export const apiService = {
   async addMarkerAndComment(dto: CreateCommentDto): Promise<Comment> {
     console.log('Adding marker and comment:', dto);
     try {
-      const response = await makeRequest<{ comment: Comment }>('/api/comments/with-marker', {
+      const response = await makeRequest<Comment>('/api/comments', {
       method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -983,7 +983,7 @@ export const apiService = {
         throw new Error(response.error || 'Failed to add comment with marker');
       }
       
-      return response.data.comment;
+      return response.data;
     } catch (error) {
       console.error('Error in addMarkerAndComment:', error);
       throw error;
@@ -1016,6 +1016,28 @@ export const apiService = {
       return response;
     } catch (error) {
       console.error('❌ [ApiService] Error fetching comments and markers:', error);
+      return { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 500
+      };
+    }
+  },
+
+  async fetchAllComments(page: number = 1, limit: number = 100): Promise<ApiResponse<any>> {
+    console.log('🌐 [ApiService] Fetching all comments for search');
+    try {
+      const url = `/api/comments?page=${page}&limit=${limit}`;
+      console.log('🌐 [ApiService] Request URL:', url);
+      
+      const response = await makeRequest<any>(url);
+      
+      console.log('🌐 [ApiService] All comments response:', response);
+      console.log('🌐 [ApiService] Response data type:', typeof response.data);
+      console.log('🌐 [ApiService] Response data structure:', response.data);
+      
+      return response;
+    } catch (error) {
+      console.error('❌ [ApiService] Error fetching all comments:', error);
       return { 
         error: error instanceof Error ? error.message : 'Unknown error',
         status: 500

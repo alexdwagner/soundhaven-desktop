@@ -3,7 +3,9 @@
 import React, { ReactNode, useState, useRef, useEffect } from "react";
 import { FaBars } from "react-icons/fa";
 import { usePlaylists } from "@/app/hooks/UsePlaylists";
+import { useTracks } from "@/app/providers/TracksProvider";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useAllComments } from "@/app/hooks/useAllComments";
 import SearchBar from "./SearchBar";
 import { Track, Playlist } from "../../../../../shared/types";
 
@@ -42,7 +44,35 @@ const NavBar: React.FC<NavBarProps> = ({
   const { user, loading, logout } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const { clearPlaylists } = usePlaylists();
+  const { clearPlaylists, playlists: contextPlaylists } = usePlaylists();
+  const { tracks: contextTracks } = useTracks();
+  const { comments, isLoading: commentsLoading, error: commentsError } = useAllComments();
+  
+  // Use context data instead of props (context should have the actual data)
+  const actualTracks = contextTracks.length > 0 ? contextTracks : tracks;
+  const actualPlaylists = contextPlaylists.length > 0 ? contextPlaylists : playlists;
+  
+  console.log('🔍 [NavBar] Data sources:', {
+    propTracks: tracks.length,
+    propPlaylists: playlists.length,
+    contextTracks: contextTracks.length,
+    contextPlaylists: contextPlaylists.length,
+    actualTracks: actualTracks.length,
+    actualPlaylists: actualPlaylists.length,
+    comments: comments.length
+  });
+  
+  // Log comments state for debugging
+  useEffect(() => {
+    console.log('🔍 [NavBar] Comments state:', { 
+      commentsCount: comments?.length || 0, 
+      isLoading: commentsLoading, 
+      error: commentsError 
+    });
+    if (commentsError) {
+      console.warn('🔍 [NavBar] Comments error - search will work without comments:', commentsError);
+    }
+  }, [comments, commentsLoading, commentsError]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
@@ -97,8 +127,9 @@ const NavBar: React.FC<NavBarProps> = ({
             {user && (
               <div className="w-full max-w-lg">
                 <SearchBar
-                  tracks={tracks}
-                  playlists={playlists}
+                  tracks={actualTracks}
+                  playlists={actualPlaylists}
+                  comments={commentsError ? [] : comments}
                   onTrackSelect={onTrackSelect}
                   onPlaylistSelect={onPlaylistSelect}
                   onSearchResults={onSearchResults}

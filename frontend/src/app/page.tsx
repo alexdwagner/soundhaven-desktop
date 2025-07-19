@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import MainContent from "./components/layout/MainContent";
 import NavBar from "./components/layout/NavBar";
 import Footer from "./components/layout/Footer";
@@ -8,6 +8,7 @@ import AuthModal from "./components/modals/AuthModal";
 import SettingsModal from "./components/modals/SettingsModal";
 import { apiService } from '../services/electronApiService';
 import { useTracks } from "./providers/TracksProvider";
+import { Track, Playlist } from "../../../shared/types";
 
 // import { useAuth } from "../hooks/UseAuth";
 // import LoginForm from "../components/auth/LoginForm";
@@ -23,6 +24,17 @@ export default function HomePage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  
+  // Search results state
+  const [searchResults, setSearchResults] = useState<{
+    tracks: Track[],
+    playlists: Playlist[],
+    isActive: boolean
+  }>({
+    tracks: [],
+    playlists: [],
+    isActive: false
+  });
   
   // Get tracks from context
   const { tracks, isLoading, error, fetchTracks } = useTracks();
@@ -55,12 +67,40 @@ export default function HomePage() {
     setShowSettingsModal(true);
   };
 
+  // Handle search results from NavBar
+  const handleSearchResults = useCallback((filteredTracks: Track[], filteredPlaylists: Playlist[]) => {
+    console.log('🔍 [HomePage] Search results received:', {
+      tracks: filteredTracks.length,
+      playlists: filteredPlaylists.length
+    });
+    
+    const isActive = filteredTracks.length > 0 || filteredPlaylists.length > 0;
+    setSearchResults({
+      tracks: filteredTracks,
+      playlists: filteredPlaylists,
+      isActive
+    });
+  }, []);
+
+  const handleTrackSelect = useCallback((track: Track) => {
+    console.log('🔍 [HomePage] Track selected from search:', track.name);
+    // You can add track selection logic here if needed
+  }, []);
+
+  const handlePlaylistSelect = useCallback((playlist: Playlist) => {
+    console.log('🔍 [HomePage] Playlist selected from search:', playlist.name);
+    // You can add playlist selection logic here if needed
+  }, []);
+
   return (
     <div className="flex-col">
       <NavBar 
         onLoginClick={handleLoginClick}
         onRegisterClick={handleRegisterClick}
         onSettingsClick={handleSettingsClick}
+        onSearchResults={handleSearchResults}
+        onTrackSelect={handleTrackSelect}
+        onPlaylistSelect={handlePlaylistSelect}
       >
         <div className="flex items-center">
           <h1 className="text-xl font-bold text-gray-900">SoundHaven</h1>
@@ -68,7 +108,7 @@ export default function HomePage() {
       </NavBar>
 
       <div className="flex min-h-screen">
-        <MainContent />
+        <MainContent searchResults={searchResults} />
       </div>
 
       {showAuthModal && (

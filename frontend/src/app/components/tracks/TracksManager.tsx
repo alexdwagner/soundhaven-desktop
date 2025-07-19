@@ -28,13 +28,19 @@ interface TracksManagerProps {
   selectedPlaylistId?: string | null;
   selectedPlaylistName?: string | null;
   onRegisterReorderHandler?: (handler: (startIndex: number, endIndex: number) => void) => void;
+  searchResults?: {
+    tracks: Track[];
+    playlists: any[];
+    isActive: boolean;
+  };
 }
 
 export default function TracksManager({ 
   selectedPlaylistTracks, 
   selectedPlaylistId,
   selectedPlaylistName,
-  onRegisterReorderHandler
+  onRegisterReorderHandler,
+  searchResults
 }: TracksManagerProps) {
   console.log('🎯 TracksManager component rendering...');
   
@@ -50,15 +56,26 @@ export default function TracksManager({
   const { removeTrackFromPlaylist, updatePlaylistTrackOrder, fetchPlaylistById, setCurrentPlaylistTracks, currentPlaylistTracks } = usePlaylists();
   
   // Determine which tracks to display
-  const tracks = selectedPlaylistId ? currentPlaylistTracks : allTracks;
+  const tracks = (() => {
+    // If search is active, use search results
+    if (searchResults?.isActive) {
+      console.log('📓 [TRACKS MANAGER] Using search results:', searchResults.tracks.length, 'tracks');
+      return searchResults.tracks;
+    }
+    
+    // Otherwise use normal logic: playlist tracks or all tracks
+    return selectedPlaylistId ? currentPlaylistTracks : allTracks;
+  })();
   
   console.log(`📓 [TRACKS MANAGER] Tracks determination:`, {
     selectedPlaylistId,
+    searchActive: searchResults?.isActive || false,
+    searchResultsLength: searchResults?.tracks.length || 0,
     currentPlaylistTracksLength: currentPlaylistTracks.length,
     allTracksLength: allTracks.length,
     finalTracksLength: tracks.length,
-    currentPlaylistTracks: currentPlaylistTracks.map(t => ({ id: t.id, name: t.name })),
-    allTracks: allTracks.map(t => ({ id: t.id, name: t.name }))
+    usingSource: searchResults?.isActive ? 'search' : selectedPlaylistId ? 'playlist' : 'all',
+    tracks: tracks.map(t => ({ id: t.id, name: t.name }))
   });
   
   const isPlaylistView = !!selectedPlaylistId;
@@ -1176,6 +1193,27 @@ export default function TracksManager({
   };
 
   const getViewTitle = () => {
+    // If search is active, show search results indicator
+    if (searchResults?.isActive) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold text-gray-900">Search Results</span>
+          <span className="text-sm text-white bg-blue-500 px-2 py-1 rounded-full">
+            {displayTracks.length} result{displayTracks.length !== 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={() => {
+              // Clear search by setting empty search in parent - we'll need to handle this
+              console.log('🔍 Clear search clicked - TODO: implement clear search');
+            }}
+            className="text-xs text-gray-500 hover:text-gray-700 underline"
+          >
+            Clear search
+          </button>
+        </div>
+      );
+    }
+    
     if (isPlaylistView && selectedPlaylistName) {
       return (
         <div className="flex items-center gap-2">

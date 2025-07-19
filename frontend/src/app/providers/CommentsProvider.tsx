@@ -249,11 +249,14 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         userId: user.id,
       };
       
+      console.log('🎵 [CommentsProvider] About to call addMarkerAndComment with:', commentData);
       const comment = await apiService.addMarkerAndComment(commentData);
-      console.log('Comment added successfully:', comment);
+      console.log('🎵 [CommentsProvider] Comment added successfully:', comment);
+      console.log('🎵 [CommentsProvider] Comment type:', typeof comment, 'is object:', typeof comment === 'object');
 
-      if (!comment) {
-        console.error('Invalid response format from API');
+      if (!comment || typeof comment !== 'object') {
+        console.error('🎵 [CommentsProvider] Invalid response format from API');
+        console.error('🎵 [CommentsProvider] Expected object, got:', typeof comment, comment);
         throw new Error('Invalid response format from server');
       }
 

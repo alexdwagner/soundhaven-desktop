@@ -583,7 +583,14 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
     }
     
     // Route the request to the appropriate handler
-    console.log('API Request:', { endpoint, method, apiPath });
+    console.log('🌐 [API REQUEST]', { 
+      endpoint, 
+      method, 
+      apiPath, 
+      originalPath: normalizedPath,
+      searchParams: Object.fromEntries(url.searchParams.entries()),
+      hasBody: !!body 
+    });
     console.log('[API DEBUG] About to check playlist handlers, apiPath:', apiPath);
     
     // Handle track endpoints
@@ -1173,51 +1180,116 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
       }
     }
     
+    console.log('[API DEBUG] About to check comment endpoints for path:', apiPath);
+    console.log('[API DEBUG] Checking if', apiPath, 'starts with "/api/comments":', apiPath.startsWith('/api/comments'));
     // Handle comment endpoints
     if (apiPath.startsWith('/api/comments')) {
-      // Get comments for a track
+      console.log('[COMMENTS DEBUG] Comment endpoint hit:', { 
+        method, 
+        apiPath, 
+        fullUrl: url.toString(),
+        searchParams: Object.fromEntries(url.searchParams.entries()),
+        trackId: url.searchParams.get('trackId') 
+      });
+      
+      // Get all comments (for search) or comments for a specific track
       if (method === 'GET') {
+        console.log('[COMMENTS DEBUG] Entering GET handler');
         const trackId = url.searchParams.get('trackId');
         const page = parseInt(url.searchParams.get('page') || '1', 10);
-        const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+        const limit = parseInt(url.searchParams.get('limit') || '100', 10);
         
-        if (!trackId) {
-          return { error: 'Missing trackId parameter', status: 400 };
-        }
+        console.log('[COMMENTS DEBUG] GET request params:', { trackId, page, limit });
         
         try {
-          const comments = await dbAsync.all(
-            'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
-            [trackId, limit, (page - 1) * limit]
-          );
-          
-          const total = await dbAsync.get(
-            'SELECT COUNT(*) as count FROM comments WHERE track_id = ?',
-            [trackId]
-          );
-          
-          return {
-            data: {
-              comments,
-              pagination: {
-                total: total.count,
-                page,
-                limit,
-                pages: Math.ceil(total.count / limit)
+          if (!trackId) {
+            console.log('[COMMENTS DEBUG] Fetching all comments for search');
+            // Get all comments for search functionality
+            const commentsRaw = await dbAsync.all(
+              'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+              [limit, (page - 1) * limit]
+            );
+            
+            // Convert Unix timestamps to ISO date strings
+            const comments = commentsRaw.map((comment: any) => ({
+              ...comment,
+              created_at: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
+              timestamp: comment.timestamp || 0
+            }));
+            
+            const total = await dbAsync.get(
+              'SELECT COUNT(*) as count FROM comments'
+            );
+            
+            const result = {
+              data: {
+                comments,
+                pagination: {
+                  total: total.count,
+                  page,
+                  limit,
+                  pages: Math.ceil(total.count / limit)
+                }
               }
-            }
-          };
+            };
+            
+            console.log('[COMMENTS DEBUG] Returning all comments result:', { 
+              commentsCount: comments.length, 
+              total: total.count 
+            });
+            
+            return result;
+          } else {
+            // Get comments for a specific track
+            const commentsRaw = await dbAsync.all(
+              'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+              [trackId, limit, (page - 1) * limit]
+            );
+            
+            // Convert Unix timestamps to ISO date strings
+            const comments = commentsRaw.map((comment: any) => ({
+              ...comment,
+              created_at: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
+              timestamp: comment.timestamp || 0
+            }));
+            
+            const total = await dbAsync.get(
+              'SELECT COUNT(*) as count FROM comments WHERE track_id = ?',
+              [trackId]
+            );
+            
+            return {
+              data: {
+                comments,
+                pagination: {
+                  total: total.count,
+                  page,
+                  limit,
+                  pages: Math.ceil(total.count / limit)
+                }
+              }
+            };
+          }
         } catch (error) {
-          console.error('[API DEBUG] Error fetching comments:', error);
+          console.error('[COMMENTS DEBUG] Error fetching comments:', error);
+          console.error('[COMMENTS DEBUG] Error details:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+          });
           return { error: 'Failed to fetch comments', status: 500 };
         }
       }
       
       // Create new comment
       if (method === 'POST') {
+        console.log('[COMMENTS DEBUG] Entering POST handler');
         const { trackId, userId, content, time } = body;
         
+        console.log('[COMMENTS DEBUG] POST request body:', { trackId, userId, content, time });
+        console.log('[COMMENTS DEBUG] Full body object:', body);
+        
         if (!trackId) {
+          console.log('[COMMENTS DEBUG] trackId is missing from body');
           return { error: 'Missing trackId', status: 400 };
         }
         if (!userId) {
@@ -1239,12 +1311,58 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
             [commentId, content, trackId, userId, now, time]
           );
           
-          const comment = await dbAsync.get(
+          // Create marker if time is provided
+          let marker = null;
+          if (typeof time === 'number') {
+            const markerId = uuidv4();
+            const waveSurferRegionId = `region-${markerId}`;
+            
+            await dbAsync.run(
+              'INSERT INTO markers (id, wave_surfer_region_id, time, duration, comment_id, track_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [markerId, waveSurferRegionId, time, 0.1, commentId, trackId, now]
+            );
+            
+            marker = {
+              id: markerId,
+              waveSurferRegionID: waveSurferRegionId,
+              time: time,
+              duration: 0.1,
+              commentId: commentId,
+              trackId: trackId,
+              createdAt: now,
+              data: {
+                customColor: "#FF0000",
+                isVisible: true,
+                isDraggable: true,
+                isResizable: false
+              }
+            };
+          }
+          
+          const commentRaw = await dbAsync.get(
             'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.id = ?',
             [commentId]
           );
           
-          return { data: comment };
+          console.log('[COMMENTS DEBUG] Raw comment from DB:', commentRaw);
+          console.log('[COMMENTS DEBUG] Created marker:', marker);
+          
+          // Convert Unix timestamp to ISO date string
+          const comment = {
+            ...commentRaw,
+            created_at: commentRaw.created_at ? new Date(commentRaw.created_at * 1000).toISOString() : null,
+            timestamp: commentRaw.timestamp || 0
+          };
+          
+          // Add marker to comment if it was created
+          const commentWithMarker = {
+            ...comment,
+            ...(marker && { marker })
+          };
+          
+          console.log('[COMMENTS DEBUG] Final comment with marker:', commentWithMarker);
+          
+          return { data: commentWithMarker };
         } catch (error) {
           console.error('[API DEBUG] Error creating comment:', error);
           return { error: 'Failed to create comment', status: 500 };
