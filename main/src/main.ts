@@ -1204,18 +1204,51 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
         try {
           if (!trackId) {
             console.log('[COMMENTS DEBUG] Fetching all comments for search');
-            // Get all comments for search functionality
+            // Get all comments for search functionality with markers
             const commentsRaw = await dbAsync.all(
-              'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+              `SELECT c.*, u.name as user_name,
+                      m.id as marker_id, m.wave_surfer_region_id, m.time as marker_time, 
+                      m.duration as marker_duration, m.created_at as marker_created_at
+               FROM comments c 
+               LEFT JOIN users u ON c.user_id = u.id 
+               LEFT JOIN markers m ON c.id = m.comment_id 
+               ORDER BY c.created_at DESC 
+               LIMIT ? OFFSET ?`,
               [limit, (page - 1) * limit]
             );
             
-            // Convert Unix timestamps to ISO date strings
-            const comments = commentsRaw.map((comment: any) => ({
-              ...comment,
-              created_at: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
-              timestamp: comment.timestamp || 0
-            }));
+            // Convert Unix timestamps to ISO date strings and fix field names, include markers
+            const comments = commentsRaw.map((comment: any) => {
+              const processedComment: any = {
+                ...comment,
+                trackId: comment.track_id, // Map track_id to trackId for frontend
+                userId: comment.user_id, // Map user_id to userId for frontend  
+                userName: comment.user_name, // Map user_name to userName for frontend
+                createdAt: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
+                timestamp: comment.timestamp || 0
+              };
+              
+              // Add marker if it exists
+              if (comment.marker_id) {
+                processedComment.marker = {
+                  id: comment.marker_id,
+                  waveSurferRegionID: comment.wave_surfer_region_id,
+                  time: comment.marker_time,
+                  duration: comment.marker_duration || 0.1,
+                  commentId: comment.id,
+                  trackId: comment.track_id,
+                  createdAt: comment.marker_created_at ? new Date(comment.marker_created_at * 1000).toISOString() : null,
+                  data: {
+                    customColor: "#FF0000",
+                    isVisible: true,
+                    isDraggable: true,
+                    isResizable: false
+                  }
+                };
+              }
+              
+              return processedComment;
+            });
             
             const total = await dbAsync.get(
               'SELECT COUNT(*) as count FROM comments'
@@ -1240,18 +1273,52 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
             
             return result;
           } else {
-            // Get comments for a specific track
+            // Get comments for a specific track with markers
             const commentsRaw = await dbAsync.all(
-              'SELECT c.*, u.name as user_name FROM comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.track_id = ? ORDER BY c.created_at DESC LIMIT ? OFFSET ?',
+              `SELECT c.*, u.name as user_name,
+                      m.id as marker_id, m.wave_surfer_region_id, m.time as marker_time, 
+                      m.duration as marker_duration, m.created_at as marker_created_at
+               FROM comments c 
+               LEFT JOIN users u ON c.user_id = u.id 
+               LEFT JOIN markers m ON c.id = m.comment_id 
+               WHERE c.track_id = ? 
+               ORDER BY c.created_at DESC 
+               LIMIT ? OFFSET ?`,
               [trackId, limit, (page - 1) * limit]
             );
             
-            // Convert Unix timestamps to ISO date strings
-            const comments = commentsRaw.map((comment: any) => ({
-              ...comment,
-              created_at: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
-              timestamp: comment.timestamp || 0
-            }));
+            // Convert Unix timestamps to ISO date strings and fix field names, include markers
+            const comments = commentsRaw.map((comment: any) => {
+              const processedComment: any = {
+                ...comment,
+                trackId: comment.track_id, // Map track_id to trackId for frontend
+                userId: comment.user_id, // Map user_id to userId for frontend  
+                userName: comment.user_name, // Map user_name to userName for frontend
+                createdAt: comment.created_at ? new Date(comment.created_at * 1000).toISOString() : null,
+                timestamp: comment.timestamp || 0
+              };
+              
+              // Add marker if it exists
+              if (comment.marker_id) {
+                processedComment.marker = {
+                  id: comment.marker_id,
+                  waveSurferRegionID: comment.wave_surfer_region_id,
+                  time: comment.marker_time,
+                  duration: comment.marker_duration || 0.1,
+                  commentId: comment.id,
+                  trackId: comment.track_id,
+                  createdAt: comment.marker_created_at ? new Date(comment.marker_created_at * 1000).toISOString() : null,
+                  data: {
+                    customColor: "#FF0000",
+                    isVisible: true,
+                    isDraggable: true,
+                    isResizable: false
+                  }
+                };
+              }
+              
+              return processedComment;
+            });
             
             const total = await dbAsync.get(
               'SELECT COUNT(*) as count FROM comments WHERE track_id = ?',
@@ -1329,7 +1396,7 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
               duration: 0.1,
               commentId: commentId,
               trackId: trackId,
-              createdAt: now,
+              createdAt: new Date(now * 1000).toISOString(),
               data: {
                 customColor: "#FF0000",
                 isVisible: true,
@@ -1347,10 +1414,10 @@ ipcMain.handle('api-request', async (_, { endpoint, method, body, headers }) => 
           console.log('[COMMENTS DEBUG] Raw comment from DB:', commentRaw);
           console.log('[COMMENTS DEBUG] Created marker:', marker);
           
-          // Convert Unix timestamp to ISO date string
+          // Convert Unix timestamp to ISO date string and fix field name
           const comment = {
             ...commentRaw,
-            created_at: commentRaw.created_at ? new Date(commentRaw.created_at * 1000).toISOString() : null,
+            createdAt: commentRaw.created_at ? new Date(commentRaw.created_at * 1000).toISOString() : null,
             timestamp: commentRaw.timestamp || 0
           };
           

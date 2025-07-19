@@ -57,6 +57,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 <span>Waveform colors</span>
                 <span className="text-xs bg-gray-100 px-2 py-1 rounded">Coming soon</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span>Timezone for comment dates</span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-400">
+                    Currently: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  </span>
+                  <span className="text-xs bg-gray-100 px-2 py-1 rounded">Coming soon</span>
+                </div>
+              </div>
             </div>
           </div>
 

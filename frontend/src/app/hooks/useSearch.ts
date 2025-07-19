@@ -16,6 +16,7 @@ export interface SearchFilters {
 export interface SearchResult {
   tracks: Track[];
   playlists: Playlist[];
+  comments: Comment[];
   matchedFields: {
     [trackId: string]: string[]; // Which fields matched for each track
   };
@@ -65,6 +66,7 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments:
       return {
         tracks: [],
         playlists: [],
+        comments: [],
         matchedFields: {},
         totalResults: 0
       };
@@ -77,6 +79,7 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments:
     
     const matchedTracks: Track[] = [];
     const matchedPlaylists: Playlist[] = [];
+    const matchedComments: Comment[] = [];
     const matchedFields: { [trackId: string]: string[] } = {};
 
     // Search tracks
@@ -169,6 +172,20 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments:
       });
     }
 
+    // Search comments separately
+    if (filters.includeComments && Array.isArray(comments) && comments.length > 0) {
+      try {
+        comments.forEach(comment => {
+          if (comment && comment.content && 
+              searchTerms.some(term => comment.content.toLowerCase().includes(term))) {
+            matchedComments.push(comment);
+          }
+        });
+      } catch (error) {
+        console.warn('🔍 [useSearch] Error searching comments separately:', error);
+      }
+    }
+
     setIsSearching(false);
 
     console.log('🔍 [useSearch] Search completed:', {
@@ -179,7 +196,8 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments:
       totalComments: comments.length,
       matchedTracks: matchedTracks.length,
       matchedPlaylists: matchedPlaylists.length,
-      totalResults: matchedTracks.length + matchedPlaylists.length,
+      matchedComments: matchedComments.length,
+      totalResults: matchedTracks.length + matchedPlaylists.length + matchedComments.length,
       activeFilters: Object.entries(filters).filter(([, value]) => value).map(([key]) => key),
       includeComments: filters.includeComments
     });
@@ -187,8 +205,9 @@ export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments:
     return {
       tracks: matchedTracks,
       playlists: matchedPlaylists,
+      comments: matchedComments,
       matchedFields,
-      totalResults: matchedTracks.length + matchedPlaylists.length
+      totalResults: matchedTracks.length + matchedPlaylists.length + matchedComments.length
     };
   }, [searchQuery, tracks, playlists, comments, filters]);
 

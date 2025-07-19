@@ -11,6 +11,7 @@ interface SearchBarProps {
   comments?: Comment[];
   onTrackSelect: (track: Track) => void;
   onPlaylistSelect: (playlist: Playlist) => void;
+  onCommentSelect: (comment: Comment) => void;
   onSearchResults: (tracks: Track[], playlists: Playlist[]) => void;
 }
 
@@ -20,6 +21,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   comments = [],
   onTrackSelect,
   onPlaylistSelect,
+  onCommentSelect,
   onSearchResults
 }) => {
   const [showFilters, setShowFilters] = useState(false);
@@ -108,6 +110,11 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   const handlePlaylistClick = (playlist: Playlist) => {
     onPlaylistSelect(playlist);
+    setShowResults(false);
+  };
+
+  const handleCommentClick = (comment: Comment) => {
+    onCommentSelect(comment);
     setShowResults(false);
   };
 
@@ -388,10 +395,49 @@ const SearchBar: React.FC<SearchBarProps> = ({
                 </div>
               )}
 
+              {/* Comment results */}
+              {searchResults.comments && searchResults.comments.length > 0 && (
+                <div>
+                  <div className="p-2 text-xs font-medium text-gray-500 uppercase tracking-wide bg-gray-50 border-b">
+                    Comments ({searchResults.comments.length})
+                  </div>
+                  {searchResults.comments.slice(0, 5).map((comment) => {
+                    // Find the track name for this comment
+                    const track = comment.trackId 
+                      ? tracks.find(t => t.id.toString() === comment.trackId.toString())
+                      : null;
+                    const trackName = track?.name || 'Unknown Track';
+                    
+                    return (
+                      <div
+                        key={comment.id}
+                        onClick={() => handleCommentClick(comment)}
+                        className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {comment.content}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {comment.userName || 'Unknown User'} • {trackName}
+                          {comment.marker?.time !== undefined && (
+                            <span> • {Math.floor(comment.marker.time / 60)}:{('0' + Math.floor(comment.marker.time % 60)).slice(-2)}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {searchResults.comments.length > 5 && (
+                    <div className="p-2 text-xs text-gray-500 text-center">
+                      and {searchResults.comments.length - 5} more comments...
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* No results */}
               {searchResults.totalResults === 0 && (
                 <div className="p-4 text-center text-gray-500">
-                  No results found for "{debouncedQuery}"
+                  No results found for "{searchQuery}"
                 </div>
               )}
             </>

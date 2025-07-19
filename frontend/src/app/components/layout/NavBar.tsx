@@ -7,7 +7,7 @@ import { useTracks } from "@/app/providers/TracksProvider";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useAllComments } from "@/app/hooks/useAllComments";
 import SearchBar from "./SearchBar";
-import { Track, Playlist } from "../../../../../shared/types";
+import { Track, Playlist, _Comment as Comment } from "../../../../../shared/types";
 
 // Define a local User type that matches what we expect from the API
 interface User {
@@ -27,6 +27,7 @@ interface NavBarProps {
   playlists?: Playlist[];
   onTrackSelect?: (track: Track) => void;
   onPlaylistSelect?: (playlist: Playlist) => void;
+  onCommentSelect?: (comment: Comment) => void;
   onSearchResults?: (tracks: Track[], playlists: Playlist[]) => void;
 }
 
@@ -39,6 +40,7 @@ const NavBar: React.FC<NavBarProps> = ({
   playlists = [],
   onTrackSelect = () => {},
   onPlaylistSelect = () => {},
+  onCommentSelect = () => {},
   onSearchResults = () => {}
 }) => {
   const { user, loading, logout } = useAuth();
@@ -132,6 +134,7 @@ const NavBar: React.FC<NavBarProps> = ({
                   comments={commentsError ? [] : comments}
                   onTrackSelect={onTrackSelect}
                   onPlaylistSelect={onPlaylistSelect}
+                  onCommentSelect={onCommentSelect}
                   onSearchResults={onSearchResults}
                 />
               </div>

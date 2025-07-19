@@ -45,12 +45,26 @@ const CommentBlock = forwardRef<HTMLDivElement, CommentBlockProps>(({
     };
   }, [showMenu]);
 
-  const formatDate = (dateInput: string | Date): string => {
+  const formatDateTime = (dateInput: string | Date): string => {
     const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     if (!date || isNaN(date.getTime())) { // Check if date is valid
       return 'Invalid date'; // Return a placeholder or fallback value
     }
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    
+    // Format date as MM/DD/YY
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(-2);
+    const dateString = `${month}/${day}/${year}`;
+    
+    // Format time as HH:MM AM/PM
+    const timeString = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    return `${dateString} ${timeString}`;
   };  
 
   // Format marker time if present
@@ -129,7 +143,7 @@ const CommentBlock = forwardRef<HTMLDivElement, CommentBlockProps>(({
         <div className="text-xs text-gray-400">Time: {formatMarkerTime(markerTime)}</div>
       )}
       <p className="mt-1">{comment.content}</p>
-      <div className="text-sm text-gray-500 mt-2">{formatDate(new Date(comment.createdAt))}</div>
+      <div className="text-sm text-gray-500 mt-2">{formatDateTime(comment.createdAt)}</div>
     </div>
   );
 });

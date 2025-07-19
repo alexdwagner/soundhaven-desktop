@@ -92,6 +92,16 @@ export default function HomePage() {
     // You can add playlist selection logic here if needed
   }, []);
 
+  const handleCommentSelect = useCallback((comment: any) => {
+    console.log('🔍 [HomePage] Comment selected from search:', {
+      commentId: comment.id,
+      content: comment.content.substring(0, 50) + '...',
+      trackId: comment.trackId
+    });
+    // TODO: Load the track and show comments panel
+    // This will need to communicate with MainContent/TracksManager
+  }, []);
+
   return (
     <div className="flex-col">
       <NavBar 
@@ -101,6 +111,7 @@ export default function HomePage() {
         onSearchResults={handleSearchResults}
         onTrackSelect={handleTrackSelect}
         onPlaylistSelect={handlePlaylistSelect}
+        onCommentSelect={handleCommentSelect}
       >
         <div className="flex items-center">
           <h1 className="text-xl font-bold text-gray-900">SoundHaven</h1>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import { FaTrash, FaEdit, FaPlus } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaPlus, FaComment } from 'react-icons/fa';
 
 interface TrackContextMenuProps {
   x: number;
@@ -11,6 +11,7 @@ interface TrackContextMenuProps {
   onDelete: () => void;
   onEditMetadata: () => void;
   onAddToPlaylist: () => void;
+  onAddComment: () => void;
   onRemoveFromPlaylist?: () => void;
   isPlaylistView?: boolean;
 }
@@ -23,6 +24,7 @@ const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
   onDelete,
   onEditMetadata,
   onAddToPlaylist,
+  onAddComment,
   onRemoveFromPlaylist,
   isPlaylistView
 }) => {
@@ -72,6 +74,21 @@ const TrackContextMenu: React.FC<TrackContextMenuProps> = ({
       >
         <FaPlus className="text-green-600" />
         <span>Add to playlist</span>
+      </button>
+
+      <button
+        onClick={() => {
+          onAddComment();
+          onClose();
+        }}
+        className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center space-x-2 text-sm"
+        disabled={isMultiple}
+      >
+        <FaComment className={isMultiple ? "text-gray-400" : "text-blue-600"} />
+        <span className={isMultiple ? "text-gray-400" : ""}>
+          Add comment
+          {isMultiple && " (single track only)"}
+        </span>
       </button>
 
       <button

@@ -335,6 +335,31 @@ export default function TracksManager({
     setContextMenu(null);
   }, [contextMenu]);
 
+  // Handle add comment from context menu
+  const handleAddCommentFromContextMenu = useCallback(() => {
+    if (contextMenu && contextMenu.trackIds.length === 1) {
+      const trackId = contextMenu.trackIds[0];
+      const track = tracks.find(t => t.id === trackId);
+      
+      if (track && user) {
+        console.log('Adding comment to track:', track.name);
+        // Add a comment without a marker (time = 0)
+        addMarkerAndComment(
+          parseInt(trackId),
+          'Comment added via right-click menu',
+          0, // No specific time - this is a general comment
+          '#4F46E5' // Blue color for context menu comments
+        ).then(() => {
+          console.log('Comment added successfully via context menu');
+        }).catch((error: any) => {
+          console.error('Error adding comment via context menu:', error);
+          setError(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        });
+      }
+    }
+    setContextMenu(null);
+  }, [contextMenu, tracks, user, addMarkerAndComment]);
+
   // Handle remove from playlist
   const handleRemoveFromPlaylist = useCallback(async (trackId: string) => {
     if (!selectedPlaylistId) {
@@ -1562,6 +1587,7 @@ export default function TracksManager({
           onDelete={handleDeleteFromContextMenu}
           onEditMetadata={handleEditMetadata}
           onAddToPlaylist={handleAddToPlaylist}
+          onAddComment={handleAddCommentFromContextMenu}
           onRemoveFromPlaylist={isPlaylistView ? handleRemoveFromPlaylistContextMenu : undefined}
           isPlaylistView={isPlaylistView}
         />
