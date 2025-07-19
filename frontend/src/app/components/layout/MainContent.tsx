@@ -18,12 +18,17 @@ export default function MainContent() {
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [dragTrackCount, setDragTrackCount] = useState(1);
   const [tracksManagerReorderHandler, setTracksManagerReorderHandler] = useState<((startIndex: number, endIndex: number) => void) | null>(null);
-  const [isSuccessfulDrop, setIsSuccessfulDrop] = useState(false);
+  const [playlistSidebarDragHandler, setPlaylistSidebarDragHandler] = useState<((event: any) => void) | null>(null);
   
   // Debug handler registration
   const handleRegisterReorderHandler = (handler: (startIndex: number, endIndex: number) => void) => {
     console.log('🔧 [MAIN CONTENT] Registering reorder handler:', typeof handler);
     setTracksManagerReorderHandler(() => handler);
+  };
+
+  const handleRegisterPlaylistDragHandler = (handler: (event: any) => void) => {
+    console.log('🔧 [MAIN CONTENT] Registering playlist drag handler:', typeof handler);
+    setPlaylistSidebarDragHandler(() => handler);
   };
   
   // Use playlists provider for cross-playlist operations and track reordering
@@ -73,9 +78,11 @@ export default function MainContent() {
 
   // Global drag start handler
   const handleDragStart = (event: any) => {
+    console.log('👉 [DRAG START] Global drag start triggered');
     setIsDragging(true);
     const activeData = event.active.data.current;
     
+    console.log('👉 [DRAG START] Setting isDragging to true');
     console.log('🌍 [GLOBAL DND] *** DRAG STARTED ***', { 
       activeId: event.active.id, 
       activeData: activeData,
@@ -91,11 +98,15 @@ export default function MainContent() {
       );
       
       if (track) {
+        console.log('👉 [DRAG START] Found track for preview:', track.name);
         setActiveTrack(track);
         // Set the count of tracks being dragged
         const selectedCount = activeData.selectedTrackIds?.length || 1;
         setDragTrackCount(selectedCount);
+        console.log('👉 [DRAG START] Setting active track and count:', track.name, 'count:', selectedCount);
         console.log('🌍 [GLOBAL DND] Setting active track for preview:', track.name, 'count:', selectedCount);
+      } else {
+        console.log('👉 [DRAG START] No track found for preview');
       }
     }
   };
@@ -104,27 +115,11 @@ export default function MainContent() {
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     
-    // Check if this was a successful drop (has a valid target)
-    const wasSuccessfulDrop = !!over;
+    console.log('👉 [DRAG END] Global drag end triggered');
+    console.log('👉 [DRAG END] Active ID:', active.id);
+    console.log('👉 [DRAG END] Over ID:', over?.id);
+    console.log('👉 [DRAG END] Has valid drop target:', !!over);
     
-    if (wasSuccessfulDrop) {
-      // Mark as successful drop to trigger fade-out animation
-      setIsSuccessfulDrop(true);
-      
-      // Clean up after animation
-      setTimeout(() => {
-        setIsDragging(false);
-        setActiveTrack(null);
-        setDragTrackCount(1);
-        setIsSuccessfulDrop(false);
-      }, 200); // Short delay for fade-out animation
-    } else {
-      // No valid drop target, clean up immediately
-      setIsDragging(false);
-      setActiveTrack(null);
-      setDragTrackCount(1);
-      setIsSuccessfulDrop(false);
-    }
     console.log('🌍 [GLOBAL DND] *** DRAG ENDED ***', { 
       activeId: active.id, 
       overId: over?.id, 
@@ -134,7 +129,14 @@ export default function MainContent() {
       overType: over?.data.current?.type
     });
 
+    // Always clean up our drag state immediately to let @dnd-kit handle its own lifecycle
+    console.log('👉 [DRAG END] Cleaning up drag state');
+    setIsDragging(false);
+    setActiveTrack(null);
+    setDragTrackCount(1);
+
     if (!over) {
+      console.log('👉 [DRAG END] No drop target - failed drop');
       console.log('🌍 [GLOBAL DND] No drop target');
       return;
     }
@@ -142,6 +144,9 @@ export default function MainContent() {
     const activeData = active.data.current;
     const overData = over.data.current;
 
+    console.log('👉 [DRAG END] Active data type:', activeData?.type);
+    console.log('👉 [DRAG END] Over data type:', overData?.type);
+    
     console.log('🌍 [GLOBAL DND] Detailed drag analysis:', {
       activeType: activeData?.type,
       overType: overData?.type,
@@ -152,67 +157,48 @@ export default function MainContent() {
 
     // Case 1: Track dropped on another track (playlist reordering)
     if (activeData?.type === 'track' && overData?.type === 'track') {
+      console.log('👉 [DRAG END] CASE 1: Track-to-track reordering');
+      console.log('👉 [DRAG END] Skipping - now handled by local DndContext in TracksTable');
       console.log('🌍 [GLOBAL DND] Track-to-track drag detected (playlist reordering)');
       
-      // Only allow reordering within the same playlist
-      if (!activeData.isPlaylistView || !currentPlaylistId) {
-        console.log('🌍 [GLOBAL DND] Reordering only supported in playlist view');
-        return;
-      }
-      
-      // Find the indices using the current playlist tracks
-      const tracks = currentPlaylistTracks;
-      const activeId = active.id;
-      const overId = over.id;
-      
-      const oldIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === activeId);
-      const newIndex = tracks.findIndex((track) => (track.playlist_track_id || track.id) === overId);
-      
-      console.log('🌍 [GLOBAL DND] Track reorder indices:', { activeId, overId, oldIndex, newIndex });
-      
-      if (oldIndex === -1 || newIndex === -1) {
-        console.error('🌍 [GLOBAL DND] Invalid track indices for reordering');
-        return;
-      }
-      
-      if (oldIndex === newIndex) {
-        console.log('🌍 [GLOBAL DND] No movement needed');
-        return;
-      }
-      
-      // Call the reordering callback instead of handling directly
-      if (tracksManagerReorderHandler && typeof tracksManagerReorderHandler === 'function') {
-        console.log('🌍 [GLOBAL DND] Calling TracksManager reorder handler:', { oldIndex, newIndex });
-        // Defer the call to avoid state updates during render
-        setTimeout(() => {
-          if (tracksManagerReorderHandler && typeof tracksManagerReorderHandler === 'function') {
-            tracksManagerReorderHandler(oldIndex, newIndex);
-          }
-        }, 0);
-      } else {
-        console.warn('🌍 [GLOBAL DND] No TracksManager reorder handler registered or not a function:', typeof tracksManagerReorderHandler);
-      }
+      // Track reordering is now handled by the local DndContext in TracksTable
+      // This global handler only deals with cross-playlist operations
+      console.log('👉 [DRAG END] Delegating to local TracksTable DndContext');
       return;
     }
 
     // Case 2: Track dropped on playlist (cross-playlist operation)
     if (activeData?.type === 'track' && overData?.type === 'playlist') {
+      console.log('👉 [DRAG END] CASE 2: Track-to-playlist operation');
       console.log('🌍 [GLOBAL DND] Track-to-playlist drag detected (cross-playlist)');
       console.log('🌍 [GLOBAL DND] Track data:', activeData);
       console.log('🌍 [GLOBAL DND] Playlist data:', overData);
       
       // Handle cross-playlist operation
+      console.log('👉 [DRAG END] Calling handleCrossPlaylistDrag');
       handleCrossPlaylistDrag(activeData, overData);
+      console.log('👉 [DRAG END] Exiting track-to-playlist case');
       return;
     }
 
     // Case 3: Playlist dropped on playlist (playlist reordering)
     if (activeData?.type === 'playlist' && overData?.type === 'playlist') {
+      console.log('👉 [DRAG END] CASE 3: Playlist-to-playlist reordering');
       console.log('🌍 [GLOBAL DND] Playlist-to-playlist drag detected (playlist reordering)');
-      // This will be handled by PlaylistSidebar logic
+      // Delegate to PlaylistSidebar's drag handler
+      if (playlistSidebarDragHandler && typeof playlistSidebarDragHandler === 'function') {
+        console.log('👉 [DRAG END] Calling PlaylistSidebar drag handler');
+        console.log('🌍 [GLOBAL DND] Calling PlaylistSidebar drag handler');
+        playlistSidebarDragHandler(event);
+      } else {
+        console.log('👉 [DRAG END] No PlaylistSidebar drag handler available');
+        console.warn('🌍 [GLOBAL DND] No PlaylistSidebar drag handler registered');
+      }
+      console.log('👉 [DRAG END] Exiting playlist-to-playlist case');
       return;
     }
 
+    console.log('👉 [DRAG END] Unhandled drag type - no case matched');
     console.log('🌍 [GLOBAL DND] Unhandled drag type');
   };
 
@@ -265,15 +251,24 @@ export default function MainContent() {
         sensors={sensors}
         collisionDetection={closestCenter} 
         onDragStart={(event) => {
+          console.log('👉 [DND LIFECYCLE] DndContext onDragStart triggered');
           console.log('🎯 [DND CONTEXT] onDragStart triggered!', event);
           handleDragStart(event);
         }}
         onDragEnd={(event) => {
+          console.log('👉 [DND LIFECYCLE] DndContext onDragEnd triggered');
           console.log('🎯 [DND CONTEXT] onDragEnd triggered!', event);
           handleDragEnd(event);
         }}
         onDragMove={(event) => {
+          console.log('👉 [DND LIFECYCLE] DndContext onDragMove triggered for:', event.active.id);
           console.log('🎯 [DND CONTEXT] onDragMove triggered!', event.active.id);
+        }}
+        onDragOver={(event) => {
+          console.log('👉 [DND LIFECYCLE] DndContext onDragOver triggered');
+        }}
+        onDragCancel={(event) => {
+          console.log('👉 [DND LIFECYCLE] DndContext onDragCancel triggered');
         }}
       >
         <div className="flex h-full gap-2">
@@ -282,6 +277,7 @@ export default function MainContent() {
               onSelectPlaylist={handleSelectPlaylist}
               onViewAllTracks={handleViewAllTracks}
               onDeletePlaylist={handleDeletePlaylist}
+              onRegisterDragHandler={handleRegisterPlaylistDragHandler}
             />
           </div>
           <div className="w-4/5 flex-1 min-w-0">
@@ -297,13 +293,9 @@ export default function MainContent() {
         {/* Drag Overlay for visual feedback */}
         <DragOverlay>
           {activeTrack ? (
-            <div 
-              className={`bg-white border border-gray-200 rounded-lg shadow-xl max-w-2xl transition-all duration-200 ${
-                isSuccessfulDrop 
-                  ? 'opacity-0 scale-95' // Fade out and slightly shrink on successful drop
-                  : 'opacity-95 scale-100' // Normal state during drag
-              }`}
-            >
+            <>
+              {console.log('👉 [DRAG OVERLAY] Rendering drag overlay for:', activeTrack.name)}
+              <div className="bg-white border border-gray-200 rounded-lg shadow-xl opacity-95 max-w-2xl">
               <table className="min-w-full">
                 <tbody>
                   <TrackItem
@@ -326,7 +318,8 @@ export default function MainContent() {
                   )}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           ) : null}
         </DragOverlay>
       </DndContext>

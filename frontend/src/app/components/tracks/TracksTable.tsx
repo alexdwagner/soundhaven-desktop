@@ -1,7 +1,8 @@
 "use client";
 
 import React from 'react';
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import TrackItem from "./TrackItem";
 import ColumnVisibilityControl from "./ColumnVisibilityControl";
@@ -69,6 +70,29 @@ const TracksTable: React.FC<TracksTableProps> = ({
   const handleSort = (column: SortColumn) => {
     if (onSort) {
       onSort(column);
+    }
+  };
+
+  // Local drag handler for track reordering (isolated from global MainContent)
+  const handleLocalDragEnd = (event: any) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    console.log('👉 [LOCAL DRAG] Track reordering in TracksTable:', { activeId: active.id, overId: over.id });
+
+    // Only handle reordering for playlist view
+    if (isPlaylistView && playlistSortMode === 'manual' && onReorderTracks) {
+      const oldIndex = tracks.findIndex(track => (track.playlist_track_id || track.id) === active.id);
+      const newIndex = tracks.findIndex(track => (track.playlist_track_id || track.id) === over.id);
+      
+      console.log('👉 [LOCAL DRAG] Reordering from index', oldIndex, 'to', newIndex);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onReorderTracks(oldIndex, newIndex);
+      }
     }
   };
 
@@ -159,15 +183,34 @@ const TracksTable: React.FC<TracksTableProps> = ({
       </div>
 
       {/* Table */}
-      <SortableContext 
-        items={tracks.map((track) => track.playlist_track_id || track.id)} 
-        strategy={verticalListSortingStrategy}
-      >
-        <table className="min-w-full divide-y divide-gray-200">
-          {renderTableHeader()}
-          {renderTableBody()}
-        </table>
-      </SortableContext>
+      {isPlaylistView && playlistSortMode === 'manual' ? (
+        // Isolated DndContext for track reordering (no snapback)
+        <DndContext 
+          collisionDetection={closestCenter}
+          onDragEnd={handleLocalDragEnd}
+        >
+          <SortableContext 
+            items={tracks.map((track) => track.playlist_track_id || track.id)} 
+            strategy={verticalListSortingStrategy}
+          >
+            <table className="min-w-full divide-y divide-gray-200">
+              {renderTableHeader()}
+              {renderTableBody()}
+            </table>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        // No local DndContext for library view (uses global one for cross-playlist drag)
+        <SortableContext 
+          items={tracks.map((track) => track.playlist_track_id || track.id)} 
+          strategy={verticalListSortingStrategy}
+        >
+          <table className="min-w-full divide-y divide-gray-200">
+            {renderTableHeader()}
+            {renderTableBody()}
+          </table>
+        </SortableContext>
+      )}
     </div>
   );
 };

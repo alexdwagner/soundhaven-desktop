@@ -15,12 +15,14 @@ interface PlaylistSidebarProps {
   onSelectPlaylist: (tracks: Track[], playlistId: string, playlistName?: string) => void;
   onViewAllTracks: () => void;
   onDeletePlaylist: (playlistId: string) => void;
+  onRegisterDragHandler?: (handler: (event: any) => void) => void;
 }
 
 const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   onSelectPlaylist,
   onViewAllTracks,
   onDeletePlaylist,
+  onRegisterDragHandler,
 }) => {
   const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists, loading, error: playlistError, setCurrentPlaylistId, setCurrentPlaylistTracks } = usePlaylists();
   const { user, token } = useAuth();
@@ -146,7 +148,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     console.log(`📓 [PLAYLIST SIDEBAR] ✅ View all tracks complete`);
   };
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = useCallback((event: any) => {
     const { active, over } = event;
     console.log('🔄 [PLAYLIST SORT] Drag ended:', { activeId: active.id, overId: over?.id });
     
@@ -161,7 +163,15 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
       setPlaylists(reorderedPlaylists);
       updatePlaylistOrder(reorderedPlaylists.map((p) => p.id));
     }
-  };
+  }, [playlists, setPlaylists, updatePlaylistOrder]);
+
+  // Register the drag handler with MainContent
+  useEffect(() => {
+    if (onRegisterDragHandler) {
+      console.log('🔧 [PLAYLIST SIDEBAR] Registering drag handler with MainContent');
+      onRegisterDragHandler(handleDragEnd);
+    }
+  }, [onRegisterDragHandler, handleDragEnd]);
 
   console.log("🔍 PlaylistSidebar: About to render component");
 
@@ -178,19 +188,21 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
         <h3 className="font-medium text-xs uppercase text-gray-400 border-b border-gray-600 pb-1 mb-2">Playlists</h3>
 
-        <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-          <ul className="px-1">
-            {playlists.map((playlist) => (
-              <PlaylistItem 
-                key={playlist.id} 
-                playlist={playlist} 
-                onSelect={() => handlePlaylistSelect(playlist.id)} 
-                isSelected={playlist.id === selectedPlaylistId} 
-                onDelete={() => handleDeletePlaylist(playlist.id)} 
-              />
-            ))}
-          </ul>
-        </SortableContext>
+        <DndContext onDragEnd={handleDragEnd}>
+          <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <ul className="px-1">
+              {playlists.map((playlist) => (
+                <PlaylistItem 
+                  key={playlist.id} 
+                  playlist={playlist} 
+                  onSelect={() => handlePlaylistSelect(playlist.id)} 
+                  isSelected={playlist.id === selectedPlaylistId} 
+                  onDelete={() => handleDeletePlaylist(playlist.id)} 
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
       </div>
   );
 };

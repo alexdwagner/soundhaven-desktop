@@ -170,6 +170,8 @@ export default function TracksManager({
 
   // Enhanced reorder handler with optimistic updates and debouncing
   const handleReorderTracks = useCallback(async (startIndex: number, endIndex: number) => {
+    console.log('👉 [REORDER] TracksManager handleReorderTracks called');
+    console.log('👉 [REORDER] Parameters:', { startIndex, endIndex, playlistSortMode, isPlaylistView });
     console.log('🔄 [DRAG] handleReorderTracks called:', { startIndex, endIndex, playlistSortMode, isPlaylistView });
     
     // Only allow reordering in manual mode

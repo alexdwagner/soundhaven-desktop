@@ -62,13 +62,41 @@ const TrackItem: React.FC<TrackItemProps> = ({
     }
   });
 
-  // Don't filter out @dnd-kit listeners - they're needed for drag detection in both library and playlist views
+  // Wrap @dnd-kit listeners with our logging while preserving their functionality
   const dragListeners = useMemo(() => {
     if (!listeners || !isDragEnabled) return {};
     
     console.log(`🔧 [TRACK ITEM] ${track.name} - Original listeners:`, Object.keys(listeners));
     console.log(`🔧 [TRACK ITEM] ${track.name} - Using all listeners for @dnd-kit drag detection (${isPlaylistView ? 'playlist' : 'library'} view)`);
-    return listeners; // Use all listeners - @dnd-kit needs them for drag detection
+    console.log(`👉 [TRACK ITEM] ${track.name} - Raw listeners object:`, listeners);
+    
+    // Wrap the onPointerDown to add logging while preserving @dnd-kit functionality
+    const wrappedListeners = { ...listeners };
+    if (wrappedListeners.onPointerDown) {
+      console.log(`👉 [TRACK ITEM] ${track.name} - Found onPointerDown, wrapping it`);
+      const originalOnPointerDown = wrappedListeners.onPointerDown;
+      wrappedListeners.onPointerDown = (e: any) => {
+        console.log(`👉 [TRACK POINTER] ${track.name} - onPointerDown triggered`);
+        console.log(`🖱️ [TRACK ITEM] ${track.name} - onPointerDown triggered!`, e);
+        console.log(`👉 [TRACK POINTER] ${track.name} - calling @dnd-kit onPointerDown`);
+        originalOnPointerDown(e);
+      };
+    } else {
+      console.log(`👉 [TRACK ITEM] ${track.name} - NO onPointerDown found in listeners!`);
+    }
+    
+    if (wrappedListeners.onMouseDown) {
+      console.log(`👉 [TRACK ITEM] ${track.name} - Found onMouseDown, wrapping it`);
+      const originalOnMouseDown = wrappedListeners.onMouseDown;
+      wrappedListeners.onMouseDown = (e: any) => {
+        console.log(`👉 [TRACK MOUSE] ${track.name} - onMouseDown triggered`);
+        console.log(`👉 [TRACK MOUSE] ${track.name} - calling @dnd-kit onMouseDown`);
+        originalOnMouseDown(e);
+      };
+    }
+    
+    console.log(`👉 [TRACK ITEM] ${track.name} - Final wrapped listeners:`, Object.keys(wrappedListeners));
+    return wrappedListeners;
   }, [listeners, isDragEnabled, track.name, isPlaylistView]);
 
   const { isPlaying, currentTrack } = usePlayback();
@@ -86,8 +114,11 @@ const TrackItem: React.FC<TrackItemProps> = ({
   // Debug logging for isDragging state (moved after style declaration)
   useEffect(() => {
     if (isDragging) {
+      console.log(`👉 [TRACK DRAG] ${track.name} - isDragging: TRUE`);
       console.log(`🚀 [TRACK ITEM] ${track.name} - isDragging: TRUE (should show enhanced styling)`);
       console.log(`🚀 [TRACK ITEM] ${track.name} - style:`, style);
+    } else {
+      console.log(`👉 [TRACK DRAG] ${track.name} - isDragging: FALSE`);
     }
   }, [isDragging, track.name, style]);
 
@@ -199,18 +230,13 @@ const TrackItem: React.FC<TrackItemProps> = ({
       style={style}
       data-track-id={track.id}
       {...attributes}
-      {...listeners}
-      onPointerDown={(e) => {
-        console.log(`🖱️ [TRACK ITEM] ${track.name} - onPointerDown triggered!`, e);
-        // Call original listeners if they exist
-        if (listeners?.onPointerDown) {
-          listeners.onPointerDown(e);
-        }
-      }}
+      {...dragListeners}
       onClick={(e) => {
+        console.log('👉 [TRACK CLICK] Track clicked:', track.name);
         console.log('🐥 [TRACK ITEM] Track clicked:', track.name);
         handleClick(e);
       }}
+
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       className={`transition-all duration-200 select-none relative ${
