@@ -12,8 +12,10 @@ import GenericModal from "../modals/GenericModal";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useComments } from "@/app/hooks/useComments";
+import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 import { _Comment as Comment, Track } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/providers/PlaylistsProvider";
+import ColumnVisibilityControl from "./ColumnVisibilityControl";
 
 // Temporary mock for the auth user - replace with your actual auth context
 const useMockAuth = () => ({
@@ -140,6 +142,9 @@ export default function TracksManager({
   const reorderingRef = useRef(false);
   const [showDebugTools, setShowDebugTools] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+
+  // Column visibility hook
+  const { columnVisibility, toggleColumn, resetToDefault } = useColumnVisibility();
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
@@ -1172,31 +1177,29 @@ export default function TracksManager({
 
   const getViewTitle = () => {
     if (isPlaylistView && selectedPlaylistName) {
-      return `${selectedPlaylistName} (${displayTracks.length} tracks)`;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold text-gray-900">{selectedPlaylistName}</span>
+          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+            {displayTracks.length} track{displayTracks.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      );
     }
-    return `All Tracks (${displayTracks.length})`;
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-semibold text-gray-900">All Tracks</span>
+        <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+          {displayTracks.length} track{displayTracks.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+    );
   };
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Audio player at the top */}
-      <div className="border-b bg-white p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex-1">
-            {/* Left side content can go here if needed */}
-          </div>
-          <button
-            onClick={() => setShowComments(!showComments)}
-            disabled={!playbackCurrentTrack}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              playbackCurrentTrack 
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {showComments ? 'Hide Comments' : 'Show Comments'}
-          </button>
-        </div>
+      {/* Persistent Audio player at the top */}
+      <div className="border-b bg-white p-2">
         <AudioPlayer 
           track={playbackCurrentTrack}
           isPlaying={isPlaying}
@@ -1216,7 +1219,7 @@ export default function TracksManager({
 
       {/* Main content area */}
       <div 
-        className={`flex-1 overflow-auto p-3 transition-colors ${
+        className={`flex-1 overflow-auto p-2 transition-colors ${
           isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-400' : ''
         }`}
         onDragOver={handleDragOver}
@@ -1255,9 +1258,9 @@ export default function TracksManager({
 
         {/* Upload Progress */}
         {uploading && uploadProgress.length > 0 && (
-          <div className="mb-3 bg-white rounded shadow p-3">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">Uploading Files...</h3>
-            <div className="space-y-2">
+          <div className="mb-1 bg-white rounded shadow p-2">
+            <h3 className="text-sm font-medium text-gray-900 mb-1">Uploading Files...</h3>
+            <div className="space-y-1">
               {uploadProgress.map((item, index) => (
                 <div key={index} className="bg-gray-50 rounded p-2">
                   <div className="flex justify-between items-center mb-1">
@@ -1277,7 +1280,7 @@ export default function TracksManager({
         )}
 
         {/* Compact Upload and Debug Tools */}
-        <div className="mb-3">
+        <div className="mb-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <input
@@ -1320,6 +1323,18 @@ export default function TracksManager({
             </div>
             
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className={`text-xs px-2 py-1 rounded border ${
+                  playbackCurrentTrack 
+                    ? 'text-blue-600 border-blue-300 hover:text-blue-800 hover:border-blue-400' 
+                    : 'text-gray-400 border-gray-200 cursor-not-allowed'
+                }`}
+                disabled={!playbackCurrentTrack}
+                title={playbackCurrentTrack ? "Toggle comments panel" : "Select a track to view comments"}
+              >
+                💬 {showComments ? 'Hide' : 'Show'} Comments
+              </button>
               <button
                 onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
                 className="text-xs px-2 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded"
@@ -1399,62 +1414,64 @@ export default function TracksManager({
         </div>
 
         {/* Header */}
-        <div className="mb-3">
+        <div className="mb-1">
           <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900">
-            {getViewTitle()}
-          </h1>
+          {getViewTitle()}
             
-            {/* Sorting Mode Toggle - Only show in playlist view */}
+            {/* Sorting Mode Toggle and Column Visibility - Only show in playlist view */}
             {isPlaylistView && (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">Sort by:</span>
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => {
-                      setPlaylistSortMode('manual');
-                      setSortColumn(null);
-                    }}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                      playlistSortMode === 'manual'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    📋 Manual Order
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPlaylistSortMode('column');
-                    }}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                      playlistSortMode === 'column'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    🔤 Column Sort
-                  </button>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Sort by:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => {
+                        setPlaylistSortMode('manual');
+                        setSortColumn(null);
+                      }}
+                      className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                        playlistSortMode === 'manual'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      📋 Manual Order
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPlaylistSortMode('column');
+                      }}
+                      className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                        playlistSortMode === 'column'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      🔤 Column Sort
+                    </button>
+                  </div>
                 </div>
+                
+                {/* Column Visibility Control */}
+                <ColumnVisibilityControl
+                  columnVisibility={columnVisibility}
+                  onToggleColumn={toggleColumn}
+                  onResetToDefault={resetToDefault}
+                />
               </div>
+            )}
+            
+            {/* Column Visibility Control for Library view */}
+            {!isPlaylistView && (
+              <ColumnVisibilityControl
+                columnVisibility={columnVisibility}
+                onToggleColumn={toggleColumn}
+                onResetToDefault={resetToDefault}
+              />
             )}
           </div>
           
-          {/* Sorting Mode Description */}
-          {isPlaylistView && (
-            <div className="mt-2 text-sm text-gray-500">
-              {playlistSortMode === 'manual' ? (
-                <span>💡 Drag and drop tracks to reorder your playlist</span>
-              ) : (
-                <span>💡 Click column headers to sort tracks</span>
-              )}
-              {reorderingTracks && (
-                <span className="ml-2 text-blue-600">
-                  ⏳ Reordering tracks...
-                </span>
-              )}
-            </div>
-          )}
+
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1472,6 +1489,9 @@ export default function TracksManager({
             sortDirection={sortDirection}
             onSort={handleSort}
             onContextMenu={handleContextMenu}
+            columnVisibility={columnVisibility}
+            onToggleColumn={toggleColumn}
+            onResetColumns={resetToDefault}
           />
         </div>
 

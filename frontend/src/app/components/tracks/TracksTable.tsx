@@ -26,6 +26,9 @@ interface TracksTableProps {
   sortColumn?: SortColumn | null;
   sortDirection?: SortDirection;
   onSort?: (column: SortColumn) => void;
+  columnVisibility?: ColumnVisibility;
+  onToggleColumn?: (column: keyof ColumnVisibility) => void;
+  onResetColumns?: () => void;
 }
 
 const TracksTable: React.FC<TracksTableProps> = ({
@@ -42,9 +45,15 @@ const TracksTable: React.FC<TracksTableProps> = ({
   sortColumn,
   sortDirection = 'asc',
   onSort,
+  columnVisibility: propColumnVisibility,
+  onToggleColumn,
+  onResetColumns,
 }) => {
-  // Column visibility hook
-  const { columnVisibility, toggleColumn, resetToDefault } = useColumnVisibility();
+  // Column visibility hook (fallback if not provided via props)
+  const { columnVisibility: localColumnVisibility, toggleColumn: localToggleColumn, resetToDefault } = useColumnVisibility();
+  
+  // Use props if provided, otherwise fall back to local hook
+  const columnVisibility = propColumnVisibility || localColumnVisibility;
 
   // Enable drag for both library and playlist tracks
   // - Library tracks: can be dragged to playlists (cross-playlist operations)
@@ -176,15 +185,6 @@ const TracksTable: React.FC<TracksTableProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Column Visibility Controls */}
-      <div className="flex justify-end">
-        <ColumnVisibilityControl
-          columnVisibility={columnVisibility}
-          onToggleColumn={toggleColumn}
-          onResetToDefault={resetToDefault}
-        />
-      </div>
-
       {/* Table */}
       {isPlaylistView && playlistSortMode === 'manual' ? (
         // Isolated DndContext for track reordering (no snapback)

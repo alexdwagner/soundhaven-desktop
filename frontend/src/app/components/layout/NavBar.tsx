@@ -87,23 +87,27 @@ const NavBar: React.FC<NavBarProps> = ({
   return (
     <nav className="w-full bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center flex-shrink-0">
             {children}
           </div>
           
-          {/* Search Bar - Only show when user is logged in */}
-          {user && (
-            <SearchBar
-              tracks={tracks}
-              playlists={playlists}
-              onTrackSelect={onTrackSelect}
-              onPlaylistSelect={onPlaylistSelect}
-              onSearchResults={onSearchResults}
-            />
-          )}
+          {/* Centered Search Bar - Only show when user is logged in */}
+          <div className="flex-1 flex items-center justify-center px-8">
+            {user && (
+              <div className="w-full max-w-lg">
+                <SearchBar
+                  tracks={tracks}
+                  playlists={playlists}
+                  onTrackSelect={onTrackSelect}
+                  onPlaylistSelect={onPlaylistSelect}
+                  onSearchResults={onSearchResults}
+                />
+              </div>
+            )}
+          </div>
           
-          <div className="flex items-center">
+          <div className="flex items-center flex-shrink-0">
             {user ? (
               <div className="relative">
                 <button

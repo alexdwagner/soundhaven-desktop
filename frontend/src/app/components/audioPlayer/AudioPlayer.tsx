@@ -989,14 +989,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     };
   }, []);
 
-  if (!track) {
-    return (
-      <div className="flex items-center justify-center h-32 bg-gray-100 rounded-lg">
-        <p>No track selected</p>
-      </div>
-    );
-  }
-
   // Debug markers
   // console.log('AudioPlayer render - markers:', markers);
 
@@ -1038,7 +1030,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={onPrevious}
-            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+            disabled={!track}
+            className={`p-1 transition-colors ${
+              track 
+                ? 'text-gray-600 hover:text-gray-800' 
+                : 'text-gray-300 cursor-not-allowed'
+            }`}
             aria-label="Previous track"
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -1048,7 +1045,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           
           <button
             onClick={handlePlayPause}
-            className="p-1.5 text-white bg-gray-800 rounded hover:bg-gray-700 transition-colors"
+            disabled={!track}
+            className={`p-1.5 rounded transition-colors ${
+              track 
+                ? 'text-white bg-gray-800 hover:bg-gray-700' 
+                : 'text-gray-400 bg-gray-200 cursor-not-allowed'
+            }`}
             aria-label={isPlayingState ? 'Pause' : 'Play'}
           >
             {isPlayingState ? (
@@ -1064,7 +1066,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           
           <button
             onClick={onNext}
-            className="p-1 text-gray-600 hover:text-gray-800 transition-colors"
+            disabled={!track}
+            className={`p-1 transition-colors ${
+              track 
+                ? 'text-gray-600 hover:text-gray-800' 
+                : 'text-gray-300 cursor-not-allowed'
+            }`}
             aria-label="Next track"
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
