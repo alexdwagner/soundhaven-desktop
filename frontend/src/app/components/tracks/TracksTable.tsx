@@ -20,6 +20,7 @@ interface TracksTableProps {
   onReorderTracks: (startIndex: number, endIndex: number) => void;
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
+  currentPlaylistId?: string | null;
   playlistSortMode?: 'manual' | 'column';
   onContextMenu?: (trackId: string, x: number, y: number) => void;
   sortColumn?: SortColumn | null;
@@ -35,6 +36,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
   onReorderTracks,
   onRemoveFromPlaylist,
   isPlaylistView = false,
+  currentPlaylistId = null,
   playlistSortMode = 'manual',
   onContextMenu,
   sortColumn,
@@ -162,6 +164,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
             allTracks={tracks}
             onRemoveFromPlaylist={onRemoveFromPlaylist}
             isPlaylistView={isPlaylistView}
+            currentPlaylistId={currentPlaylistId}
             isDragEnabled={isDragEnabled}
             onContextMenu={onContextMenu}
             columnVisibility={columnVisibility}

@@ -75,6 +75,8 @@ export default function TracksManager({
   const {
     isPlaying,
     currentTrack: playbackCurrentTrack,
+    currentTrackIndex: playbackCurrentTrackIndex,
+    currentPlaylistContext,
     togglePlayback,
     selectTrack,
     nextTrack,
@@ -459,11 +461,17 @@ export default function TracksManager({
   const sortedTracks = useCallback(() => {
     // Don't sort if we're in playlist view and manual mode
     if (isPlaylistView && playlistSortMode === 'manual') {
+      console.log('🎵 [SEQUENTIAL] Using manual playlist order (no sorting applied)');
       return safeTracks;
     }
     
     // Don't sort if no sort column is selected
-    if (!sortColumn) return safeTracks;
+    if (!sortColumn) {
+      console.log('🎵 [SEQUENTIAL] No sort column selected, using original order');
+      return safeTracks;
+    }
+
+    console.log('🎵 [SEQUENTIAL] Applying sorting:', { sortColumn, sortDirection, isPlaylistView, playlistSortMode });
 
     return [...safeTracks].sort((a, b) => {
       let aValue: any;
@@ -501,10 +509,11 @@ export default function TracksManager({
   }, [safeTracks, sortColumn, sortDirection, isPlaylistView, playlistSortMode]);
 
   const displayTracks = sortedTracks();
+  console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
 
   const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
     console.log('🐥 [TRACKS MANAGER] handleSelectTrack called with trackId:', trackId);
-    console.log('🐥 [TRACKS MANAGER] Available tracks:', tracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
+    console.log('🐥 [TRACKS MANAGER] Available tracks (displayTracks):', displayTracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
     console.log('🐥 [TRACKS MANAGER] isPlaylistView:', isPlaylistView);
     console.log('🐥 [TRACKS MANAGER] Current selectedTrackIds:', selectedTrackIds);
     
@@ -589,55 +598,57 @@ export default function TracksManager({
     let trackIndex = -1;
     
     if (isPlaylistView) {
-      trackIndex = tracks.findIndex((t) => {
+      trackIndex = displayTracks.findIndex((t) => {
         const playlistTrackId = t.playlist_track_id?.toString();
         const regularTrackId = t.id.toString();
         return playlistTrackId === trackId || regularTrackId === trackId;
       });
     } else {
-      trackIndex = tracks.findIndex((t) => t.id.toString() === trackId);
+      trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
     }
     
     console.log('🎵 Looking for track with ID:', trackId);
-    console.log('🎵 Found trackIndex:', trackIndex);
-    console.log('🎵 Track found:', trackIndex !== -1 ? tracks[trackIndex] : 'NOT FOUND');
+    console.log('🎵 Found trackIndex in displayTracks:', trackIndex);
+    console.log('🎵 Track found:', trackIndex !== -1 ? displayTracks[trackIndex] : 'NOT FOUND');
     
     if (trackIndex !== -1) {
-      const track = tracks[trackIndex];
+      const track = displayTracks[trackIndex];
       setCurrentTrackIndex(trackIndex);
       // Single-click should ONLY select the track for deletion, not load it into audio player
       // selectTrack(track, trackIndex, false); // REMOVED - only double-click should load tracks
     } else {
-      console.log('❌ Track not found in tracks array');
+      console.log('❌ Track not found in displayTracks array');
     }
-  }, [tracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, displayTracks, isPlaylistView]);
+  }, [displayTracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, isPlaylistView]);
 
   const handlePlayTrack = useCallback((trackId: string) => {
     console.log('🎵 [HANDLE PLAY TRACK] === START ===');
     console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
     console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
     console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
+    console.log('🎵 [SEQUENTIAL] Using displayTracks for proper sort order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
     
-    // For playlist view, trackId might be playlist_track_id, for library view it's track.id
+    // IMPORTANT: Use displayTracks instead of tracks to respect current sort order
     let trackIndex = -1;
     let foundTrack = null;
     
     if (isPlaylistView) {
       // In playlist view, trackId could be playlist_track_id (number) or track.id (string)
-      trackIndex = tracks.findIndex((t) => {
+      trackIndex = displayTracks.findIndex((t) => {
         const playlistTrackId = t.playlist_track_id?.toString();
         const regularTrackId = t.id.toString();
         return playlistTrackId === trackId || regularTrackId === trackId;
       });
     } else {
       // In library view, trackId is always track.id
-      trackIndex = tracks.findIndex((t) => t.id.toString() === trackId);
+      trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
     }
     
-    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex:', trackIndex);
+    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
+    console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
     
     if (trackIndex !== -1) {
-      foundTrack = tracks[trackIndex];
+      foundTrack = displayTracks[trackIndex];
       console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
         index: trackIndex,
         id: foundTrack.id,
@@ -646,12 +657,12 @@ export default function TracksManager({
         filePath: foundTrack.filePath
       });
       
-      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with autoplay=true');
-      selectTrack(foundTrack, trackIndex, true);
+      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with sorted index and autoplay=true');
+      selectTrack(foundTrack, trackIndex, true, { isPlaylistView, playlistId: selectedPlaylistId });
       console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
     } else {
       console.error('❌ [HANDLE PLAY TRACK] Track not found for playback:', trackId);
-      console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', tracks.map(t => ({
+      console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', displayTracks.map(t => ({
         id: t.id,
         playlist_track_id: t.playlist_track_id,
         name: t.name
@@ -659,7 +670,7 @@ export default function TracksManager({
     }
     
     console.log('🎵 [HANDLE PLAY TRACK] === END ===');
-  }, [tracks, selectTrack, isPlaylistView]);
+  }, [displayTracks, selectTrack, isPlaylistView]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -891,11 +902,13 @@ export default function TracksManager({
   };
 
   const handleNext = () => {
-    nextTrack(displayTracks);
+    console.log('🎵 [SEQUENTIAL] Next track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    nextTrack(displayTracks, true); // autoPlay = true
   };
 
   const handlePrevious = () => {
-    previousTrack(displayTracks);
+    console.log('🎵 [SEQUENTIAL] Previous track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    previousTrack(displayTracks, true); // autoPlay = true
   };
 
   // Add comments functionality
@@ -1453,6 +1466,7 @@ export default function TracksManager({
             onReorderTracks={handleReorderTracks}
             onRemoveFromPlaylist={isPlaylistView ? handleRemoveFromPlaylist : undefined}
             isPlaylistView={isPlaylistView}
+            currentPlaylistId={selectedPlaylistId}
             playlistSortMode={playlistSortMode}
             sortColumn={sortColumn}
             sortDirection={sortDirection}

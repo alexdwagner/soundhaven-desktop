@@ -12,6 +12,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
     const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(null);
+    const [currentPlaylistContext, setCurrentPlaylistContext] = useState<{ isPlaylistView: boolean; playlistId: string | null }>({ isPlaylistView: false, playlistId: null });
     const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('normal');
     const [shuffleQueue, setShuffleQueue] = useState<number[]>([]);
     const [spacebarPlaybackEnabled, setSpacebarPlaybackEnabled] = useState(true);
@@ -86,9 +87,9 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
         setIsPlaying(prevIsPlaying => !prevIsPlaying);
     }, []);
 
-    const selectTrack = useCallback((track: Track | null, index: number | null, autoPlay: boolean = false) => {
+    const selectTrack = useCallback((track: Track | null, index: number | null, autoPlay: boolean = false, context?: { isPlaylistView?: boolean; playlistId?: string | null }) => {
         console.log("🎵 [PLAYBACK] === selectTrack START ===");
-        console.log("🎵 [PLAYBACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay);
+        console.log("🎵 [PLAYBACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay, "context:", context);
         console.log("🎵 [PLAYBACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
         console.log("🎵 [PLAYBACK] Current isPlaying:", isPlaying);
         
@@ -96,6 +97,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
             console.log("🎵 [PLAYBACK] Setting track to null");
             setCurrentTrack(null);
             setCurrentTrackIndex(null);
+            setCurrentPlaylistContext({ isPlaylistView: false, playlistId: null });
             setIsPlaying(false);
         } else {
             // For playlist tracks, we need to compare both track ID and index to handle duplicates
@@ -124,10 +126,12 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
                     trackName: track.name,
                     trackId: track.id,
                     index: index,
-                    willAutoPlay: autoPlay
+                    willAutoPlay: autoPlay,
+                    context: context
                 });
                 setCurrentTrack(track);
                 setCurrentTrackIndex(index);
+                setCurrentPlaylistContext(context || { isPlaylistView: false, playlistId: null });
                 setIsPlaying(autoPlay);
             }
         }
@@ -193,8 +197,9 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
         }
         
         console.log("🎵 [PLAYBACK] Next track index:", nextIndex);
-        selectTrack(tracks[nextIndex], nextIndex, autoPlay);
-    }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue]);
+        // Keep the same context when advancing tracks
+        selectTrack(tracks[nextIndex], nextIndex, autoPlay, currentPlaylistContext);
+    }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue, currentPlaylistContext]);
       
     const previousTrack = useCallback((tracks: Track[], autoPlay: boolean = false) => {
         console.log("🎵 [PLAYBACK] previousTrack called, mode:", playbackMode, "autoPlay:", autoPlay);
@@ -251,8 +256,9 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
         }
         
         console.log("🎵 [PLAYBACK] Previous track index:", prevIndex);
-        selectTrack(tracks[prevIndex], prevIndex, autoPlay);
-    }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue]);
+        // Keep the same context when going to previous tracks
+        selectTrack(tracks[prevIndex], prevIndex, autoPlay, currentPlaylistContext);
+    }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue, currentPlaylistContext]);
 
     // Function to change playback mode
     const handleSetPlaybackMode = useCallback((mode: PlaybackMode) => {
@@ -271,6 +277,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
               isPlaying,
               currentTrack, 
               currentTrackIndex,
+              currentPlaylistContext,
               playbackMode,
               shuffleQueue,
               togglePlayback, 

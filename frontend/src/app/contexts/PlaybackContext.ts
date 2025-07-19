@@ -7,10 +7,11 @@ export interface PlaybackContextValue {
     isPlaying: boolean;
     currentTrack: Track | null;
     currentTrackIndex: number;
+    currentPlaylistContext: { isPlaylistView: boolean; playlistId: string | null };
     playbackMode: PlaybackMode;
     shuffleQueue: number[]; // Array of shuffled track indices
     togglePlayback: () => void;
-    selectTrack: (track: Track, index: number, autoPlay?: boolean) => void;
+    selectTrack: (track: Track, index: number, autoPlay?: boolean, context?: { isPlaylistView?: boolean; playlistId?: string | null }) => void;
     nextTrack: (tracks: Track[], autoPlay?: boolean) => void;
     previousTrack: (tracks: Track[], autoPlay?: boolean) => void;
     setPlaybackMode: (mode: PlaybackMode) => void;
@@ -28,6 +29,7 @@ const initialPlaybackContextValue: PlaybackContextValue = {
     isPlaying: false,
     currentTrack: null,
     currentTrackIndex: -1,
+    currentPlaylistContext: { isPlaylistView: false, playlistId: null },
     playbackMode: 'normal',
     shuffleQueue: [],
     togglePlayback: () => {},

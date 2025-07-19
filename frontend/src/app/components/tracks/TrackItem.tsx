@@ -19,6 +19,7 @@ interface TrackItemProps {
   allTracks?: Track[]; // All tracks in the current view to help with ID mapping
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
+  currentPlaylistId?: string | null; // Add playlist context
   isDragEnabled?: boolean;
   onContextMenu?: (trackId: string, x: number, y: number) => void;
   columnVisibility: ColumnVisibility;
@@ -34,6 +35,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
   allTracks = [],
   onRemoveFromPlaylist,
   isPlaylistView = false,
+  currentPlaylistId = null,
   isDragEnabled = true,
   onContextMenu,
   columnVisibility,
@@ -99,7 +101,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     return wrappedListeners;
   }, [listeners, isDragEnabled, track.name, isPlaylistView]);
 
-  const { isPlaying, currentTrack } = usePlayback();
+  const { isPlaying, currentTrack, currentTrackIndex: playbackCurrentTrackIndex, currentPlaylistContext } = usePlayback();
 
   // Apply drag transform and transition when drag is enabled
   const style = {
@@ -122,7 +124,25 @@ const TrackItem: React.FC<TrackItemProps> = ({
     }
   }, [isDragging, track.name, style]);
 
-  const isCurrentTrack = currentTrack?.id === track.id;
+  // Enhanced current track detection - only highlight the specific instance that's playing
+  const isCurrentTrack = currentTrack?.id === track.id && 
+                         playbackCurrentTrackIndex === index &&
+                         currentPlaylistContext.isPlaylistView === isPlaylistView &&
+                         currentPlaylistContext.playlistId === currentPlaylistId;
+  
+  // Debug logging for current track detection (only when track is actually current)
+  if (isCurrentTrack || (currentTrack?.id === track.id && !isCurrentTrack)) {
+    console.log(`🎵 [TRACK HIGHLIGHT] ${track.name} - isCurrentTrack:`, isCurrentTrack, {
+      trackIdMatch: currentTrack?.id === track.id,
+      indexMatch: playbackCurrentTrackIndex === index,
+      contextMatch: currentPlaylistContext.isPlaylistView === isPlaylistView,
+      playlistIdMatch: currentPlaylistContext.playlistId === currentPlaylistId,
+      playbackIndex: playbackCurrentTrackIndex,
+      thisIndex: index,
+      playbackContext: currentPlaylistContext,
+      thisContext: { isPlaylistView, currentPlaylistId }
+    });
+  }
 
   // Track selection with proper event handling
   const handleClick = (e: React.MouseEvent) => {
