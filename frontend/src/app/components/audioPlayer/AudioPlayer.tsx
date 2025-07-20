@@ -117,6 +117,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const internalWaveSurferRef = useRef<WaveSurferWithRegions | null>(null);
   const internalRegionsRef = useRef<any>(null);
   
+  // Mobile HTML5 audio element
+  const mobileAudioRef = useRef<HTMLAudioElement>(null);
+  
   // Use external refs if provided, otherwise use internal refs
   const waveSurferRef = externalWaveSurferRef || internalWaveSurferRef;
   const regionsRef = externalRegionsRef || internalRegionsRef;
@@ -238,22 +241,39 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [track]);
 
-  // Enhanced getFileUrl function with better error handling
+  // Enhanced getFileUrl function with mobile browser support
   const getFileUrl = useCallback(async (filePath: string): Promise<string> => {
-    console.log('🎵 AudioPlayer: Getting file URL for:', filePath);
+    console.log('🎵 AudioPlayer: Getting file URL for track:', track?.id, 'filePath:', filePath);
+    
+    // Detect if we're in mobile browser (no Electron APIs) - use consistent detection
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    const isMobileBrowser = !isElectron;
+    
+    console.log('🎵 AudioPlayer: Environment detection:', { isElectron, isMobileBrowser });
     
     try {
-      // For Electron, always use audio server for better compatibility
-      const fileName = filePath.replace('/uploads/', '');
-      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
-      
-      console.log('🎵 AudioPlayer: Using audio server URL for better compatibility:', {
-        originalPath: filePath,
-        fileName: fileName,
-        audioServerUrl: audioServerUrl
-      });
-      
-      return audioServerUrl;
+      if (isMobileBrowser) {
+        // Mobile browser: use streaming URL based on track ID (not implemented yet)
+        const streamingUrl = `/audio/${track?.id}`;
+        console.log('🎵 AudioPlayer: Using track ID streaming URL for mobile:', {
+          trackId: track?.id,
+          streamingUrl: streamingUrl,
+          note: 'Audio streaming not yet implemented - will show proper 404'
+        });
+        return streamingUrl;
+      } else {
+        // Electron: use audio server with actual filename
+        const fileName = filePath.replace('/uploads/', '');
+        const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+        
+        console.log('🎵 AudioPlayer: Using audio server URL for Electron:', {
+          originalPath: filePath,
+          fileName: fileName,
+          audioServerUrl: audioServerUrl
+        });
+        
+        return audioServerUrl;
+      }
       
     } catch (error) {
       console.warn('⚠️ AudioPlayer: Error getting file URL, using fallback:', {
@@ -261,26 +281,35 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         filePath: filePath
       });
       
-      // Fallback to audio server
-      const fileName = filePath.replace('/uploads/', '');
-      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
-      
-      console.log('🎵 AudioPlayer: Using audio server fallback:', {
-        originalPath: filePath,
-        fileName: fileName,
-        fallbackUrl: audioServerUrl
-      });
-      
-      return audioServerUrl;
+      // Fallback based on environment
+      if (isMobileBrowser) {
+        const fallbackUrl = `/audio/${track?.id || 'unknown'}`;
+        console.log('🎵 AudioPlayer: Using mobile fallback:', fallbackUrl);
+        return fallbackUrl;
+      } else {
+        const fileName = filePath.replace('/uploads/', '');
+        const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+        console.log('🎵 AudioPlayer: Using Electron fallback:', audioServerUrl);
+        return audioServerUrl;
+      }
     }
-  }, []);
+  }, [track?.id]);
 
-  // Enhanced WaveSurfer initialization with better error handling and singleton enforcement
+  // Enhanced WaveSurfer initialization with mobile browser detection
   const initializeWaveSurfer = useCallback(async () => {
     if (!track || !waveformRef.current) {
       console.log('🎵 AudioPlayer: Cannot initialize WaveSurfer - missing track or container');
       return;
     }
+
+    // Detect mobile browser and handle gracefully - use consistent detection
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    const isMobileBrowser = !isElectron;
+    
+    console.log('🎵 AudioPlayer: Environment detection:', { isElectron, isMobileBrowser, hasElectron: !!window.electron, hasIpcRenderer: !!window.electron?.ipcRenderer });
+    
+    // WaveSurfer works on mobile browsers too! No need to skip it
+    console.log('🎵 AudioPlayer: Initializing WaveSurfer for environment:', { isElectron, isMobileBrowser });
 
     // Destroy any existing instance before creating a new one
     if (waveSurferRef.current) {
@@ -775,8 +804,31 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [audioUrl]);
 
-  // Handle play/pause - OPTIMIZED: Use WaveSurfer for immediate response
+  // Handle play/pause - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
   const handlePlayPause = useCallback(() => {
+    // Detect environment
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    const isMobileBrowser = !isElectron;
+    
+    if (isMobileBrowser && mobileAudioRef.current) {
+      // Mobile: Use HTML5 audio
+      try {
+        if (isPlayingState) {
+          console.log('🎵 AudioPlayer: Pausing mobile audio');
+          mobileAudioRef.current.pause();
+          setIsPlaying(false);
+        } else {
+          console.log('🎵 AudioPlayer: Playing mobile audio');
+          mobileAudioRef.current.play();
+          setIsPlaying(true);
+        }
+      } catch (error) {
+        console.error('❌ AudioPlayer: Error during mobile audio play/pause:', error);
+      }
+      return;
+    }
+    
+    // Desktop: Use WaveSurfer
     if (!waveSurferRef.current) {
       console.warn('🎵 AudioPlayer: No WaveSurfer instance available for play/pause');
       return;
@@ -994,6 +1046,37 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   return (
     <div className="space-y-2">
+      {/* Hidden HTML5 audio element for mobile - only render if audioUrl exists */}
+      {audioUrl && (
+        <audio
+          ref={mobileAudioRef}
+          src={audioUrl}
+          onLoadedData={() => {
+            console.log('🎵 Mobile audio loaded');
+            setIsAudioLoaded(true);
+            setIsReady(true);
+          }}
+          onPlay={() => {
+            console.log('🎵 Mobile audio playing');
+            setIsPlaying(true);
+          }}
+          onPause={() => {
+            console.log('🎵 Mobile audio paused');
+            setIsPlaying(false);
+          }}
+          onTimeUpdate={(e) => {
+            const target = e.target as HTMLAudioElement;
+            setCurrentTime(target.currentTime);
+          }}
+          onDurationChange={(e) => {
+            const target = e.target as HTMLAudioElement;
+            setDuration(target.duration);
+          }}
+          preload="metadata"
+          style={{ display: 'none' }}
+        />
+      )}
+      
       {/* Full Height Waveform */}
     <div 
       ref={waveformRef} 

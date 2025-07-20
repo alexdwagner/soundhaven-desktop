@@ -10,12 +10,12 @@
     "shared"
   ],
   "scripts": {
-    "dev": "chmod +x cleanup-ports.sh && ./cleanup-ports.sh && concurrently \"cd frontend && yarn dev\" \"cd main && yarn start\"",
+    "dev": "chmod +x cleanup-ports.sh && ./cleanup-ports.sh && concurrently \"cd frontend && yarn dev -H 0.0.0.0\" \"cd main && yarn start\"",
     "dev:clean": "chmod +x kill-and-restart.sh && ./kill-and-restart.sh",
     "kill": "./kill-electron.sh",
     "cleanup": "chmod +x cleanup-ports.sh && ./cleanup-ports.sh",
     "start": "concurrently \"yarn start:frontend\" \"yarn start:electron\"",
-    "start:frontend": "cd frontend && yarn dev",
+    "start:frontend": "cd frontend && yarn dev -H 0.0.0.0",
     "start:electron": "wait-on tcp:3000 && electron-forge start",
     "build": "cd main && yarn build && electron-builder",
     "build:frontend": "cd frontend && yarn build",

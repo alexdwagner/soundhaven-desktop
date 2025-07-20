@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Track } from '../../../../shared/types';
 import { useAuth } from '../hooks/UseAuth';
 import { apiService } from '../../services/electronApiService';
+import { useDataLayer } from '../hooks/useDataLayer';
 
 // Define the API service interface to ensure type safety
 interface ApiService {
@@ -85,6 +86,39 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   // Auth (optional for local-first app)
   const { token, refreshToken, setToken } = useAuth();
   
+  // Use the new data layer
+  const dataLayer = useDataLayer();
+  
+  // Manual test function for browser console - READ ONLY
+  const manualTestAPI = useCallback(async () => {
+    console.log('🧪 [MANUAL TEST] Testing API without affecting state...');
+    try {
+      const response = await fetch('/api/tracks');
+      if (response.ok) {
+        const data = await response.json();
+        const tracksData = data.data || data;
+        console.log('🧪 [MANUAL TEST] API Response:', tracksData);
+        console.log('🧪 [MANUAL TEST] Tracks count:', Array.isArray(tracksData) ? tracksData.length : 0);
+        console.log('🧪 [MANUAL TEST] Note: This test does not modify app state - use normal flow instead');
+        return tracksData;
+      } else {
+        console.log('🧪 [MANUAL TEST] API Response not OK:', response.status);
+        return null;
+      }
+    } catch (error) {
+      console.error('🧪 [MANUAL TEST] API Error:', error);
+      return null;
+    }
+  }, []);
+  
+  // Expose manual test to window for browser console
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).testTracksAPI = manualTestAPI;
+      console.log('🧪 [MANUAL TEST] Available in console: window.testTracksAPI()');
+    }
+  }, [manualTestAPI]);
+  
   console.log('🎯 TracksProvider state:', { 
     tracksLength: tracks.length, 
     isLoading, 
@@ -103,54 +137,58 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   // FIXED: Use a ref to track if the component is mounted
   const isMountedRef = useRef(false);
   
-  useEffect(() => {
-    // Set mounted flag
-    isMountedRef.current = true;
+  // TEMPORARY: Disable auto-loading to stop infinite loop
+  // useEffect(() => {
+  //   // Set mounted flag
+  //   isMountedRef.current = true;
     
-    console.log('🎯 TracksProvider: Initial useEffect FIRED at:', new Date().toISOString());
+  //   console.log('🎯 TracksProvider: Initial useEffect FIRED at:', new Date().toISOString());
     
-    const loadTracks = async () => {
-      if (!isMountedRef.current) return;
+  //   const loadTracks = async () => {
+  //     if (!isMountedRef.current) return;
       
-      try {
-        console.log('🎯 TracksProvider: Starting to load tracks...');
-        setIsLoading(true);
+  //     try {
+  //       console.log('🎯 TracksProvider: Starting to load tracks...');
+  //       setIsLoading(true);
         
-        const response = await apiService.getTracks();
-        console.log('🎯 TracksProvider: API response:', response);
+  //       const tracksData = await dataLayer.getTracks();
+  //       console.log('🎯 TracksProvider: Data layer response:', tracksData);
         
-        if (!isMountedRef.current) return;
+  //       if (!isMountedRef.current) return;
         
-        if (response.data && Array.isArray(response.data)) {
-          console.log('🎯 TracksProvider: Setting tracks:', response.data);
-          setTracks(response.data);
+  //       if (Array.isArray(tracksData)) {
+  //         console.log('🎯 TracksProvider: Setting tracks:', tracksData);
+  //         setTracks(tracksData);
           
-          // Removed auto-select to prevent auto-playing audio on app start
+  //         // Removed auto-select to prevent auto-playing audio on app start
           
-          console.log('🎯 TracksProvider: Tracks loaded successfully!');
-        } else {
-          console.log('🎯 TracksProvider: No tracks found in response or invalid format');
-          setTracks([]);
-        }
-      } catch (error) {
-        if (!isMountedRef.current) return;
-        console.error('🎯 TracksProvider: Error loading tracks:', error);
-        setError('Failed to load tracks');
-      } finally {
-        if (isMountedRef.current) {
-          setIsLoading(false);
-        }
-      }
-    };
+  //         console.log('🎯 TracksProvider: Tracks loaded successfully!');
+  //       } else {
+  //         console.log('🎯 TracksProvider: No tracks found in response or invalid format');
+  //         setTracks([]);
+  //       }
+  //     } catch (error) {
+  //       if (!isMountedRef.current) return;
+  //       console.error('🎯 TracksProvider: Error loading tracks:', error);
+  //       setError('Failed to load tracks');
+  //     } finally {
+  //       if (isMountedRef.current) {
+  //         setIsLoading(false);
+  //       }
+  //     }
+  //   };
     
-    // Load tracks immediately
-    loadTracks();
+  //   // Load tracks immediately
+  //   loadTracks();
     
-    // Cleanup function
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);  // Empty dependency array - run once on mount
+  //   // Cleanup function
+  //   return () => {
+  //     isMountedRef.current = false;
+  //   };
+  // }, []);  // Empty dependency array - run once on mount
+
+  // Mount effect (moved below fetchTracks declaration)
+  // Will be added back after fetchTracks is declared
 
   // TEST: Simple useEffect to see if any useEffect fires
   useEffect(() => {
@@ -173,53 +211,51 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
     }
   }, []); // Remove token dependency for local-first app
   
-  // Fetch all tracks with retry logic
+  // Re-enabled fetchTracks with proper stabilization
   const fetchTracks = useCallback(async () => {
-    console.log('🎯 TracksProvider fetchTracks called...');
+    console.log('🎯 TracksProvider fetchTracks called');
+    if (!isMountedRef.current) return;
+    
     try {
       setIsLoading(true);
-      console.log('🎯 TracksProvider calling apiService.getTracks()...');
-      const response = await apiService.getTracks();
-      console.log('🎯 TracksProvider getTracks response:', response);
+      setError(null);
       
-      if (response.error) {
-        console.error('🎯 TracksProvider API returned error:', response.error);
-        throw new Error(response.error);
-      }
+      console.log('🎯 TracksProvider: Calling dataLayer.getTracks()');
+      const tracksData = await dataLayer.getTracks();
+      console.log('🎯 TracksProvider: Data layer response:', tracksData);
       
-      const tracksToSet = response.data || [];
-      console.log('🎯 TracksProvider setting tracks:', tracksToSet.length, 'tracks');
+      if (!isMountedRef.current) return;
       
-      // Log detailed info about first few tracks
-      if (tracksToSet.length > 0) {
-        console.log('🎯 TracksProvider first 3 tracks structure:');
-        tracksToSet.slice(0, 3).forEach((track, index) => {
-          console.log(`🎯 TracksProvider Track ${index + 1}:`, {
-            id: track.id,
-            name: track.name,
-            artistName: track.artistName,
-            artistId: track.artistId,
-            albumName: track.albumName,
-            year: track.year,
-            hasArtistName: !!track.artistName,
-            hasArtistId: !!track.artistId,
-            allKeys: Object.keys(track)
-          });
-        });
+      if (Array.isArray(tracksData)) {
+        console.log('🎯 TracksProvider: Setting tracks:', tracksData.length);
+        setTracks(tracksData);
       } else {
-        console.log('🎯 TracksProvider No tracks to set!');
+        console.log('🎯 TracksProvider: No tracks found or invalid format');
+        setTracks([]);
       }
-      
-      setTracks(tracksToSet);
-      console.log('🎯 TracksProvider tracks set successfully, new length should be:', tracksToSet.length);
     } catch (error) {
-      console.error('🎯 TracksProvider Error fetching tracks:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch tracks');
+      if (!isMountedRef.current) return;
+      console.error('🎯 TracksProvider: Error loading tracks:', error);
+      setError('Failed to load tracks');
     } finally {
-      setIsLoading(false);
-      console.log('🎯 TracksProvider fetchTracks completed');
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [dataLayer]);
+  
+  // Re-enabled auto-fetching on mount with proper cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    console.log('🎯 TracksProvider: Mounted - Auto-fetching tracks...');
+    
+    // Call fetchTracks only once on mount
+    fetchTracks();
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchTracks]); // Empty dependency - mount only, NO FETCHING
   
   // Update a track
   const updateTrack = useCallback(async (

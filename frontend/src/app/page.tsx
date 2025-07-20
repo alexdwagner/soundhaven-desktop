@@ -39,19 +39,21 @@ export default function HomePage() {
   // Get tracks from context
   const { tracks, isLoading, error, fetchTracks } = useTracks();
   
-  // Test useEffect to check if TracksProvider is working
-  useEffect(() => {
-    console.log('🧪 HomePage useEffect - tracks from context:', tracks);
-    console.log('🧪 HomePage useEffect - isLoading:', isLoading);
-    console.log('🧪 HomePage useEffect - error:', error);
+  // DISABLED - This was causing infinite loop due to fetchTracks dependency
+  // useEffect(() => {
+  //   console.log('🧪 HomePage useEffect - tracks from context:', tracks);
+  //   console.log('🧪 HomePage useEffect - isLoading:', isLoading);
+  //   console.log('🧪 HomePage useEffect - error:', error);
     
-    if (tracks.length === 0 && !isLoading && !error) {
-      console.log('🧪 HomePage useEffect - No tracks loaded yet, calling fetchTracks()');
-      fetchTracks().then(() => {
-        console.log('🧪 HomePage useEffect - fetchTracks completed');
-      });
-    }
-  }, [tracks, isLoading, error, fetchTracks]);
+  //   if (tracks.length === 0 && !isLoading && !error) {
+  //     console.log('🧪 HomePage useEffect - No tracks loaded yet, calling fetchTracks()');
+  //     fetchTracks().then(() => {
+  //       console.log('🧪 HomePage useEffect - fetchTracks completed');
+  //     });
+  //   }
+  // }, [tracks, isLoading, error, fetchTracks]);
+  
+  console.log('🎯 HomePage: Auto-fetch disabled - infinite loop fixed');
 
   const handleLoginClick = () => {
     setAuthMode('login');

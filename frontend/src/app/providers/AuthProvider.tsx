@@ -38,6 +38,15 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   // Initialize auth state from Electron secure storage or auto-login test user
   useEffect(() => {
     const initializeAuthState = async () => {
+      // Detect if we're in mobile browser (no Electron APIs)
+      const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+      
+      if (!isElectron) {
+        console.log('📱 [AuthProvider] Mobile browser detected - skipping auth initialization');
+        setLoading(false);
+        return;
+      }
+      
       try {
         const [storedUser, storedToken] = await Promise.all([
           electronApiService.getStoredUser(),
@@ -134,6 +143,35 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<User> => {
     console.log('AuthProvider: Starting login...');
     setLoading(true);
+    
+    // Detect mobile browser and handle gracefully - use consistent detection
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    
+    if (!isElectron) {
+      console.log('📱 [AuthProvider] Mobile browser login - using test user');
+      
+      // For mobile browsers, create a simple test user without backend validation
+      const mobileUser: User = {
+        id: 1,
+        email: email || 'mobile@test.com',
+        name: 'Mobile User',
+        role: 'USER',
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      
+             // Store user locally
+       localStorage.setItem('user', JSON.stringify(mobileUser));
+       localStorage.setItem('token', 'mobile-test-token');
+       
+       setUser(mobileUser);
+       setToken('mobile-test-token');
+       setLoading(false);
+      
+      console.log('📱 [AuthProvider] Mobile login successful:', mobileUser);
+      return mobileUser;
+    }
+    
     try {
       const response = await electronApiService.login({
         email,
@@ -170,12 +208,20 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
 
   const logout = useCallback(async () => {
     setLoading(true);
+    
+    // Detect mobile browser and handle gracefully - use consistent detection
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    
     try {
       console.log('Logout initiated');
       
-      await electronApiService.logout();
+      if (isElectron) {
+        await electronApiService.logout();
+      } else {
+        console.log('📱 [AuthProvider] Logout on mobile browser - clearing local state only');
+      }
       
-      // Clear local state
+      // Clear local state (works for both environments)
       clearTracks();
       clearPlaylists();
       setUser(null);

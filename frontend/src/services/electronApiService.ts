@@ -192,14 +192,23 @@ const makeRequest = async <T = any>(
         credentials: 'include',
       });
 
-      const data = await response.json().catch(() => ({}));
+      const responseJson = await response.json().catch(() => ({}));
       
       if (!response.ok) {
         return {
-          error: data.message || 'Request failed',
+          error: responseJson.message || responseJson.error || 'Request failed',
           status: response.status,
         };
       }
+
+      // Extract data field from Next.js API response for consistency with Electron IPC
+      const data = responseJson.data !== undefined ? responseJson.data : responseJson;
+      
+      console.log('🔌 [MAKE REQUEST] Mobile response processed:', {
+        originalResponse: responseJson,
+        extractedData: data,
+        hasDataField: responseJson.data !== undefined
+      });
 
       return { data, status: response.status };
     } catch (error) {

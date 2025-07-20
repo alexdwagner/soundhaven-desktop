@@ -149,6 +149,11 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   };
 
   const handleDragEnd = useCallback((event: any) => {
+    if (!event) {
+      console.warn('🔄 [PLAYLIST SORT] Drag ended with null event - ignoring');
+      return;
+    }
+    
     const { active, over } = event;
     console.log('🔄 [PLAYLIST SORT] Drag ended:', { activeId: active.id, overId: over?.id });
     

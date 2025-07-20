@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { DndContext, closestCenter, PointerSensor, MouseSensor, useSensor, useSensors, DragOverlay } from "@dnd-kit/core";
 import PlaylistSidebar from "../playlists/PlaylistSidebar";
 import TracksManager from "../tracks/TracksManager";
@@ -29,15 +29,15 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const [playlistSidebarDragHandler, setPlaylistSidebarDragHandler] = useState<((event: any) => void) | null>(null);
   
   // Debug handler registration
-  const handleRegisterReorderHandler = (handler: (startIndex: number, endIndex: number) => void) => {
+  const handleRegisterReorderHandler = useCallback((handler: (startIndex: number, endIndex: number) => void) => {
     console.log('🔧 [MAIN CONTENT] Registering reorder handler:', typeof handler);
-    setTracksManagerReorderHandler(() => handler);
-  };
+    setTracksManagerReorderHandler(handler); // Remove function wrapper
+  }, []);
 
-  const handleRegisterPlaylistDragHandler = (handler: (event: any) => void) => {
+  const handleRegisterPlaylistDragHandler = useCallback((handler: (event: any) => void) => {
     console.log('🔧 [MAIN CONTENT] Registering playlist drag handler:', typeof handler);
-    setPlaylistSidebarDragHandler(() => handler);
-  };
+    setPlaylistSidebarDragHandler(handler); // Remove function wrapper
+  }, []);
   
   // Use playlists provider for cross-playlist operations and track reordering
   const { addTracksToPlaylist, updatePlaylistTrackOrder, currentPlaylistTracks, currentPlaylistId } = usePlaylists();

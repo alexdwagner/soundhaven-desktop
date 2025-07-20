@@ -22,8 +22,29 @@ const AlbumArtPanel: React.FC<AlbumArtPanelProps> = ({ track, show }) => {
   const getAlbumArtUrl = (track: Track | null): string | null => {
     if (!track?.albumArtPath) return null;
     
-    // Construct the full URL for the album art
-    return `http://localhost:3000${track.albumArtPath}`;
+    // Use the same environment detection as other components
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    
+    console.log('🖼️ [AlbumArtPanel] Environment detection:', {
+      isElectron,
+      hasWindow: typeof window !== 'undefined',
+      hasElectron: !!window.electron,
+      hasIpcRenderer: !!window.electron?.ipcRenderer,
+      trackAlbumArtPath: track.albumArtPath
+    });
+    
+    if (isElectron) {
+      // Desktop: use Electron audio server
+      const url = `http://localhost:3000${track.albumArtPath}`;
+      console.log('🖼️ [AlbumArtPanel] Using desktop URL:', url);
+      return url;
+    } else {
+      // Mobile: use Next.js album art API
+      const filename = track.albumArtPath.split('/').pop();
+      const url = `/api/album-art/${filename}`;
+      console.log('🖼️ [AlbumArtPanel] Using mobile URL:', url);
+      return url;
+    }
   };
 
   const getDisplayInfo = (track: Track | null) => {

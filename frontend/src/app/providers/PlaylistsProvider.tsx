@@ -4,6 +4,7 @@ import * as React from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from "../hooks/UseAuth";
 import { apiService } from "../../services/electronApiService";
+import { useDataLayer } from '../hooks/useDataLayer';
 
 // Import types
 import { Playlist, Track, User } from "../../../../shared/types";
@@ -56,6 +57,9 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Use the new data layer
+  const dataLayer = useDataLayer();
+  
   console.log("🔥 PlaylistsProvider: State initialized. Playlists count:", playlists.length);
 
   const fetchPlaylists = useCallback(async () => {
@@ -64,10 +68,14 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
     setError(null);
     
     try {
-      console.log("🎵 [PLAYLISTS PROVIDER] About to call apiService.getPlaylists()");
-      const playlists = await apiService.getPlaylists() as ExtendedPlaylist[];
-      console.log("🎵 [PLAYLISTS PROVIDER] Raw playlists from API:", playlists);
-      console.log("🎵 [PLAYLISTS PROVIDER] Playlists count:", playlists?.length || 0);
+      console.log("🎵 [PLAYLISTS PROVIDER] About to call dataLayer.getPlaylists()");
+      const playlistsData = await dataLayer.getPlaylists();
+      console.log("🎵 [PLAYLISTS PROVIDER] Raw playlists from data layer:", playlistsData);
+      console.log("🎵 [PLAYLISTS PROVIDER] Playlists count:", Array.isArray(playlistsData) ? playlistsData.length : 0);
+      
+      // Ensure we have an array
+      const playlists = Array.isArray(playlistsData) ? playlistsData : [];
+      console.log("🎵 [PLAYLISTS PROVIDER] Playlists array confirmed:", playlists.length);
       
       if (playlists && playlists.length > 0) {
         console.log("🎵 [PLAYLISTS PROVIDER] First playlist structure:", playlists[0]);
@@ -119,7 +127,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // dataLayer is stable now
 
   // Effect to fetch playlists on mount
   useEffect(() => {

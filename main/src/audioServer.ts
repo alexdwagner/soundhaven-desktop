@@ -168,6 +168,11 @@ export class AudioServer {
         const fileName = filePath.substring(6); // Remove 'audio/'
         filePath = path.join(process.cwd(), 'uploads', fileName);
         console.log(`[AUDIO SERVER] Converted audio/ path to: ${filePath}`);
+      } else if (filePath.startsWith('api/album-art/')) {
+        // Handle Next.js API album art requests that accidentally hit the audio server
+        const fileName = filePath.substring(14); // Remove 'api/album-art/'
+        filePath = path.join(process.cwd(), 'uploads', 'album-art', fileName);
+        console.log(`[AUDIO SERVER] Converted api/album-art/ path to: ${filePath}`);
       } else if (filePath.startsWith('uploads/')) {
         // Already has uploads prefix, just make it absolute from process.cwd()
         filePath = path.join(process.cwd(), filePath);

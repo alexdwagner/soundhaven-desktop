@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Tag } from '../../../../shared/types';
-import { electronApiService } from '../../services/electronApiService';
 
 export interface TagsState {
   tags: Tag[];
@@ -20,10 +19,11 @@ export const useTags = () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await electronApiService.makeRequest('/api/tags', 'GET');
+      const response = await fetch('/api/tags');
+      const data = await response.json();
       setState(prev => ({ 
         ...prev, 
-        tags: response.data || [], 
+        tags: data.data || [], 
         loading: false 
       }));
     } catch (error) {
@@ -40,8 +40,13 @@ export const useTags = () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await electronApiService.makeRequest('/api/tags', 'POST', tagData);
-      const newTag = response.data;
+      const response = await fetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tagData)
+      });
+      const data = await response.json();
+      const newTag = data.data;
       
       setState(prev => ({ 
         ...prev, 
