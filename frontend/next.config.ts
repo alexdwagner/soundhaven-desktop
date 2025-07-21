@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Proxy audio and API requests to Electron backend
+  // Proxy audio and specific API requests to Electron backend
   async rewrites() {
     const audioServerPort = process.env.AUDIO_SERVER_PORT || '3000';
     return [
@@ -31,9 +31,18 @@ const nextConfig: NextConfig = {
         source: '/audio/:path*',
         destination: `http://localhost:${audioServerPort}/audio/:path*`,
       },
+      // Only proxy specific API routes to Electron, let Next.js handle the rest
       {
-        source: '/api/:path*',
-        destination: `http://localhost:${audioServerPort}/api/:path*`,
+        source: '/api/tracks',
+        destination: `http://localhost:${audioServerPort}/api/tracks`,
+      },
+      {
+        source: '/api/playlists',
+        destination: `http://localhost:${audioServerPort}/api/playlists`,
+      },
+      {
+        source: '/api/comments',
+        destination: `http://localhost:${audioServerPort}/api/comments`,
       },
     ];
   },

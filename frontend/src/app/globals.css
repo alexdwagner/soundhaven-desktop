@@ -14,6 +14,41 @@ body {
   color-scheme: light;
 }
 
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  /* Prevent horizontal scrolling */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Touch-friendly buttons */
+  .mobile-button {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+  
+  /* Swipe navigation indicators */
+  .swipe-indicator {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 20px;
+    background: #3b82f6;
+    border-radius: 2px;
+    opacity: 0.6;
+  }
+  
+  .swipe-indicator.left {
+    left: 8px;
+  }
+  
+  .swipe-indicator.right {
+    right: 8px;
+  }
+}
+
 /* WaveSurfer region styling for better visibility */
 .wavesurfer-region {
   border: 2px solid #ff0000 !important;
@@ -98,4 +133,36 @@ wave {
   border-radius: 4px;
   height: 4px;
   border: none;
+}
+
+/* Mobile touch improvements */
+@media (max-width: 768px) {
+  .slider::-webkit-slider-thumb {
+    height: 20px;
+    width: 20px;
+  }
+  
+  .slider::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+  }
+  
+  /* Prevent text selection on mobile */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow text selection in inputs and textareas */
+  input, textarea {
+    -webkit-user-select: text;
+    -khtml-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
 }

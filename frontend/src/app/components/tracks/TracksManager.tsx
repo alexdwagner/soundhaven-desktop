@@ -1261,7 +1261,7 @@ export default function TracksManager({
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Persistent Audio player at the top */}
+      {/* Audio player with waveform - always at top */}
       <div className="border-b bg-white p-2">
         <AudioPlayer 
           track={playbackCurrentTrack}
@@ -1654,6 +1654,8 @@ export default function TracksManager({
           </div>
         </div>
       )}
+
+
     </div>
   );
 } 

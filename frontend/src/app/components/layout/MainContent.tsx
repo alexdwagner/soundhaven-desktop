@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { DndContext, closestCenter, PointerSensor, MouseSensor, useSensor, useSensors, DragOverlay } from "@dnd-kit/core";
 import PlaylistSidebar from "../playlists/PlaylistSidebar";
 import TracksManager from "../tracks/TracksManager";
@@ -9,6 +9,7 @@ import { Track, Playlist } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
+import { useEnvironment } from '@/app/hooks/useEnvironment';
 
 interface MainContentProps {
   searchResults?: {
@@ -17,6 +18,9 @@ interface MainContentProps {
     isActive: boolean;
   };
 }
+
+// Mobile navigation views
+type MobileView = 'playlists' | 'library' | 'comments';
 
 export default function MainContent({ searchResults }: MainContentProps) {
   const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState<Track[]>([]);
@@ -27,6 +31,15 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const [dragTrackCount, setDragTrackCount] = useState(1);
   const [tracksManagerReorderHandler, setTracksManagerReorderHandler] = useState<((startIndex: number, endIndex: number) => void) | null>(null);
   const [playlistSidebarDragHandler, setPlaylistSidebarDragHandler] = useState<((event: any) => void) | null>(null);
+  
+  // Mobile navigation state
+  const [mobileView, setMobileView] = useState<MobileView>('library');
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Environment detection
+  const { isMobile } = useEnvironment();
   
   // Debug handler registration
   const handleRegisterReorderHandler = useCallback((handler: (startIndex: number, endIndex: number) => void) => {
@@ -62,11 +75,63 @@ export default function MainContent({ searchResults }: MainContentProps) {
     })
   );
 
+  // Mobile swipe navigation
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      // Swipe left - go to next view
+      switch (mobileView) {
+        case 'playlists':
+          setMobileView('library');
+          break;
+        case 'library':
+          setMobileView('comments');
+          break;
+        case 'comments':
+          // Stay on comments
+          break;
+      }
+    } else if (isRightSwipe) {
+      // Swipe right - go to previous view
+      switch (mobileView) {
+        case 'playlists':
+          // Stay on playlists
+          break;
+        case 'library':
+          setMobileView('playlists');
+          break;
+        case 'comments':
+          setMobileView('library');
+          break;
+      }
+    }
+  };
+
   const handleSelectPlaylist = (tracks: Track[], playlistId: string, playlistName?: string) => {
     console.log("📋 Playlist selected:", { playlistId, playlistName, tracksCount: tracks.length });
     setSelectedPlaylistTracks(tracks);
     setSelectedPlaylistId(playlistId);
     setSelectedPlaylistName(playlistName || 'Unknown Playlist');
+    // On mobile, switch to library view when playlist is selected
+    if (isMobile) {
+      setMobileView('library');
+    }
   };
 
   const handleViewAllTracks = () => {
@@ -254,7 +319,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
 
 
   return (
-    <main className="flex flex-col p-2 mx-auto w-full h-screen">
+    <main className={`flex flex-col mx-auto w-full h-screen ${isMobile ? 'p-0' : 'p-2'}`}>
       <DndContext 
         sensors={sensors}
         collisionDetection={closestCenter} 
@@ -279,25 +344,121 @@ export default function MainContent({ searchResults }: MainContentProps) {
           console.log('👉 [DND LIFECYCLE] DndContext onDragCancel triggered');
         }}
       >
-        <div className="flex h-full gap-2">
-          <div className="w-1/5 flex-shrink-0">
-            <PlaylistSidebar 
-              onSelectPlaylist={handleSelectPlaylist}
-              onViewAllTracks={handleViewAllTracks}
-              onDeletePlaylist={handleDeletePlaylist}
-              onRegisterDragHandler={handleRegisterPlaylistDragHandler}
-            />
+        {isMobile ? (
+          // Mobile Layout with Swipe Navigation
+          <div 
+            ref={containerRef}
+            className="flex flex-col h-full"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
+            {/* Mobile Navigation Header */}
+            <div className="flex items-center justify-center bg-white border-b border-gray-200 px-4 py-3 relative">
+              <div className="flex space-x-8">
+                <button
+                  onClick={() => setMobileView('playlists')}
+                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                    mobileView === 'playlists' 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Playlists
+                </button>
+                <button
+                  onClick={() => setMobileView('library')}
+                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                    mobileView === 'library' 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Library
+                </button>
+                <button
+                  onClick={() => setMobileView('comments')}
+                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                    mobileView === 'comments' 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Comments
+                </button>
+              </div>
+              
+              {/* Swipe indicators */}
+              <div className="swipe-indicator left"></div>
+              <div className="swipe-indicator right"></div>
+              
+              {/* Swipe hint */}
+              <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-400">
+                Swipe to navigate
+              </div>
+            </div>
+
+            {/* Mobile Content Area */}
+            <div className="flex-1 overflow-hidden">
+              {/* Playlists View */}
+              {mobileView === 'playlists' && (
+                <div className="h-full overflow-auto">
+                  <PlaylistSidebar 
+                    onSelectPlaylist={handleSelectPlaylist}
+                    onViewAllTracks={handleViewAllTracks}
+                    onDeletePlaylist={handleDeletePlaylist}
+                    onRegisterDragHandler={handleRegisterPlaylistDragHandler}
+                  />
+                </div>
+              )}
+
+              {/* Library View */}
+              {mobileView === 'library' && (
+                <div className="h-full overflow-hidden">
+                  <TracksManager 
+                    selectedPlaylistTracks={selectedPlaylistTracks}
+                    selectedPlaylistId={selectedPlaylistId}
+                    selectedPlaylistName={selectedPlaylistName}
+                    onRegisterReorderHandler={handleRegisterReorderHandler}
+                    searchResults={searchResults}
+                  />
+                </div>
+              )}
+
+              {/* Comments View */}
+              {mobileView === 'comments' && (
+                <div className="h-full flex items-center justify-center bg-gray-50">
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">💬</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Comments</h3>
+                    <p className="text-gray-600">Comments view coming soon...</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="w-4/5 flex-1 min-w-0">
-            <TracksManager 
-              selectedPlaylistTracks={selectedPlaylistTracks}
-              selectedPlaylistId={selectedPlaylistId}
-              selectedPlaylistName={selectedPlaylistName}
-              onRegisterReorderHandler={handleRegisterReorderHandler}
-              searchResults={searchResults}
-            />
+        ) : (
+          // Desktop Layout (unchanged)
+          <div className="flex h-full gap-2">
+            <div className="w-1/5 flex-shrink-0">
+              <PlaylistSidebar 
+                onSelectPlaylist={handleSelectPlaylist}
+                onViewAllTracks={handleViewAllTracks}
+                onDeletePlaylist={handleDeletePlaylist}
+                onRegisterDragHandler={handleRegisterPlaylistDragHandler}
+              />
+            </div>
+            <div className="w-4/5 flex-1 min-w-0">
+              <TracksManager 
+                selectedPlaylistTracks={selectedPlaylistTracks}
+                selectedPlaylistId={selectedPlaylistId}
+                selectedPlaylistName={selectedPlaylistName}
+                onRegisterReorderHandler={handleRegisterReorderHandler}
+                searchResults={searchResults}
+              />
+            </div>
           </div>
-        </div>
+        )}
         
         {/* Drag Overlay for visual feedback */}
         <DragOverlay>

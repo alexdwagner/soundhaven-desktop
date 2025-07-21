@@ -253,12 +253,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     
     try {
       if (isMobileBrowser) {
-        // Mobile browser: use streaming URL based on track ID (not implemented yet)
-        const streamingUrl = `/audio/${track?.id}`;
-        console.log('🎵 AudioPlayer: Using track ID streaming URL for mobile:', {
+        // Mobile browser: use Next.js API streaming endpoint
+        const streamingUrl = `/api/audio/${track?.id}`;
+        console.log('🎵 AudioPlayer: Using Next.js API streaming URL for mobile:', {
           trackId: track?.id,
           streamingUrl: streamingUrl,
-          note: 'Audio streaming not yet implemented - will show proper 404'
+          note: 'Using Next.js /api/audio/[trackId] endpoint'
         });
         return streamingUrl;
       } else {
@@ -283,7 +283,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
       // Fallback based on environment
       if (isMobileBrowser) {
-        const fallbackUrl = `/audio/${track?.id || 'unknown'}`;
+        const fallbackUrl = `/api/audio/${track?.id || 'unknown'}`;
         console.log('🎵 AudioPlayer: Using mobile fallback:', fallbackUrl);
         return fallbackUrl;
       } else {
@@ -771,13 +771,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         return;
       }
       
-    // Always use audio server URL for better compatibility
-    const fileName = track.filePath.replace('/uploads/', '');
-    const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+    // Use environment-aware URL (mobile API vs desktop audio server)
+    const getAudioUrl = async () => {
+      try {
+        const audioServerUrl = await getFileUrl(track.filePath);
+        console.log('🎵 AudioPlayer: Setting audioUrl via getFileUrl:', audioServerUrl);
+        setAudioUrl(audioServerUrl);
+      } catch (error) {
+        console.error('❌ AudioPlayer: Error getting audio URL:', error);
+      }
+    };
     
-    console.log('🎵 AudioPlayer: Setting audioUrl to audio server URL:', audioServerUrl);
-    setAudioUrl(audioServerUrl);
-  }, [track?.filePath]);
+    getAudioUrl();
+  }, [track?.filePath, getFileUrl]);
 
   // Reset states when audioUrl changes
   useEffect(() => {
@@ -810,20 +816,54 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     const isMobileBrowser = !isElectron;
     
-    if (isMobileBrowser && mobileAudioRef.current) {
-      // Mobile: Use HTML5 audio
-      try {
-        if (isPlayingState) {
-          console.log('🎵 AudioPlayer: Pausing mobile audio');
-          mobileAudioRef.current.pause();
-          setIsPlaying(false);
-        } else {
-          console.log('🎵 AudioPlayer: Playing mobile audio');
-          mobileAudioRef.current.play();
-          setIsPlaying(true);
+    console.log('🎵 AudioPlayer: Play/Pause clicked - Environment:', { 
+      isElectron, 
+      isMobileBrowser, 
+      hasMobileAudioRef: !!mobileAudioRef.current,
+      audioUrl: audioUrl,
+      isPlayingState: isPlayingState
+    });
+    
+    if (isMobileBrowser) {
+      // Mobile: Use HTML5 audio for playback, WaveSurfer for visualization only
+      if (mobileAudioRef.current) {
+        try {
+          if (isPlayingState) {
+            console.log('🎵 AudioPlayer: Pausing mobile audio');
+            mobileAudioRef.current.pause();
+            // Also pause WaveSurfer visualization if it exists
+            if (waveSurferRef.current) {
+              waveSurferRef.current.pause();
+            }
+            setIsPlaying(false);
+          } else {
+            console.log('🎵 AudioPlayer: Playing mobile audio');
+            const playPromise = mobileAudioRef.current.play();
+            if (playPromise) {
+              playPromise
+                .then(() => {
+                  console.log('✅ Mobile audio play succeeded');
+                  setIsPlaying(true);
+                  // Sync WaveSurfer visualization if it exists
+                  if (waveSurferRef.current && mobileAudioRef.current) {
+                    waveSurferRef.current.seekTo(mobileAudioRef.current.currentTime / mobileAudioRef.current.duration);
+                  }
+                })
+                .catch(error => {
+                  console.error('❌ Mobile audio play failed:', error);
+                  console.log('🔄 Attempting to unlock audio context...');
+                  // Try to enable audio context
+                  mobileAudioRef.current?.load();
+                });
+            } else {
+              setIsPlaying(true);
+            }
+          }
+        } catch (error) {
+          console.error('❌ AudioPlayer: Error during mobile audio play/pause:', error);
         }
-      } catch (error) {
-        console.error('❌ AudioPlayer: Error during mobile audio play/pause:', error);
+      } else {
+        console.error('❌ AudioPlayer: Mobile audio element not available');
       }
       return;
     }
@@ -1055,6 +1095,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             console.log('🎵 Mobile audio loaded');
             setIsAudioLoaded(true);
             setIsReady(true);
+            // Set volume for mobile
+            if (mobileAudioRef.current) {
+              mobileAudioRef.current.volume = volume;
+              console.log('🎵 Mobile audio volume set to:', volume);
+            }
           }}
           onPlay={() => {
             console.log('🎵 Mobile audio playing');
