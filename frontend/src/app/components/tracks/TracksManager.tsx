@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import TracksTable, { SortColumn, SortDirection } from "./TracksTable";
 import AudioPlayer from "../audioPlayer/AudioPlayer";
 import AlbumArtPanel from "../audioPlayer/AlbumArtPanel";
+import MobileAudioControls from "../audioPlayer/MobileAudioControls";
 import CommentsPanel from "../comments/CommentsPanel";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import TrackContextMenu from "./TrackContextMenu";
@@ -13,6 +14,7 @@ import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useComments } from "@/app/hooks/useComments";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
+import { useEnvironment } from '@/app/hooks/useEnvironment';
 import { _Comment as Comment, Track } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 import ColumnVisibilityControl from "./ColumnVisibilityControl";
@@ -162,6 +164,125 @@ export default function TracksManager({
 
   // Column visibility hook
   const { columnVisibility, toggleColumn, resetToDefault } = useColumnVisibility();
+  
+  // Environment detection for mobile
+  const { isMobile } = useEnvironment();
+  
+  console.log('📱 [TracksManager] Mobile detection:', { isMobile });
+
+  // Apply sorting to tracks - only sort if not in playlist manual mode
+  const sortedTracks = useCallback(() => {
+    // Don't sort if we're in playlist view and manual mode
+    if (isPlaylistView && playlistSortMode === 'manual') {
+      console.log('🎵 [SEQUENTIAL] Using manual playlist order (no sorting applied)');
+      return safeTracks;
+    }
+    
+    // Don't sort if no sort column is selected
+    if (!sortColumn) {
+      console.log('🎵 [SEQUENTIAL] No sort column selected, using original order');
+      return safeTracks;
+    }
+
+    console.log('🎵 [SEQUENTIAL] Applying sorting:', { sortColumn, sortDirection, isPlaylistView, playlistSortMode });
+
+    return [...safeTracks].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || '';
+          bValue = b.name?.toLowerCase() || '';
+          break;
+        case 'artistName':
+          aValue = a.artistName?.toLowerCase() || '';
+          bValue = b.artistName?.toLowerCase() || '';
+          break;
+        case 'albumName':
+          aValue = a.albumName?.toLowerCase() || '';
+          bValue = b.albumName?.toLowerCase() || '';
+          break;
+        case 'year':
+          aValue = a.year || 0;
+          bValue = b.year || 0;
+          break;
+        case 'duration':
+          aValue = a.duration || 0;
+          bValue = b.duration || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [safeTracks, sortColumn, sortDirection, isPlaylistView, playlistSortMode]);
+
+  // Use displayTracks for playback and selection logic
+  const displayTracks = sortedTracks();
+  console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+
+  const handlePlayTrack = useCallback((trackId: string) => {
+    console.log('🎵 [HANDLE PLAY TRACK] === START ===');
+    console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
+    console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
+    console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
+    console.log('🎵 [SEQUENTIAL] Using displayTracks for proper sort order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    
+    // IMPORTANT: Use displayTracks instead of tracks to respect current sort order
+    let trackIndex = -1;
+    let foundTrack = null;
+    
+    if (isPlaylistView) {
+      // In playlist view, trackId could be playlist_track_id (number) or track.id (string)
+      trackIndex = displayTracks.findIndex((t) => {
+        const playlistTrackId = t.playlist_track_id?.toString();
+        const regularTrackId = t.id.toString();
+        return playlistTrackId === trackId || regularTrackId === trackId;
+      });
+    } else {
+      // In library view, trackId is always track.id
+      trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
+    }
+    
+    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
+    console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
+    
+    if (trackIndex !== -1) {
+      foundTrack = displayTracks[trackIndex];
+      console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
+        index: trackIndex,
+        id: foundTrack.id,
+        name: foundTrack.name,
+        playlist_track_id: foundTrack.playlist_track_id,
+        filePath: foundTrack.filePath
+      });
+      
+      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with sorted index and autoplay=true');
+      selectTrack(foundTrack, trackIndex, true, { isPlaylistView, playlistId: selectedPlaylistId });
+      console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
+    } else {
+      console.error('❌ [HANDLE PLAY TRACK] Track not found for playback:', trackId);
+      console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', displayTracks.map(t => ({
+        id: t.id,
+        playlist_track_id: t.playlist_track_id,
+        name: t.name
+      })));
+    }
+    
+    console.log('🎵 [HANDLE PLAY TRACK] === END ===');
+  }, [displayTracks, selectTrack, isPlaylistView]);
+
+  const handleMobilePlayPause = useCallback(() => {
+    if (playbackCurrentTrack) {
+      togglePlayback();
+    } else if (displayTracks.length > 0) {
+      handlePlayTrack(displayTracks[0].id.toString());
+    }
+  }, [playbackCurrentTrack, togglePlayback, displayTracks, handlePlayTrack]);
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
@@ -504,60 +625,6 @@ export default function TracksManager({
     }
   }, [sortColumn, sortDirection, isPlaylistView]);
 
-  // Apply sorting to tracks - only sort if not in playlist manual mode
-  const sortedTracks = useCallback(() => {
-    // Don't sort if we're in playlist view and manual mode
-    if (isPlaylistView && playlistSortMode === 'manual') {
-      console.log('🎵 [SEQUENTIAL] Using manual playlist order (no sorting applied)');
-      return safeTracks;
-    }
-    
-    // Don't sort if no sort column is selected
-    if (!sortColumn) {
-      console.log('🎵 [SEQUENTIAL] No sort column selected, using original order');
-      return safeTracks;
-    }
-
-    console.log('🎵 [SEQUENTIAL] Applying sorting:', { sortColumn, sortDirection, isPlaylistView, playlistSortMode });
-
-    return [...safeTracks].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortColumn) {
-        case 'name':
-          aValue = a.name?.toLowerCase() || '';
-          bValue = b.name?.toLowerCase() || '';
-          break;
-        case 'artistName':
-          aValue = a.artistName?.toLowerCase() || '';
-          bValue = b.artistName?.toLowerCase() || '';
-          break;
-        case 'albumName':
-          aValue = a.albumName?.toLowerCase() || '';
-          bValue = b.albumName?.toLowerCase() || '';
-          break;
-        case 'year':
-          aValue = a.year || 0;
-          bValue = b.year || 0;
-          break;
-        case 'duration':
-          aValue = a.duration || 0;
-          bValue = b.duration || 0;
-          break;
-        default:
-          return 0;
-      }
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [safeTracks, sortColumn, sortDirection, isPlaylistView, playlistSortMode]);
-
-  const displayTracks = sortedTracks();
-  console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
-
   const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
     console.log('🐥 [TRACKS MANAGER] handleSelectTrack called with trackId:', trackId);
     console.log('🐥 [TRACKS MANAGER] Available tracks (displayTracks):', displayTracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
@@ -667,57 +734,6 @@ export default function TracksManager({
       console.log('❌ Track not found in displayTracks array');
     }
   }, [displayTracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, isPlaylistView]);
-
-  const handlePlayTrack = useCallback((trackId: string) => {
-    console.log('🎵 [HANDLE PLAY TRACK] === START ===');
-    console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
-    console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
-    console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
-    console.log('🎵 [SEQUENTIAL] Using displayTracks for proper sort order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
-    
-    // IMPORTANT: Use displayTracks instead of tracks to respect current sort order
-    let trackIndex = -1;
-    let foundTrack = null;
-    
-    if (isPlaylistView) {
-      // In playlist view, trackId could be playlist_track_id (number) or track.id (string)
-      trackIndex = displayTracks.findIndex((t) => {
-        const playlistTrackId = t.playlist_track_id?.toString();
-        const regularTrackId = t.id.toString();
-        return playlistTrackId === trackId || regularTrackId === trackId;
-      });
-    } else {
-      // In library view, trackId is always track.id
-      trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
-    }
-    
-    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
-    console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
-    
-    if (trackIndex !== -1) {
-      foundTrack = displayTracks[trackIndex];
-      console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
-        index: trackIndex,
-        id: foundTrack.id,
-        name: foundTrack.name,
-        playlist_track_id: foundTrack.playlist_track_id,
-        filePath: foundTrack.filePath
-      });
-      
-      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with sorted index and autoplay=true');
-      selectTrack(foundTrack, trackIndex, true, { isPlaylistView, playlistId: selectedPlaylistId });
-      console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
-    } else {
-      console.error('❌ [HANDLE PLAY TRACK] Track not found for playback:', trackId);
-      console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', displayTracks.map(t => ({
-        id: t.id,
-        playlist_track_id: t.playlist_track_id,
-        name: t.name
-      })));
-    }
-    
-    console.log('🎵 [HANDLE PLAY TRACK] === END ===');
-  }, [displayTracks, selectTrack, isPlaylistView]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1570,11 +1586,13 @@ export default function TracksManager({
           />
         )}
 
-        {/* Album Art Panel */}
-        <AlbumArtPanel
-          track={playbackCurrentTrack}
-          show={!!playbackCurrentTrack}
-        />
+        {/* Album Art Panel - Only show on desktop */}
+        {!isMobile && (
+          <AlbumArtPanel
+            track={playbackCurrentTrack}
+            show={!!playbackCurrentTrack}
+          />
+        )}
       </div>
 
       {/* Context Menu */}
@@ -1655,6 +1673,21 @@ export default function TracksManager({
         </div>
       )}
 
+      {/* Mobile Audio Controls - Fixed at bottom for mobile devices */}
+      {isMobile && (
+        <MobileAudioControls
+          track={playbackCurrentTrack}
+          isPlaying={isPlaying}
+          onPlayPause={handleMobilePlayPause}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          onSeek={handleSeek}
+          onVolumeChange={setVolume}
+          onPlaybackSpeedChange={setPlaybackSpeed}
+          volume={volume}
+          playbackSpeed={playbackSpeed}
+        />
+      )}
 
     </div>
   );
