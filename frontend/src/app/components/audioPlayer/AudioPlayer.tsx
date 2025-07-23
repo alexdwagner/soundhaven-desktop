@@ -4,6 +4,7 @@ import type { WaveSurfer as WaveSurferType } from 'wavesurfer.js';
 import type { Region } from 'wavesurfer.js/dist/plugins/regions';
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { useComments } from "@/app/hooks/useComments";
+import { useEnvironment } from "@/app/hooks/useEnvironment";
 import { Marker as MarkerType } from "../../../../../shared/types";
 import apiService from "../../../services/electronApiService";
 
@@ -138,6 +139,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   
   // Track if we should auto-play once audio is loaded
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
+
+  // Environment detection for mobile/desktop behavior
+  const { isMobile } = useEnvironment();
+  
+  // Touch tracking for mobile waveform seeking
+  const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   // Sync internal volume state with external volume prop
   useEffect(() => {
@@ -900,8 +908,37 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [isPlayingState, isAudioLoaded]);
 
-  // Handle seek - OPTIMIZED: Use WaveSurfer for immediate seeking
+  // Handle seek - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
   const handleSeek = useCallback((time: number) => {
+    // Detect environment
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+    const isMobileBrowser = !isElectron;
+    
+    console.log('🎵 AudioPlayer: Seeking to time:', time, 'seconds - Environment:', { isElectron, isMobileBrowser });
+    
+    if (isMobileBrowser) {
+      // Mobile: Use HTML5 audio for seeking
+      if (mobileAudioRef.current) {
+        try {
+          mobileAudioRef.current.currentTime = time;
+          console.log('✅ Mobile audio seeked to:', time);
+          
+          // Sync WaveSurfer visualization if it exists
+          if (waveSurferRef.current && duration > 0) {
+            const seekPercent = time / duration;
+            waveSurferRef.current.seekTo(seekPercent);
+            console.log('✅ WaveSurfer visualization synced to:', seekPercent);
+          }
+        } catch (error) {
+          console.error('❌ AudioPlayer: Error during mobile audio seek:', error);
+        }
+      } else {
+        console.error('❌ AudioPlayer: Mobile audio element not available for seek');
+      }
+      return;
+    }
+    
+    // Desktop: Use WaveSurfer for seeking
     if (!waveSurferRef.current) {
       console.warn('🎵 AudioPlayer: No WaveSurfer instance available for seek');
       return;
@@ -914,6 +951,69 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       console.error('❌ AudioPlayer: Error during WaveSurfer seek:', error);
     }
   }, [duration]);
+
+  // Handle mobile waveform touch/click for seeking
+  const handleWaveformTouch = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Get touch/click position
+    let clientX: number;
+    if ('touches' in e) {
+      // Touch event
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      setTouchStartTime(Date.now());
+      setTouchStartX(clientX);
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+    }
+    
+    if (!waveformRef.current || duration === 0) return;
+    
+    const rect = waveformRef.current.getBoundingClientRect();
+    const clickX = clientX - rect.left;
+    const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
+    const clickTime = clickPercent * duration;
+    
+    console.log('🎵 [WAVEFORM SEEK] Touch/click detected:', {
+      isMobile,
+      clickX,
+      clickPercent: clickPercent.toFixed(3),
+      clickTime: clickTime.toFixed(2),
+      duration,
+      rect: { left: rect.left, width: rect.width }
+    });
+    
+    // Seek to the clicked/touched position
+    handleSeek(clickTime);
+  }, [duration, handleSeek, isMobile]);
+
+  // Handle touch end for mobile (to distinguish from swipe gestures)
+  const handleWaveformTouchEnd = useCallback((e: React.TouchEvent) => {
+    const touchEndTime = Date.now();
+    
+    // Only proceed if we have touch start data
+    if (touchStartTime === null || touchStartX === null) return;
+    
+    const touchDuration = touchEndTime - touchStartTime;
+    const touch = e.changedTouches[0];
+    const touchEndX = touch.clientX;
+    const touchDistance = Math.abs(touchEndX - touchStartX);
+    
+    console.log('🎵 [TOUCH END] Touch analysis:', {
+      duration: touchDuration,
+      distance: touchDistance,
+      isQuickTap: touchDuration < 200 && touchDistance < 10
+    });
+    
+    // Reset touch tracking
+    setTouchStartTime(null);
+    setTouchStartX(null);
+    
+    // If it was a quick tap (not a swipe), we already handled the seek in touchstart
+    // This is just cleanup - the actual seeking happens in handleWaveformTouch
+  }, [touchStartTime, touchStartX]);
 
   // Handle volume change
   const handleVolumeChange = useCallback((newVolume: number) => {
@@ -1135,6 +1235,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         "--region-border-color": "rgb(59, 130, 246)",
         "--region-handle-color": "rgb(59, 130, 246)",
       } as React.CSSProperties}
+      onTouchStart={handleWaveformTouch}
+      onTouchEnd={handleWaveformTouchEnd}
+      onClick={(e) => {
+        // Only handle click on desktop (not mobile) to avoid interference with touch
+        if (!isMobile) {
+          handleWaveformTouch(e);
+        }
+      }}
       onDoubleClick={(e) => {
         if (!waveSurferRef.current) return;
         
@@ -1149,7 +1257,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           onAddComment(clickTime);
         }
       }}
-      title="Double-click to add a comment"
+      title={isMobile ? "Tap to seek, double-tap to add comment" : "Click to seek, double-click to add comment"}
     />
 
       {/* Compact Transport Controls - Single Row */}
