@@ -84,17 +84,24 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     }, []);
 
     const togglePlayback = useCallback(() => {
-        setIsPlaying(prevIsPlaying => !prevIsPlaying);
-    }, []);
+        console.log("😺 [TOGGLE PLAYBACK] === togglePlayback called ===");
+        console.log("😺 [TOGGLE PLAYBACK] Current isPlaying before toggle:", isPlaying);
+        setIsPlaying(prevIsPlaying => {
+            const newIsPlaying = !prevIsPlaying;
+            console.log(`😺 [TOGGLE PLAYBACK] Toggling isPlaying: ${prevIsPlaying} → ${newIsPlaying}`);
+            return newIsPlaying;
+        });
+        console.log("😺 [TOGGLE PLAYBACK] === togglePlayback end ===");
+    }, [isPlaying]);
 
     const selectTrack = useCallback((track: Track | null, index: number | null, autoPlay: boolean = false, context?: { isPlaylistView?: boolean; playlistId?: string | null }) => {
-        console.log("🎵 [PLAYBACK] === selectTrack START ===");
-        console.log("🎵 [PLAYBACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay, "context:", context);
-        console.log("🎵 [PLAYBACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
-        console.log("🎵 [PLAYBACK] Current isPlaying:", isPlaying);
+        console.log("😺 [SELECT TRACK] === selectTrack START ===");
+        console.log("😺 [SELECT TRACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay, "context:", context);
+        console.log("😺 [SELECT TRACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
+        console.log("😺 [SELECT TRACK] Current isPlaying:", isPlaying);
         
         if (track === null) {
-            console.log("🎵 [PLAYBACK] Setting track to null");
+            console.log("😺 [SELECT TRACK] Setting track to null");
             setCurrentTrack(null);
             setCurrentTrackIndex(null);
             setCurrentPlaylistContext({ isPlaylistView: false, playlistId: null });
@@ -109,7 +116,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
             // Check if this is the same track AND same position (for duplicates)
             const isSameTrackAndIndex = currentTrackId === newTrackId && currentIndex === newIndex;
             
-            console.log("🎵 [PLAYBACK] Comparison:", {
+            console.log("😺 [SELECT TRACK] Comparison:", {
                 currentTrackId,
                 newTrackId,
                 currentIndex,
@@ -119,24 +126,29 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
             });
             
             if (isSameTrackAndIndex && isPlaying && !autoPlay) {
-                console.log("🎵 [PLAYBACK] Same track and index already playing - pausing");
+                console.log("😺 [SELECT TRACK] Same track and index already playing - pausing");
                 setIsPlaying(false);
             } else {
-                console.log("🎵 [PLAYBACK] Setting new track:", {
+                console.log("😺 [SELECT TRACK] Setting new track:", {
                     trackName: track.name,
                     trackId: track.id,
                     index: index,
                     willAutoPlay: autoPlay,
                     context: context
                 });
+                
+                console.log("😺 [SELECT TRACK] About to call setCurrentTrack, setCurrentTrackIndex, setCurrentPlaylistContext");
                 setCurrentTrack(track);
                 setCurrentTrackIndex(index);
                 setCurrentPlaylistContext(context || { isPlaylistView: false, playlistId: null });
+                
+                console.log(`😺 [SELECT TRACK] About to call setIsPlaying(${autoPlay}) - THIS SHOULD TRIGGER AUDIO`);
                 setIsPlaying(autoPlay);
+                console.log(`😺 [SELECT TRACK] setIsPlaying(${autoPlay}) called - if autoPlay=true, audio should start playing`);
             }
         }
         
-        console.log("🎵 [PLAYBACK] === selectTrack END ===");
+        console.log("😺 [SELECT TRACK] === selectTrack END ===");
     }, [currentTrack, currentTrackIndex, isPlaying]);
 
     const nextTrack = useCallback((tracks: Track[], autoPlay: boolean = false) => {

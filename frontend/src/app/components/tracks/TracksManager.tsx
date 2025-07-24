@@ -226,6 +226,10 @@ export default function TracksManager({
   console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
 
   const handlePlayTrack = useCallback((trackId: string) => {
+    console.log('😺 [TRACK PLAY] === handlePlayTrack START ===');
+    console.log('😺 [TRACK PLAY] Called with trackId:', trackId);
+    console.log('😺 [TRACK PLAY] isPlaylistView:', isPlaylistView);
+    console.log('😺 [TRACK PLAY] Available tracks count:', tracks.length);
     console.log('🎵 [HANDLE PLAY TRACK] === START ===');
     console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
     console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
@@ -276,13 +280,7 @@ export default function TracksManager({
     console.log('🎵 [HANDLE PLAY TRACK] === END ===');
   }, [displayTracks, selectTrack, isPlaylistView]);
 
-  const handleMobilePlayPause = useCallback(() => {
-    if (playbackCurrentTrack) {
-      togglePlayback();
-    } else if (displayTracks.length > 0) {
-      handlePlayTrack(displayTracks[0].id.toString());
-    }
-  }, [playbackCurrentTrack, togglePlayback, displayTracks, handlePlayTrack]);
+  // Mobile controls now use togglePlayback directly - no need for wrapper function
 
   // Add refs for WaveSurfer and regions
   const waveSurferRef = useRef(null);
@@ -1358,7 +1356,8 @@ export default function TracksManager({
           </div>
         )}
 
-        {/* Compact Upload and Debug Tools */}
+        {/* Compact Upload and Debug Tools - Hidden on mobile */}
+        {!isMobile && (
         <div className="mb-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -1491,14 +1490,15 @@ export default function TracksManager({
             </div>
           )}
         </div>
+        )}
 
         {/* Header */}
         <div className="mb-1">
           <div className="flex items-center justify-between">
           {getViewTitle()}
             
-            {/* Sorting Mode Toggle and Column Visibility - Only show in playlist view */}
-            {isPlaylistView && (
+            {/* Sorting Mode Toggle and Column Visibility - Only show in playlist view and not on mobile */}
+            {isPlaylistView && !isMobile && (
               <div className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600">Sort by:</span>
@@ -1540,8 +1540,8 @@ export default function TracksManager({
               </div>
             )}
             
-            {/* Column Visibility Control for Library view */}
-            {!isPlaylistView && (
+            {/* Column Visibility Control for Library view - Hidden on mobile */}
+            {!isPlaylistView && !isMobile && (
               <ColumnVisibilityControl
                 columnVisibility={columnVisibility}
                 onToggleColumn={toggleColumn}
@@ -1571,6 +1571,7 @@ export default function TracksManager({
             columnVisibility={columnVisibility}
             onToggleColumn={toggleColumn}
             onResetColumns={resetToDefault}
+            isMobile={isMobile}
           />
         </div>
 
@@ -1678,7 +1679,7 @@ export default function TracksManager({
         <MobileAudioControls
           track={playbackCurrentTrack}
           isPlaying={isPlaying}
-          onPlayPause={handleMobilePlayPause}
+          onPlayPause={togglePlayback}
           onNext={handleNext}
           onPrevious={handlePrevious}
           onSeek={handleSeek}

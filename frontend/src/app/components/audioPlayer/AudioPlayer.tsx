@@ -164,32 +164,93 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Sync internal isPlayingState with external isPlaying prop
   useEffect(() => {
-    console.log('🎵 AudioPlayer: isPlaying prop changed:', isPlaying);
+    console.log('😺 [ISPLAYING EFFECT] === isPlaying prop changed ===');
+    console.log('😺 [ISPLAYING EFFECT] New isPlaying value:', isPlaying);
+    console.log('😺 [ISPLAYING EFFECT] Current isAudioLoaded:', isAudioLoaded);
+    console.log('😺 [ISPLAYING EFFECT] Environment check:', {
+      isElectron: typeof window !== 'undefined' && !!(window as any).electronAPI,
+      isMobileBrowser: typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+      hasWaveSurfer: !!waveSurferRef.current,
+      hasMobileAudio: !!mobileAudioRef.current
+    });
+    
     setIsPlaying(isPlaying);
     
-    // OPTIMIZED: Use WaveSurfer for immediate audio playback
-    if (isPlaying && waveSurferRef.current && isAudioLoaded) {
-      console.log('🎵 AudioPlayer: Auto-starting WaveSurfer audio playback (immediate)');
-      const playPromise = waveSurferRef.current.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(error => {
-          // Ignore AbortError - it's expected when play() is interrupted
-          if (error.name !== 'AbortError') {
-            console.error('❌ AudioPlayer: Error auto-starting WaveSurfer audio:', error);
+    // Detect environment for proper audio handling
+    const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+    const isMobileBrowser = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isPlaying) {
+      console.log('😺 [ISPLAYING EFFECT] isPlaying=true, checking audio playback options...');
+      
+      // Mobile browser: Use HTML5 audio
+      if (isMobileBrowser && mobileAudioRef.current) {
+        console.log('😺 [ISPLAYING EFFECT] Mobile detected - using HTML5 audio for autoplay');
+        console.log('😺 [ISPLAYING EFFECT] Mobile audio src:', mobileAudioRef.current.src);
+        console.log('😺 [ISPLAYING EFFECT] Mobile audio readyState:', mobileAudioRef.current.readyState);
+        
+        try {
+          const playPromise = mobileAudioRef.current.play();
+          console.log('😺 [ISPLAYING EFFECT] Mobile audio play() called, promise:', !!playPromise);
+          
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.then(() => {
+              console.log('😺 [ISPLAYING EFFECT] Mobile audio autoplay successful!');
+            }).catch(error => {
+              console.error('😺 [ISPLAYING EFFECT] Mobile audio autoplay failed:', error);
+            });
           }
-        });
+        } catch (error) {
+          console.error('😺 [ISPLAYING EFFECT] Error starting mobile audio autoplay:', error);
+        }
+      } 
+      // Desktop/Electron: Use WaveSurfer
+      else if (waveSurferRef.current && isAudioLoaded) {
+        console.log('😺 [ISPLAYING EFFECT] Desktop detected - using WaveSurfer for autoplay');
+        const playPromise = waveSurferRef.current.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.then(() => {
+            console.log('😺 [ISPLAYING EFFECT] WaveSurfer autoplay successful!');
+          }).catch(error => {
+            // Ignore AbortError - it's expected when play() is interrupted
+            if (error.name !== 'AbortError') {
+              console.error('😺 [ISPLAYING EFFECT] WaveSurfer autoplay failed:', error);
+            }
+          });
+        }
+      } 
+      // Audio not ready yet
+      else if (!isAudioLoaded) {
+        console.log('😺 [ISPLAYING EFFECT] Audio not loaded yet, setting shouldAutoPlay flag');
+        setShouldAutoPlay(true);
+      } else {
+        console.warn('😺 [ISPLAYING EFFECT] No audio element available for autoplay!');
       }
-    } else if (!isPlaying && waveSurferRef.current) {
-      console.log('🎵 AudioPlayer: Auto-pausing WaveSurfer audio playback');
-      try {
-        waveSurferRef.current.pause();
-      } catch (error) {
-        console.error('❌ AudioPlayer: Error auto-pausing WaveSurfer audio:', error);
+    } else {
+      console.log('😺 [ISPLAYING EFFECT] isPlaying=false, pausing audio...');
+      
+      // Pause mobile audio
+      if (isMobileBrowser && mobileAudioRef.current) {
+        console.log('😺 [ISPLAYING EFFECT] Pausing mobile audio');
+        try {
+          mobileAudioRef.current.pause();
+        } catch (error) {
+          console.error('😺 [ISPLAYING EFFECT] Error pausing mobile audio:', error);
+        }
       }
-    } else if (isPlaying && !isAudioLoaded) {
-      console.log('🎵 AudioPlayer: Audio not loaded yet, setting shouldAutoPlay flag');
-      setShouldAutoPlay(true);
+      
+      // Pause WaveSurfer
+      if (waveSurferRef.current) {
+        console.log('😺 [ISPLAYING EFFECT] Pausing WaveSurfer audio');
+        try {
+          waveSurferRef.current.pause();
+        } catch (error) {
+          console.error('😺 [ISPLAYING EFFECT] Error pausing WaveSurfer audio:', error);
+        }
+      }
     }
+    
+    console.log('😺 [ISPLAYING EFFECT] === isPlaying effect completed ===');
   }, [isPlaying, isAudioLoaded]);
 
   // Get markers from comments context
@@ -820,24 +881,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Handle play/pause - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
   const handlePlayPause = useCallback(() => {
-    // Detect environment
+    console.log('😺 [MAIN AUDIO CONTROLS] handlePlayPause called in AudioPlayer');
+    
+    // NOTE: Let's try calling onPlayPause AFTER audio control to avoid conflicts
+    console.log('😺 [MAIN AUDIO CONTROLS] First handling low-level audio control, then calling onPlayPause prop');
+    
+    // Detect environment for audio control
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     const isMobileBrowser = !isElectron;
     
-    console.log('🎵 AudioPlayer: Play/Pause clicked - Environment:', { 
+    console.log('😺 [AUDIO STATE] Current audio state when handlePlayPause called:', { 
       isElectron, 
       isMobileBrowser, 
       hasMobileAudioRef: !!mobileAudioRef.current,
+      hasWaveSurferRef: !!waveSurferRef.current,
       audioUrl: audioUrl,
-      isPlayingState: isPlayingState
+      isPlayingState: isPlayingState,
+      isAudioLoaded: isAudioLoaded,
+      isReady: isReady
     });
     
     if (isMobileBrowser) {
       // Mobile: Use HTML5 audio for playback, WaveSurfer for visualization only
+      console.log('😺 [MOBILE AUDIO] Attempting mobile audio control');
       if (mobileAudioRef.current) {
+        console.log('😺 [MOBILE AUDIO] Mobile audio element exists');
         try {
           if (isPlayingState) {
-            console.log('🎵 AudioPlayer: Pausing mobile audio');
+            console.log('😺 [MOBILE AUDIO] Pausing mobile audio (isPlayingState=true)');
             mobileAudioRef.current.pause();
             // Also pause WaveSurfer visualization if it exists
             if (waveSurferRef.current) {
@@ -845,8 +916,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             }
             setIsPlaying(false);
           } else {
-            console.log('🎵 AudioPlayer: Playing mobile audio');
+            console.log('😺 [MOBILE AUDIO] Attempting to play mobile audio (isPlayingState=false)');
+            console.log('😺 [MOBILE AUDIO] Mobile audio src:', mobileAudioRef.current.src);
+            console.log('😺 [MOBILE AUDIO] Mobile audio readyState:', mobileAudioRef.current.readyState);
             const playPromise = mobileAudioRef.current.play();
+            console.log('😺 [MOBILE AUDIO] Play promise created:', !!playPromise);
             if (playPromise) {
               playPromise
                 .then(() => {
@@ -871,29 +945,33 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           console.error('❌ AudioPlayer: Error during mobile audio play/pause:', error);
         }
       } else {
-        console.error('❌ AudioPlayer: Mobile audio element not available');
+        console.error('😺 [MOBILE AUDIO] Mobile audio element not available!');
       }
       return;
     }
     
     // Desktop: Use WaveSurfer
+    console.log('😺 [DESKTOP AUDIO] Attempting desktop WaveSurfer control');
     if (!waveSurferRef.current) {
-      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for play/pause');
+      console.warn('😺 [DESKTOP AUDIO] No WaveSurfer instance available for play/pause');
       return;
     }
 
     if (!isAudioLoaded) {
-      console.warn('🎵 AudioPlayer: WaveSurfer audio not yet loaded, cannot play/pause');
+      console.warn('😺 [DESKTOP AUDIO] WaveSurfer audio not yet loaded, cannot play/pause');
+      console.warn('😺 [DESKTOP AUDIO] This might be why audio doesn\'t start on track load!');
         return;
       }
       
     try {
+      console.log('😺 [DESKTOP AUDIO] WaveSurfer ready, proceeding with play/pause');
       if (isPlayingState) {
-        console.log('🎵 AudioPlayer: Pausing WaveSurfer audio');
+        console.log('😺 [DESKTOP AUDIO] Pausing WaveSurfer audio (isPlayingState=true)');
         waveSurferRef.current.pause();
             } else {
-        console.log('🎵 AudioPlayer: Playing WaveSurfer audio');
+        console.log('😺 [DESKTOP AUDIO] Playing WaveSurfer audio (isPlayingState=false)');
         const playPromise = waveSurferRef.current.play();
+        console.log('😺 [DESKTOP AUDIO] WaveSurfer play promise created:', !!playPromise);
         if (playPromise && typeof playPromise.catch === 'function') {
           playPromise.catch(error => {
             // Ignore AbortError - it's expected when play() is interrupted
@@ -906,7 +984,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } catch (error) {
       console.error('❌ AudioPlayer: Error during WaveSurfer audio play/pause:', error);
     }
-  }, [isPlayingState, isAudioLoaded]);
+    
+    // Finally, call the onPlayPause prop to sync with higher-level state
+    console.log('😺 [MAIN AUDIO CONTROLS] About to call onPlayPause prop after audio control');
+    onPlayPause();
+    console.log('😺 [MAIN AUDIO CONTROLS] onPlayPause prop called successfully');
+  }, [isPlayingState, isAudioLoaded, onPlayPause]);
 
   // Handle seek - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
   const handleSeek = useCallback((time: number) => {

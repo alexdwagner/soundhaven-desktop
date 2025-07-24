@@ -23,6 +23,7 @@ interface TrackItemProps {
   isDragEnabled?: boolean;
   onContextMenu?: (trackId: string, x: number, y: number) => void;
   columnVisibility: ColumnVisibility;
+  isMobile?: boolean;
 }
 
 const TrackItem: React.FC<TrackItemProps> = ({
@@ -39,9 +40,11 @@ const TrackItem: React.FC<TrackItemProps> = ({
   isDragEnabled = true,
   onContextMenu,
   columnVisibility,
+  isMobile = false,
 }) => {
   const { dragState, startDrag, endDrag } = useDrag();
   const [isBeingDragged, setIsBeingDragged] = useState(false);
+  // isMobile is now passed as a prop from TracksTable
 
   // Always call useSortable hook (required by React rules)
   const {
@@ -66,7 +69,11 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   // Wrap @dnd-kit listeners with our logging while preserving their functionality
   const dragListeners = useMemo(() => {
-    if (!listeners || !isDragEnabled) return {};
+    // Disable drag on mobile
+    if (!listeners || !isDragEnabled || isMobile) {
+      console.log(`😺 [DRAG DISABLED] ${track.name} - Drag disabled (isMobile: ${isMobile}, isDragEnabled: ${isDragEnabled})`);
+      return {};
+    }
     
     console.log(`🔧 [TRACK ITEM] ${track.name} - Original listeners:`, Object.keys(listeners));
     console.log(`🔧 [TRACK ITEM] ${track.name} - Using all listeners for @dnd-kit drag detection (${isPlaylistView ? 'playlist' : 'library'} view)`);
@@ -78,6 +85,8 @@ const TrackItem: React.FC<TrackItemProps> = ({
       console.log(`👉 [TRACK ITEM] ${track.name} - Found onPointerDown, wrapping it`);
       const originalOnPointerDown = wrappedListeners.onPointerDown;
       wrappedListeners.onPointerDown = (e: any) => {
+        console.log(`😺 [DRAG INTERCEPT] ${track.name} - onPointerDown triggered BEFORE onClick`);
+        console.log(`😺 [DRAG INTERCEPT] ${track.name} - This might prevent onClick from firing`);
         console.log(`👉 [TRACK POINTER] ${track.name} - onPointerDown triggered`);
         console.log(`🖱️ [TRACK ITEM] ${track.name} - onPointerDown triggered!`, e);
         console.log(`👉 [TRACK POINTER] ${track.name} - calling @dnd-kit onPointerDown`);
@@ -99,7 +108,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     
     console.log(`👉 [TRACK ITEM] ${track.name} - Final wrapped listeners:`, Object.keys(wrappedListeners));
     return wrappedListeners;
-  }, [listeners, isDragEnabled, track.name, isPlaylistView]);
+  }, [listeners, isDragEnabled, track.name, isPlaylistView, isMobile]);
 
   const { isPlaying, currentTrack, currentTrackIndex: playbackCurrentTrackIndex, currentPlaylistContext } = usePlayback();
 
@@ -146,33 +155,65 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   // Track selection with proper event handling
   const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    console.log('😺 [TRACK CLICK] handleClick function called for:', track.name);
     
-    console.log('🐥 [TRACK ITEM] Click event:', {
-      trackId: track.id,
-      trackName: track.name,
-      ctrlKey: e.ctrlKey,
-      metaKey: e.metaKey,
-      shiftKey: e.shiftKey,
-      selectedTrackIds: selectedTrackIds
-    });
-    
-    // Call the selection handler
-    onSelectTrack(track.id, e);
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('😺 [TRACK CLICK] Event prevented and stopped');
+      console.log('🐥 [TRACK ITEM] Click event:', {
+        trackId: track.id,
+        trackName: track.name,
+        isMobile,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        selectedTrackIds: selectedTrackIds
+      });
+      
+      // Both mobile and desktop use single-click for selection only
+      console.log('😺 [TRACK CLICK] Calling onSelectTrack for selection');
+      try {
+        onSelectTrack(track.id, e);
+        console.log('😺 [TRACK CLICK] onSelectTrack called successfully');
+      } catch (error) {
+        console.error('😺 [TRACK CLICK] Error calling onSelectTrack:', error);
+      }
+    } catch (error) {
+      console.error('😺 [TRACK CLICK] Error in handleClick:', error);
+    }
   };
 
-  // Double-click to play track
+  // Double-click to play track (both mobile and desktop)
   const handleDoubleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    console.log('😺 [TRACK DOUBLE-CLICK] ===== DOUBLE-CLICK HANDLER TRIGGERED =====');
     
-    console.log('🐥 [TRACK ITEM] Double-click event:', {
-      trackId: track.id,
-      trackName: track.name
-    });
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('😺 [TRACK DOUBLE-CLICK] Event prevented and stopped');
+      console.log('😺 [TRACK DOUBLE-CLICK] Track double-clicked:', {
+        trackId: track.id,
+        trackName: track.name,
+        isMobile,
+        isDragging: isDragging
+      });
+      
+      // Handle double-click on both mobile and desktop
+      console.log('😺 [TRACK DOUBLE-CLICK] About to call onPlayTrack prop with trackId:', track.id);
+      try {
+        onPlayTrack(track.id);
+        console.log('😺 [TRACK DOUBLE-CLICK] onPlayTrack prop called successfully');
+      } catch (error) {
+        console.error('😺 [TRACK DOUBLE-CLICK] Error calling onPlayTrack:', error);
+      }
+    } catch (error) {
+      console.error('😺 [TRACK DOUBLE-CLICK] Error in handleDoubleClick:', error);
+    }
     
-    onPlayTrack(track.id);
+    console.log('😺 [TRACK DOUBLE-CLICK] ===== DOUBLE-CLICK HANDLER COMPLETED =====');
   };
 
   // Context menu handler
@@ -252,9 +293,28 @@ const TrackItem: React.FC<TrackItemProps> = ({
       {...attributes}
       {...dragListeners}
       onClick={(e) => {
+        console.log('😺 [TRACK ITEM] ===== onClick HANDLER TRIGGERED =====');
+        console.log('😺 [TRACK ITEM] onClick handler triggered for:', track.name);
+        console.log('😺 [TRACK ITEM] Event details:', {
+          type: e.type,
+          button: e.button,
+          detail: e.detail,
+          isTrusted: e.isTrusted,
+          target: e.target,
+          defaultPrevented: e.defaultPrevented,
+          propagationStopped: e.isPropagationStopped()
+        });
+        console.log('😺 [TRACK ITEM] isDragging state:', isDragging);
+        console.log('😺 [TRACK ITEM] About to call handleClick...');
         console.log('👉 [TRACK CLICK] Track clicked:', track.name);
         console.log('🐥 [TRACK ITEM] Track clicked:', track.name);
-        handleClick(e);
+        try {
+          handleClick(e);
+          console.log('😺 [TRACK ITEM] handleClick completed successfully');
+        } catch (error) {
+          console.error('😺 [TRACK ITEM] Error in onClick handler:', error);
+        }
+        console.log('😺 [TRACK ITEM] ===== onClick HANDLER COMPLETED =====');
       }}
 
       onDoubleClick={handleDoubleClick}

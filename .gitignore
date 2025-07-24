@@ -60,3 +60,7 @@ build/
 
 # Planning and marketing docs
 docs_internal/
+
+# claude config
+
+CLAUDE.md

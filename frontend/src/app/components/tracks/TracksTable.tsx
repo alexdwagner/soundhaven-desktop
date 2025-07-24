@@ -29,6 +29,7 @@ interface TracksTableProps {
   columnVisibility?: ColumnVisibility;
   onToggleColumn?: (column: keyof ColumnVisibility) => void;
   onResetColumns?: () => void;
+  isMobile?: boolean;
 }
 
 const TracksTable: React.FC<TracksTableProps> = ({
@@ -48,6 +49,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
   columnVisibility: propColumnVisibility,
   onToggleColumn,
   onResetColumns,
+  isMobile = false,
 }) => {
   // Column visibility hook (fallback if not provided via props)
   const { columnVisibility: localColumnVisibility, toggleColumn: localToggleColumn, resetToDefault } = useColumnVisibility();
@@ -177,6 +179,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
             isDragEnabled={isDragEnabled}
             onContextMenu={onContextMenu}
             columnVisibility={columnVisibility}
+            isMobile={isMobile}
           />
         );
       })}
