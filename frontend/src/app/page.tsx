@@ -8,6 +8,7 @@ import AuthModal from "./components/modals/AuthModal";
 import SettingsModal from "./components/modals/SettingsModal";
 import { apiService } from '../services/electronApiService';
 import { useTracks } from "./providers/TracksProvider";
+import { useEnvironment } from "./hooks/useEnvironment";
 import { Track, Playlist } from "../../../shared/types";
 
 // import { useAuth } from "../hooks/UseAuth";
@@ -38,6 +39,9 @@ export default function HomePage() {
   
   // Get tracks from context
   const { tracks, isLoading, error, fetchTracks } = useTracks();
+  
+  // Environment detection
+  const { isMobile } = useEnvironment();
   
   // DISABLED - This was causing infinite loop due to fetchTracks dependency
   // useEffect(() => {
@@ -116,7 +120,11 @@ export default function HomePage() {
         onCommentSelect={handleCommentSelect}
       >
         <div className="flex items-center">
-          <h1 className="text-xl font-bold text-gray-900">SoundHaven</h1>
+          {isMobile ? (
+            <h1 className="text-2xl">🌊</h1>
+          ) : (
+            <h1 className="text-xl font-bold text-gray-900">SoundHaven</h1>
+          )}
         </div>
       </NavBar>
 

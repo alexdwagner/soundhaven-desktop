@@ -1295,6 +1295,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           onTimeUpdate={(e) => {
             const target = e.target as HTMLAudioElement;
             setCurrentTime(target.currentTime);
+            // Sync WaveSurfer visualization with mobile audio progress
+            if (waveSurferRef.current && target.duration > 0) {
+              const progress = target.currentTime / target.duration;
+              waveSurferRef.current.seekTo(progress);
+            }
           }}
           onDurationChange={(e) => {
             const target = e.target as HTMLAudioElement;

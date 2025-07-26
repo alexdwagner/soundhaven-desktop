@@ -10,6 +10,7 @@ import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 import { useTracks } from "@/app/providers/TracksProvider";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 import { useEnvironment } from '@/app/hooks/useEnvironment';
+import MobileSearch from '../search/MobileSearch';
 
 interface MainContentProps {
   searchResults?: {
@@ -30,10 +31,14 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const [activeTrack, setActiveTrack] = useState<Track | null>(null);
   const [dragTrackCount, setDragTrackCount] = useState(1);
   const [tracksManagerReorderHandler, setTracksManagerReorderHandler] = useState<((startIndex: number, endIndex: number) => void) | null>(null);
+  const [tracksManagerSelectHandler, setTracksManagerSelectHandler] = useState<((trackId: string) => void) | null>(null);
+  const [tracksManagerPlayHandler, setTracksManagerPlayHandler] = useState<((trackId: string) => void) | null>(null);
   const [playlistSidebarDragHandler, setPlaylistSidebarDragHandler] = useState<((event: any) => void) | null>(null);
   
   // Mobile navigation state
   const [mobileView, setMobileView] = useState<MobileView>('library');
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [mobileSearchQuery, setMobileSearchQuery] = useState("");
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +55,16 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const handleRegisterPlaylistDragHandler = useCallback((handler: (event: any) => void) => {
     console.log('🔧 [MAIN CONTENT] Registering playlist drag handler:', typeof handler);
     setPlaylistSidebarDragHandler(handler); // Remove function wrapper
+  }, []);
+
+  const handleRegisterSelectHandler = useCallback((handler: (trackId: string) => void) => {
+    console.log('🔧 [MAIN CONTENT] Registering select handler:', typeof handler);
+    setTracksManagerSelectHandler(() => handler);
+  }, []);
+
+  const handleRegisterPlayHandler = useCallback((handler: (trackId: string) => void) => {
+    console.log('🔧 [MAIN CONTENT] Registering play handler:', typeof handler);
+    setTracksManagerPlayHandler(() => handler);
   }, []);
   
   // Use playlists provider for cross-playlist operations and track reordering
@@ -345,6 +360,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
         }}
       >
         {isMobile ? (
+          console.log('🔍 [MOBILE SEARCH] Rendering mobile layout with search field'),
           // Mobile Layout with Swipe Navigation
           <div 
             ref={containerRef}
@@ -397,6 +413,32 @@ export default function MainContent({ searchResults }: MainContentProps) {
                 Swipe to navigate
               </div>
             </div>
+            
+            {/* Mobile Search Field - positioned directly below navigation */}
+            <div className="bg-white border-b border-gray-200 px-4 py-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={mobileSearchQuery}
+                  onChange={(e) => setMobileSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setShowMobileSearch(true);
+                    }
+                  }}
+                  onFocus={() => setShowMobileSearch(true)}
+                  placeholder="Search tracks, artists, albums, playlists, tags, comments..."
+                  className="w-full px-4 py-2 pl-10 pr-4 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                <svg 
+                  className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" 
+                  fill="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+              </div>
+            </div>
 
             {/* Mobile Content Area */}
             <div className="flex-1 overflow-hidden">
@@ -420,6 +462,8 @@ export default function MainContent({ searchResults }: MainContentProps) {
                     selectedPlaylistId={selectedPlaylistId}
                     selectedPlaylistName={selectedPlaylistName}
                     onRegisterReorderHandler={handleRegisterReorderHandler}
+                    onRegisterSelectHandler={handleRegisterSelectHandler}
+                    onRegisterPlayHandler={handleRegisterPlayHandler}
                     searchResults={searchResults}
                   />
                 </div>
@@ -454,6 +498,8 @@ export default function MainContent({ searchResults }: MainContentProps) {
                 selectedPlaylistId={selectedPlaylistId}
                 selectedPlaylistName={selectedPlaylistName}
                 onRegisterReorderHandler={handleRegisterReorderHandler}
+                onRegisterSelectHandler={handleRegisterSelectHandler}
+                onRegisterPlayHandler={handleRegisterPlayHandler}
                 searchResults={searchResults}
               />
             </div>
@@ -493,6 +539,57 @@ export default function MainContent({ searchResults }: MainContentProps) {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Mobile Search Overlay */}
+      {isMobile && showMobileSearch && (
+        <MobileSearch
+          initialQuery={mobileSearchQuery}
+          onClose={() => {
+            setShowMobileSearch(false);
+            setMobileSearchQuery("");
+          }}
+          onTrackSelect={(trackId) => {
+            console.log('🔍 [MOBILE SEARCH] Track selected:', trackId);
+            // Switch to library view FIRST so TracksManager uses the correct track context
+            setMobileView('library');
+            // Then call the TracksManager's select handler to highlight the track
+            setTimeout(() => {
+              if (tracksManagerSelectHandler) {
+                console.log('🔍 [MOBILE SEARCH] Calling select handler for track:', trackId);
+                tracksManagerSelectHandler(trackId);
+              } else {
+                console.warn('🔍 [MOBILE SEARCH] No select handler available');
+              }
+            }, 50); // Small delay to ensure view switch completes
+            // Then close search
+            setShowMobileSearch(false);
+            setMobileSearchQuery("");
+          }}
+          onTrackPlay={(trackId) => {
+            console.log('🔍 [MOBILE SEARCH] Track play requested:', trackId);
+            // Call the TracksManager's play handler FIRST before closing search
+            if (tracksManagerPlayHandler) {
+              console.log('🔍 [MOBILE SEARCH] Calling play handler for track:', trackId);
+              tracksManagerPlayHandler(trackId);
+            } else {
+              console.warn('🔍 [MOBILE SEARCH] No play handler available');
+            }
+            // Then close search after a small delay to allow handler to complete
+            setTimeout(() => {
+              setShowMobileSearch(false);
+              setMobileSearchQuery("");
+            }, 100);
+          }}
+          onPlaylistSelect={(playlistId) => {
+            // Switch to playlists view and select the playlist
+            setMobileView('playlists');
+            setSelectedPlaylistId(playlistId);
+            setShowMobileSearch(false);
+            setMobileSearchQuery("");
+            console.log('Selected playlist:', playlistId);
+          }}
+        />
+      )}
     </main>
   );
 }

@@ -30,6 +30,8 @@ interface TracksManagerProps {
   selectedPlaylistId?: string | null;
   selectedPlaylistName?: string | null;
   onRegisterReorderHandler?: (handler: (startIndex: number, endIndex: number) => void) => void;
+  onRegisterSelectHandler?: (handler: (trackId: string) => void) => void;
+  onRegisterPlayHandler?: (handler: (trackId: string) => void) => void;
   searchResults?: {
     tracks: Track[];
     playlists: any[];
@@ -42,6 +44,8 @@ export default function TracksManager({
   selectedPlaylistId,
   selectedPlaylistName,
   onRegisterReorderHandler,
+  onRegisterSelectHandler,
+  onRegisterPlayHandler,
   searchResults
 }: TracksManagerProps) {
   console.log('🎯 TracksManager component rendering...');
@@ -732,6 +736,22 @@ export default function TracksManager({
       console.log('❌ Track not found in displayTracks array');
     }
   }, [displayTracks, setCurrentTrackIndex, selectTrack, selectedTrackIds, selectionAnchor, isPlaylistView]);
+
+  // Register the select handler with MainContent once
+  useEffect(() => {
+    if (onRegisterSelectHandler) {
+      console.log('🔧 [TRACKS MANAGER] Registering select handler with MainContent');
+      onRegisterSelectHandler(handleSelectTrack);
+    }
+  }, [onRegisterSelectHandler, handleSelectTrack]);
+
+  // Register the play handler with MainContent once
+  useEffect(() => {
+    if (onRegisterPlayHandler) {
+      console.log('🔧 [TRACKS MANAGER] Registering play handler with MainContent');
+      onRegisterPlayHandler(handlePlayTrack);
+    }
+  }, [onRegisterPlayHandler, handlePlayTrack]);
 
   // Keyboard shortcuts
   useEffect(() => {
