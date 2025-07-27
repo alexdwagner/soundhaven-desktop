@@ -2,9 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import TracksTable, { SortColumn, SortDirection } from "./TracksTable";
-import AudioPlayer from "../audioPlayer/AudioPlayer";
 import AlbumArtPanel from "../audioPlayer/AlbumArtPanel";
-import MobileAudioControls from "../audioPlayer/MobileAudioControls";
 import CommentsPanel from "../comments/CommentsPanel";
 import DeleteConfirmationModal from "../modals/DeleteConfirmationModal";
 import TrackContextMenu from "./TrackContextMenu";
@@ -172,6 +170,10 @@ export default function TracksManager({
   // Environment detection for mobile
   const { isMobile } = useEnvironment();
   
+  // Audio player refs for waveform and regions
+  const waveSurferRef = useRef<any>(null);
+  const regionsRef = useRef<any>(null);
+  
   console.log('📱 [TracksManager] Mobile detection:', { isMobile });
 
   // Apply sorting to tracks - only sort if not in playlist manual mode
@@ -286,9 +288,7 @@ export default function TracksManager({
 
   // Mobile controls now use togglePlayback directly - no need for wrapper function
 
-  // Add refs for WaveSurfer and regions
-  const waveSurferRef = useRef(null);
-  const regionsRef = useRef(null);
+  // Note: waveSurferRef and regionsRef already defined above
   const lastReorderRef = useRef<{ startIndex: number; endIndex: number; timestamp: number } | null>(null);
 
   // Add comments functionality
@@ -1295,26 +1295,7 @@ export default function TracksManager({
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Audio player with waveform - always at top */}
-      <div className="border-b bg-white p-2">
-        <AudioPlayer 
-          track={playbackCurrentTrack}
-          isPlaying={isPlaying}
-          onPlayPause={togglePlayback}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-          onSeek={handleSeek}
-          onVolumeChange={setVolume}
-          onPlaybackSpeedChange={setPlaybackSpeed}
-          onAddComment={handleAddComment}
-          volume={volume}
-          playbackSpeed={playbackSpeed}
-          waveSurferRef={waveSurferRef}
-          regionsRef={regionsRef}
-        />
-      </div>
-
-      {/* Main content area */}
+      {/* Main content area - audio player moved to MainContent for persistent playback */}
       <div 
         className={`flex-1 overflow-auto p-2 transition-colors ${
           isDragOver ? 'bg-blue-50 border-2 border-dashed border-blue-400' : ''
@@ -1694,21 +1675,7 @@ export default function TracksManager({
         </div>
       )}
 
-      {/* Mobile Audio Controls - Fixed at bottom for mobile devices */}
-      {isMobile && (
-        <MobileAudioControls
-          track={playbackCurrentTrack}
-          isPlaying={isPlaying}
-          onPlayPause={togglePlayback}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-          onSeek={handleSeek}
-          onVolumeChange={setVolume}
-          onPlaybackSpeedChange={setPlaybackSpeed}
-          volume={volume}
-          playbackSpeed={playbackSpeed}
-        />
-      )}
+      {/* Mobile Audio Controls moved to MainContent for persistent playback */}
 
     </div>
   );

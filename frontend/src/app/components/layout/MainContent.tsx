@@ -5,9 +5,12 @@ import { DndContext, closestCenter, PointerSensor, MouseSensor, useSensor, useSe
 import PlaylistSidebar from "../playlists/PlaylistSidebar";
 import TracksManager from "../tracks/TracksManager";
 import TrackItem from "../tracks/TrackItem";
+import AudioPlayer from "../audioPlayer/AudioPlayer";
+import MobileAudioControls from "../audioPlayer/MobileAudioControls";
 import { Track, Playlist } from "../../../../../shared/types";
 import { usePlaylists } from "@/app/providers/PlaylistsProvider";
 import { useTracks } from "@/app/providers/TracksProvider";
+import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 import { useEnvironment } from '@/app/hooks/useEnvironment';
 import MobileSearch from '../search/MobileSearch';
@@ -45,6 +48,183 @@ export default function MainContent({ searchResults }: MainContentProps) {
   
   // Environment detection
   const { isMobile } = useEnvironment();
+  
+  // Audio playback state - moved from TracksManager for persistent playback
+  const {
+    isPlaying,
+    currentTrack: playbackCurrentTrack,
+    currentTrackIndex: playbackCurrentTrackIndex,
+    currentPlaylistContext,
+    togglePlayback,
+    selectTrack,
+    nextTrack,
+    previousTrack,
+    volume,
+    setVolume,
+    playbackSpeed,
+    setPlaybackSpeed
+  } = usePlayback();
+  
+  // Audio player refs for waveform and regions - persistent across view switches
+  const waveSurferRef = useRef<any>(null);
+  const regionsRef = useRef<any>(null);
+  
+  // Persistent mobile audio element - survives view switches
+  const persistentMobileAudioRef = useRef<HTMLAudioElement>(null);
+  
+  // Get tracks from context for playback controls
+  const { tracks: contextTracks } = useTracks();
+  
+  // Audio control handlers - moved from TracksManager
+  const handleSeek = (time: number) => {
+    // This will be handled by the AudioPlayer component
+    // console.log('Seeking to:', time);
+  };
+  
+  const handleNext = () => {
+    console.log('🎵 [MAIN CONTENT] Next track requested');
+    nextTrack(contextTracks, true); // autoPlay = true
+  };
+  
+  const handlePrevious = () => {
+    console.log('🎵 [MAIN CONTENT] Previous track requested');
+    previousTrack(contextTracks, true); // autoPlay = true
+  };
+  
+  const handleAddComment = async (time: number) => {
+    // Comments functionality - TODO: implement if needed
+    console.log('💬 [MAIN CONTENT] Add comment at time:', time);
+  };
+  
+  // Persistent mobile audio management
+  useEffect(() => {
+    if (!isMobile || !persistentMobileAudioRef.current || !playbackCurrentTrack) return;
+    
+    const audio = persistentMobileAudioRef.current;
+    console.log('🎵 [PERSISTENT AUDIO] Setting up persistent audio for track:', playbackCurrentTrack.name);
+    console.log('🎵 [PERSISTENT AUDIO] Track data:', {
+      id: playbackCurrentTrack.id,
+      streamingUrl: playbackCurrentTrack.streamingUrl,
+      filePath: playbackCurrentTrack.filePath
+    });
+    
+    // Set up audio source - always use correct API endpoint for persistent mobile audio
+    const audioUrl = `/api/audio/${playbackCurrentTrack.id}`;
+    const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${window.location.origin}${audioUrl}`;
+    
+    if (audio.src !== fullAudioUrl) {
+      console.log('🎵 [PERSISTENT AUDIO] Loading new track:', fullAudioUrl);
+      audio.src = fullAudioUrl;
+      audio.load();
+    }
+    
+    // Set volume and playback speed
+    audio.volume = volume;
+    audio.playbackRate = playbackSpeed;
+    
+    // Sync playback state - only try to play if audio is ready
+    if (isPlaying && audio.paused) {
+      console.log('🎵 [PERSISTENT AUDIO] Starting playback', {
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        src: audio.src
+      });
+      
+      if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        audio.play().catch(error => {
+          console.error('🎵 [PERSISTENT AUDIO] Play failed:', error);
+        });
+      } else {
+        console.log('🎵 [PERSISTENT AUDIO] Audio not ready yet, waiting for canplaythrough');
+        // Set up one-time listener for when audio is ready
+        const playWhenReady = () => {
+          if (isPlaying && audio.paused) {
+            audio.play().catch(error => {
+              console.error('🎵 [PERSISTENT AUDIO] Delayed play failed:', error);
+            });
+          }
+          audio.removeEventListener('canplaythrough', playWhenReady);
+        };
+        audio.addEventListener('canplaythrough', playWhenReady);
+      }
+    } else if (!isPlaying && !audio.paused) {
+      console.log('🎵 [PERSISTENT AUDIO] Pausing playback');
+      audio.pause();
+    }
+    
+  }, [playbackCurrentTrack, isPlaying, volume, playbackSpeed, isMobile]);
+  
+  // Handle persistent audio events
+  useEffect(() => {
+    if (!isMobile || !persistentMobileAudioRef.current) return;
+    
+    const audio = persistentMobileAudioRef.current;
+    
+    const handleEnded = () => {
+      console.log('🎵 [PERSISTENT AUDIO] Track ended');
+      handleNext();
+    };
+    
+    const handleCanPlayThrough = () => {
+      console.log('🎵 [PERSISTENT AUDIO] Audio can play through');
+    };
+    
+    const handleLoadedData = () => {
+      console.log('🎵 [PERSISTENT AUDIO] Audio data loaded');
+    };
+    
+    const handleError = (e: Event) => {
+      const audio = e.target as HTMLAudioElement;
+      console.error('🎵 [PERSISTENT AUDIO] Audio error:', {
+        error: e,
+        audioSrc: audio.src,
+        audioError: audio.error,
+        networkState: audio.networkState,
+        readyState: audio.readyState
+      });
+    };
+    
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('canplaythrough', handleCanPlayThrough);
+    audio.addEventListener('loadeddata', handleLoadedData);
+    audio.addEventListener('error', handleError);
+    
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('canplaythrough', handleCanPlayThrough);
+      audio.removeEventListener('loadeddata', handleLoadedData);
+      audio.removeEventListener('error', handleError);
+    };
+  }, [handleNext, isMobile]);
+  
+  // Sync WaveSurfer visualization with persistent mobile audio position
+  useEffect(() => {
+    if (!isMobile || !persistentMobileAudioRef.current || !waveSurferRef.current) return;
+    
+    const audio = persistentMobileAudioRef.current;
+    const waveSurfer = waveSurferRef.current;
+    
+    const syncWaveformPosition = () => {
+      if (audio.duration > 0 && waveSurfer.getDuration && waveSurfer.getDuration() > 0) {
+        const progress = audio.currentTime / audio.duration;
+        try {
+          waveSurfer.seekTo(progress);
+        } catch (error) {
+          // Ignore seek errors during switching
+        }
+      }
+    };
+    
+    // Initial sync when switching to library view
+    syncWaveformPosition();
+    
+    // Sync during playback
+    const syncInterval = setInterval(syncWaveformPosition, 100);
+    
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [mobileView, playbackCurrentTrack, isMobile]);
   
   // Debug handler registration
   const handleRegisterReorderHandler = useCallback((handler: (startIndex: number, endIndex: number) => void) => {
@@ -369,6 +549,12 @@ export default function MainContent({ searchResults }: MainContentProps) {
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           >
+            {/* Persistent Mobile Audio Element - Hidden */}
+            <audio 
+              ref={persistentMobileAudioRef}
+              preload="metadata"
+              style={{ display: 'none' }}
+            />
             {/* Mobile Navigation Header */}
             <div className="flex items-center justify-center bg-white border-b border-gray-200 px-4 py-3 relative">
               <div className="flex space-x-8">
@@ -456,16 +642,40 @@ export default function MainContent({ searchResults }: MainContentProps) {
 
               {/* Library View */}
               {mobileView === 'library' && (
-                <div className="h-full overflow-hidden">
-                  <TracksManager 
-                    selectedPlaylistTracks={selectedPlaylistTracks}
-                    selectedPlaylistId={selectedPlaylistId}
-                    selectedPlaylistName={selectedPlaylistName}
-                    onRegisterReorderHandler={handleRegisterReorderHandler}
-                    onRegisterSelectHandler={handleRegisterSelectHandler}
-                    onRegisterPlayHandler={handleRegisterPlayHandler}
-                    searchResults={searchResults}
-                  />
+                <div className="h-full overflow-hidden flex flex-col">
+                  {/* Audio Player - Fixed to Library View */}
+                  {playbackCurrentTrack && (
+                    <div className="border-b bg-white p-2 flex-shrink-0">
+                      <AudioPlayer 
+                        track={playbackCurrentTrack}
+                        isPlaying={isPlaying}
+                        onPlayPause={togglePlayback}
+                        onNext={handleNext}
+                        onPrevious={handlePrevious}
+                        onSeek={handleSeek}
+                        onVolumeChange={setVolume}
+                        onPlaybackSpeedChange={setPlaybackSpeed}
+                        onAddComment={handleAddComment}
+                        volume={volume}
+                        playbackSpeed={playbackSpeed}
+                        waveSurferRef={waveSurferRef}
+                        regionsRef={regionsRef}
+                        externalMobileAudioRef={persistentMobileAudioRef}
+                      />
+                    </div>
+                  )}
+                  {/* Tracks Manager Content */}
+                  <div className="flex-1 overflow-hidden">
+                    <TracksManager 
+                      selectedPlaylistTracks={selectedPlaylistTracks}
+                      selectedPlaylistId={selectedPlaylistId}
+                      selectedPlaylistName={selectedPlaylistName}
+                      onRegisterReorderHandler={handleRegisterReorderHandler}
+                      onRegisterSelectHandler={handleRegisterSelectHandler}
+                      onRegisterPlayHandler={handleRegisterPlayHandler}
+                      searchResults={searchResults}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -480,6 +690,22 @@ export default function MainContent({ searchResults }: MainContentProps) {
                 </div>
               )}
             </div>
+
+            {/* Persistent Mobile Audio Controls - Fixed at bottom */}
+            {playbackCurrentTrack && (
+              <MobileAudioControls
+                track={playbackCurrentTrack}
+                isPlaying={isPlaying}
+                onPlayPause={togglePlayback}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+                onSeek={handleSeek}
+                onVolumeChange={setVolume}
+                onPlaybackSpeedChange={setPlaybackSpeed}
+                volume={volume}
+                playbackSpeed={playbackSpeed}
+              />
+            )}
           </div>
         ) : (
           // Desktop Layout (unchanged)

@@ -89,6 +89,7 @@ interface AudioPlayerProps {
   playbackSpeed: number;
   waveSurferRef?: React.MutableRefObject<WaveSurferWithRegions | null>;
   regionsRef?: React.MutableRefObject<any>;
+  externalMobileAudioRef?: React.MutableRefObject<HTMLAudioElement | null>;
 }
 
 // Define the region type
@@ -113,17 +114,19 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   playbackSpeed,
   waveSurferRef: externalWaveSurferRef,
   regionsRef: externalRegionsRef,
+  externalMobileAudioRef,
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const internalWaveSurferRef = useRef<WaveSurferWithRegions | null>(null);
   const internalRegionsRef = useRef<any>(null);
   
-  // Mobile HTML5 audio element
-  const mobileAudioRef = useRef<HTMLAudioElement>(null);
+  // Mobile HTML5 audio element - internal fallback
+  const internalMobileAudioRef = useRef<HTMLAudioElement>(null);
   
   // Use external refs if provided, otherwise use internal refs
   const waveSurferRef = externalWaveSurferRef || internalWaveSurferRef;
   const regionsRef = externalRegionsRef || internalRegionsRef;
+  const mobileAudioRef = externalMobileAudioRef || internalMobileAudioRef;
   
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -162,17 +165,63 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [playbackSpeed]);
 
+  // Sync with external mobile audio when provided (for persistent audio across view switches)
+  useEffect(() => {
+    if (!externalMobileAudioRef?.current) return;
+    
+    const externalAudio = externalMobileAudioRef.current;
+    
+    console.log('🎵 [AUDIO PLAYER] Setting up sync with external mobile audio');
+    
+    const syncTimeUpdate = () => {
+      setCurrentTime(externalAudio.currentTime);
+      
+      // Sync WaveSurfer visualization position
+      if (waveSurferRef.current && externalAudio.duration > 0) {
+        const progress = externalAudio.currentTime / externalAudio.duration;
+        try {
+          waveSurferRef.current.seekTo(progress);
+        } catch (error) {
+          // Ignore seek errors during sync
+        }
+      }
+    };
+    
+    const syncDurationChange = () => {
+      setDuration(externalAudio.duration);
+    };
+    
+    const syncLoadedData = () => {
+      console.log('🎵 [AUDIO PLAYER] External mobile audio loaded');
+      setIsAudioLoaded(true);
+      setIsReady(true);
+      setDuration(externalAudio.duration);
+    };
+    
+    // Initial sync
+    if (externalAudio.duration > 0) {
+      setDuration(externalAudio.duration);
+      setCurrentTime(externalAudio.currentTime);
+    }
+    
+    // Set up event listeners for sync
+    externalAudio.addEventListener('timeupdate', syncTimeUpdate);
+    externalAudio.addEventListener('durationchange', syncDurationChange);
+    externalAudio.addEventListener('loadeddata', syncLoadedData);
+    
+    return () => {
+      externalAudio.removeEventListener('timeupdate', syncTimeUpdate);
+      externalAudio.removeEventListener('durationchange', syncDurationChange);
+      externalAudio.removeEventListener('loadeddata', syncLoadedData);
+    };
+  }, [externalMobileAudioRef?.current, track?.id]);
+
   // Sync internal isPlayingState with external isPlaying prop
   useEffect(() => {
     console.log('😺 [ISPLAYING EFFECT] === isPlaying prop changed ===');
     console.log('😺 [ISPLAYING EFFECT] New isPlaying value:', isPlaying);
+    console.log('😺 [ISPLAYING EFFECT] Has external mobile audio ref:', !!externalMobileAudioRef);
     console.log('😺 [ISPLAYING EFFECT] Current isAudioLoaded:', isAudioLoaded);
-    console.log('😺 [ISPLAYING EFFECT] Environment check:', {
-      isElectron: typeof window !== 'undefined' && !!(window as any).electronAPI,
-      isMobileBrowser: typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
-      hasWaveSurfer: !!waveSurferRef.current,
-      hasMobileAudio: !!mobileAudioRef.current
-    });
     
     setIsPlaying(isPlaying);
     
@@ -183,9 +232,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     if (isPlaying) {
       console.log('😺 [ISPLAYING EFFECT] isPlaying=true, checking audio playback options...');
       
-      // Mobile browser: Use HTML5 audio
-      if (isMobileBrowser && mobileAudioRef.current) {
-        console.log('😺 [ISPLAYING EFFECT] Mobile detected - using HTML5 audio for autoplay');
+      // Mobile browser with external audio ref: Audio is managed externally, just sync visualization
+      if (isMobileBrowser && externalMobileAudioRef) {
+        console.log('😺 [ISPLAYING EFFECT] Mobile with external audio - audio managed externally, AudioPlayer is visualization only');
+        // External audio is managed by MainContent, AudioPlayer just provides visualization
+        return;
+      }
+      // Mobile browser without external ref: Use internal audio
+      else if (isMobileBrowser && !externalMobileAudioRef && mobileAudioRef.current) {
+        console.log('😺 [ISPLAYING EFFECT] Mobile detected - using internal HTML5 audio for autoplay');
         console.log('😺 [ISPLAYING EFFECT] Mobile audio src:', mobileAudioRef.current.src);
         console.log('😺 [ISPLAYING EFFECT] Mobile audio readyState:', mobileAudioRef.current.readyState);
         
@@ -229,9 +284,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } else {
       console.log('😺 [ISPLAYING EFFECT] isPlaying=false, pausing audio...');
       
-      // Pause mobile audio
-      if (isMobileBrowser && mobileAudioRef.current) {
-        console.log('😺 [ISPLAYING EFFECT] Pausing mobile audio');
+      // Mobile browser with external audio ref: Audio is managed externally
+      if (isMobileBrowser && externalMobileAudioRef) {
+        console.log('😺 [ISPLAYING EFFECT] Mobile with external audio - pause managed externally');
+        // External audio is managed by MainContent
+        return;
+      }
+      // Pause internal mobile audio (only if no external ref provided)
+      else if (isMobileBrowser && !externalMobileAudioRef && mobileAudioRef.current) {
+        console.log('😺 [ISPLAYING EFFECT] Pausing internal mobile audio');
         try {
           mobileAudioRef.current.pause();
         } catch (error) {
@@ -251,7 +312,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
     
     console.log('😺 [ISPLAYING EFFECT] === isPlaying effect completed ===');
-  }, [isPlaying, isAudioLoaded]);
+  }, [isPlaying, isAudioLoaded, externalMobileAudioRef]);
 
   // Get markers from comments context
   const { markers, setSelectedCommentId, regionCommentMap, setRegionCommentMap } = useComments(waveSurferRef as any, regionsRef as any);
@@ -883,9 +944,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const handlePlayPause = useCallback(() => {
     console.log('😺 [MAIN AUDIO CONTROLS] handlePlayPause called in AudioPlayer');
     
-    // NOTE: Let's try calling onPlayPause AFTER audio control to avoid conflicts
-    console.log('😺 [MAIN AUDIO CONTROLS] First handling low-level audio control, then calling onPlayPause prop');
-    
     // Detect environment for audio control
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     const isMobileBrowser = !isElectron;
@@ -893,6 +951,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('😺 [AUDIO STATE] Current audio state when handlePlayPause called:', { 
       isElectron, 
       isMobileBrowser, 
+      hasExternalMobileAudioRef: !!externalMobileAudioRef,
       hasMobileAudioRef: !!mobileAudioRef.current,
       hasWaveSurferRef: !!waveSurferRef.current,
       audioUrl: audioUrl,
@@ -901,14 +960,21 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       isReady: isReady
     });
     
-    if (isMobileBrowser) {
-      // Mobile: Use HTML5 audio for playback, WaveSurfer for visualization only
-      console.log('😺 [MOBILE AUDIO] Attempting mobile audio control');
+    // Mobile with external audio ref: Audio is managed externally, just call the prop
+    if (isMobileBrowser && externalMobileAudioRef) {
+      console.log('😺 [MOBILE AUDIO] External mobile audio ref provided - delegating to onPlayPause prop');
+      onPlayPause();
+      return;
+    }
+    
+    // Mobile with internal audio: Use HTML5 audio for playback, WaveSurfer for visualization only
+    if (isMobileBrowser && !externalMobileAudioRef) {
+      console.log('😺 [MOBILE AUDIO] Attempting internal mobile audio control');
       if (mobileAudioRef.current) {
-        console.log('😺 [MOBILE AUDIO] Mobile audio element exists');
+        console.log('😺 [MOBILE AUDIO] Internal mobile audio element exists');
         try {
           if (isPlayingState) {
-            console.log('😺 [MOBILE AUDIO] Pausing mobile audio (isPlayingState=true)');
+            console.log('😺 [MOBILE AUDIO] Pausing internal mobile audio (isPlayingState=true)');
             mobileAudioRef.current.pause();
             // Also pause WaveSurfer visualization if it exists
             if (waveSurferRef.current) {
@@ -916,7 +982,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             }
             setIsPlaying(false);
           } else {
-            console.log('😺 [MOBILE AUDIO] Attempting to play mobile audio (isPlayingState=false)');
+            console.log('😺 [MOBILE AUDIO] Attempting to play internal mobile audio (isPlayingState=false)');
             console.log('😺 [MOBILE AUDIO] Mobile audio src:', mobileAudioRef.current.src);
             console.log('😺 [MOBILE AUDIO] Mobile audio readyState:', mobileAudioRef.current.readyState);
             const playPromise = mobileAudioRef.current.play();
@@ -924,15 +990,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             if (playPromise) {
               playPromise
                 .then(() => {
-                  console.log('✅ Mobile audio play succeeded');
+                  console.log('✅ Internal mobile audio play succeeded');
                   setIsPlaying(true);
                   // Sync WaveSurfer visualization if it exists
                   if (waveSurferRef.current && mobileAudioRef.current) {
-                    waveSurferRef.current.seekTo(mobileAudioRef.current.currentTime / mobileAudioRef.current.duration);
+                    const progress = mobileAudioRef.current.currentTime / mobileAudioRef.current.duration;
+                    if (!isNaN(progress)) {
+                      waveSurferRef.current.seekTo(progress);
+                    }
                   }
                 })
                 .catch(error => {
-                  console.error('❌ Mobile audio play failed:', error);
+                  console.error('❌ Internal mobile audio play failed:', error);
                   console.log('🔄 Attempting to unlock audio context...');
                   // Try to enable audio context
                   mobileAudioRef.current?.load();
@@ -942,11 +1011,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             }
           }
         } catch (error) {
-          console.error('❌ AudioPlayer: Error during mobile audio play/pause:', error);
+          console.error('❌ AudioPlayer: Error during internal mobile audio play/pause:', error);
         }
       } else {
-        console.error('😺 [MOBILE AUDIO] Mobile audio element not available!');
+        console.error('😺 [MOBILE AUDIO] Internal mobile audio element not available!');
       }
+      
+      // Also call the prop to sync higher-level state
+      onPlayPause();
       return;
     }
     
@@ -954,21 +1026,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('😺 [DESKTOP AUDIO] Attempting desktop WaveSurfer control');
     if (!waveSurferRef.current) {
       console.warn('😺 [DESKTOP AUDIO] No WaveSurfer instance available for play/pause');
+      onPlayPause(); // Still call prop for state sync
       return;
     }
 
     if (!isAudioLoaded) {
       console.warn('😺 [DESKTOP AUDIO] WaveSurfer audio not yet loaded, cannot play/pause');
       console.warn('😺 [DESKTOP AUDIO] This might be why audio doesn\'t start on track load!');
-        return;
-      }
+      onPlayPause(); // Still call prop for state sync
+      return;
+    }
       
     try {
       console.log('😺 [DESKTOP AUDIO] WaveSurfer ready, proceeding with play/pause');
       if (isPlayingState) {
         console.log('😺 [DESKTOP AUDIO] Pausing WaveSurfer audio (isPlayingState=true)');
         waveSurferRef.current.pause();
-            } else {
+      } else {
         console.log('😺 [DESKTOP AUDIO] Playing WaveSurfer audio (isPlayingState=false)');
         const playPromise = waveSurferRef.current.play();
         console.log('😺 [DESKTOP AUDIO] WaveSurfer play promise created:', !!playPromise);
@@ -989,7 +1063,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('😺 [MAIN AUDIO CONTROLS] About to call onPlayPause prop after audio control');
     onPlayPause();
     console.log('😺 [MAIN AUDIO CONTROLS] onPlayPause prop called successfully');
-  }, [isPlayingState, isAudioLoaded, onPlayPause]);
+  }, [isPlayingState, isAudioLoaded, onPlayPause, externalMobileAudioRef]);
 
   // Handle seek - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
   const handleSeek = useCallback((time: number) => {
@@ -997,14 +1071,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     const isMobileBrowser = !isElectron;
     
-    console.log('🎵 AudioPlayer: Seeking to time:', time, 'seconds - Environment:', { isElectron, isMobileBrowser });
+    console.log('🎵 AudioPlayer: Seeking to time:', time, 'seconds - Environment:', { isElectron, isMobileBrowser, hasExternalMobileAudioRef: !!externalMobileAudioRef });
     
-    if (isMobileBrowser) {
-      // Mobile: Use HTML5 audio for seeking
-      if (mobileAudioRef.current) {
+    // Mobile with external audio ref: Seeking is managed externally
+    if (isMobileBrowser && externalMobileAudioRef) {
+      console.log('🎵 AudioPlayer: External mobile audio ref provided - seek managed externally');
+      if (externalMobileAudioRef.current) {
         try {
-          mobileAudioRef.current.currentTime = time;
-          console.log('✅ Mobile audio seeked to:', time);
+          externalMobileAudioRef.current.currentTime = time;
+          console.log('✅ External mobile audio seeked to:', time);
           
           // Sync WaveSurfer visualization if it exists
           if (waveSurferRef.current && duration > 0) {
@@ -1013,10 +1088,30 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             console.log('✅ WaveSurfer visualization synced to:', seekPercent);
           }
         } catch (error) {
-          console.error('❌ AudioPlayer: Error during mobile audio seek:', error);
+          console.error('❌ AudioPlayer: Error during external mobile audio seek:', error);
+        }
+      }
+      return;
+    }
+    
+    // Mobile with internal audio: Use internal HTML5 audio for seeking
+    if (isMobileBrowser && !externalMobileAudioRef) {
+      if (mobileAudioRef.current) {
+        try {
+          mobileAudioRef.current.currentTime = time;
+          console.log('✅ Internal mobile audio seeked to:', time);
+          
+          // Sync WaveSurfer visualization if it exists
+          if (waveSurferRef.current && duration > 0) {
+            const seekPercent = time / duration;
+            waveSurferRef.current.seekTo(seekPercent);
+            console.log('✅ WaveSurfer visualization synced to:', seekPercent);
+          }
+        } catch (error) {
+          console.error('❌ AudioPlayer: Error during internal mobile audio seek:', error);
         }
       } else {
-        console.error('❌ AudioPlayer: Mobile audio element not available for seek');
+        console.error('❌ AudioPlayer: Internal mobile audio element not available for seek');
       }
       return;
     }
@@ -1033,7 +1128,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } catch (error) {
       console.error('❌ AudioPlayer: Error during WaveSurfer seek:', error);
     }
-  }, [duration]);
+  }, [duration, externalMobileAudioRef]);
 
   // Handle mobile waveform touch/click for seeking
   const handleWaveformTouch = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -1269,27 +1364,27 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Hidden HTML5 audio element for mobile - only render if audioUrl exists */}
-      {audioUrl && (
+      {/* Hidden HTML5 audio element for mobile - only render if audioUrl exists and no external audio ref */}
+      {audioUrl && !externalMobileAudioRef && (
         <audio
-          ref={mobileAudioRef}
+          ref={internalMobileAudioRef}
           src={audioUrl}
           onLoadedData={() => {
-            console.log('🎵 Mobile audio loaded');
+            console.log('🎵 [AUDIO PLAYER] Internal mobile audio loaded');
             setIsAudioLoaded(true);
             setIsReady(true);
             // Set volume for mobile
             if (mobileAudioRef.current) {
               mobileAudioRef.current.volume = volume;
-              console.log('🎵 Mobile audio volume set to:', volume);
+              console.log('🎵 [AUDIO PLAYER] Internal mobile audio volume set to:', volume);
             }
           }}
           onPlay={() => {
-            console.log('🎵 Mobile audio playing');
+            console.log('🎵 [AUDIO PLAYER] Internal mobile audio playing');
             setIsPlaying(true);
           }}
           onPause={() => {
-            console.log('🎵 Mobile audio paused');
+            console.log('🎵 [AUDIO PLAYER] Internal mobile audio paused');
             setIsPlaying(false);
           }}
           onTimeUpdate={(e) => {
