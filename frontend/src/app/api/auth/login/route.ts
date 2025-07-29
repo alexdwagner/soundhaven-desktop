@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// API Route startup logging
+console.log('📱 [Auth Login API] Route loaded successfully');
+console.log('📱 [Auth Login API] Available methods: POST');
+console.log('📱 [Auth Login API] Features: User authentication, JWT tokens');
+
 export async function POST(request: NextRequest) {
   console.log('📱 [Auth] Login request from mobile');
   

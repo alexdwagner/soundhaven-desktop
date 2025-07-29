@@ -27,9 +27,12 @@ const MobileSearch: React.FC<MobileSearchProps> = ({
   // Get data from providers
   const { tracks } = useTracks();
   const { playlists } = usePlaylists();
-  const { comments } = useAllComments();
+  const { comments, error: commentsError } = useAllComments();
   
-  const { searchResults, setQuery, updateFilters, triggerSearch, clearSearch } = useSearch(tracks, playlists, comments);
+  // Use defensive programming for comments - always pass a valid array
+  const safeComments = Array.isArray(comments) ? comments : [];
+  
+  const { searchResults, setQuery, updateFilters, triggerSearch, clearSearch } = useSearch(tracks, playlists, safeComments);
   
   // Perform search on mount if initialQuery is provided
   useEffect(() => {

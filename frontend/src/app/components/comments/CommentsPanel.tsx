@@ -246,8 +246,11 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
 
   console.log('CommentsPanel rendered, comments:', comments);
 
+  // Detect if we're in mobile view (full screen mode)
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+  
   return (
-    <div className={`fixed top-0 right-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 z-10 ${show ? 'translate-x-0 overflow-y-auto' : 'translate-x-full pointer-events-none'}`}>
+    <div className={`${isMobileView ? 'absolute inset-0' : 'fixed top-0 right-0 h-full'} bg-white shadow-lg transform transition-transform duration-300 z-50 w-full sm:w-80 md:w-96 lg:w-80 ${show ? 'translate-x-0 overflow-y-auto' : 'translate-x-full pointer-events-none'}`}>
       {/* Header with close button */}
       <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 relative z-50">
         <h3 className="text-sm font-medium text-gray-900">Comments</h3>

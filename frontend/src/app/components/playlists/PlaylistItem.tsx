@@ -15,6 +15,7 @@ interface PlaylistItemProps {
   isSelected: boolean;
   onDelete: () => void;
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  isDragDisabled?: boolean;
 }
 
 const PlaylistItem: React.FC<PlaylistItemProps> = ({
@@ -24,6 +25,7 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   isSelected,
   onDelete,
   onDrop,
+  isDragDisabled = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [playlistName, setPlaylistName] = useState(playlist.name);
@@ -37,28 +39,36 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   const dragTimeout = useRef<NodeJS.Timeout | null>(null);
   const isDragActive = useRef(false);
 
-  // Sortable functionality for playlist reordering
+  // Conditionally use sortable functionality for playlist reordering
+  const sortableProps = useSortable({ 
+    id: playlist.id,
+    disabled: isDragDisabled 
+  });
+  
   const {
-    attributes,
-    listeners,
+    attributes = {},
+    listeners = {},
     setNodeRef,
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: playlist.id });
+  } = isDragDisabled ? { setNodeRef: () => {}, transform: null, transition: undefined, isDragging: false } : sortableProps;
 
-  // Droppable functionality for receiving tracks
-  const {
-    isOver,
-    setNodeRef: setDropRef,
-  } = useDroppable({
-    id: playlist.id, // Use same ID as sortable to avoid conflicts
+  // Conditionally use droppable functionality for receiving tracks
+  const droppableProps = useDroppable({
+    id: playlist.id,
+    disabled: isDragDisabled,
     data: {
       type: 'playlist',
       playlistId: playlist.id,
       playlistName: playlist.name
     }
   });
+  
+  const {
+    isOver,
+    setNodeRef: setDropRef,
+  } = isDragDisabled ? { isOver: false, setNodeRef: () => {} } : droppableProps;
 
   // Debug logging for isOver state
   useEffect(() => {
@@ -343,30 +353,30 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   };
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: isDragDisabled ? undefined : CSS.Transform.toString(transform),
     transition: 'all 0.2s ease-in-out',
-    border: (isDragOver || isOver) ? '2px solid #10B981' : '2px solid transparent', // Solid border for both drag states
+    border: (!isDragDisabled && (isDragOver || isOver)) ? '2px solid #10B981' : '2px solid transparent',
     backgroundColor: isSelected 
       ? 'rgba(79, 70, 229, 0.3)' 
-      : (isDragOver || isOver)
-        ? 'rgba(16, 185, 129, 0.15)' // Slightly more visible green background
+      : (!isDragDisabled && (isDragOver || isOver))
+        ? 'rgba(16, 185, 129, 0.15)'
         : 'transparent',
-    opacity: isDragging ? 0.5 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab',
-    scale: (isDragOver || isOver) ? 1.03 : 1, // Slightly more prominent scale change
-    boxShadow: (isDragOver || isOver) ? '0 4px 12px rgba(16, 185, 129, 0.3)' : 'none', // More visible shadow
+    opacity: (!isDragDisabled && isDragging) ? 0.5 : 1,
+    cursor: isDragDisabled ? 'pointer' : (isDragging ? 'grabbing' : 'grab'),
+    scale: (!isDragDisabled && (isDragOver || isOver)) ? 1.03 : 1,
+    boxShadow: (!isDragDisabled && (isDragOver || isOver)) ? '0 4px 12px rgba(16, 185, 129, 0.3)' : 'none',
   };
 
   return (
     <li
       ref={combineRefs(setNodeRef, setDropRef)}
       style={style}
-      {...attributes}
-      {...listeners}
+      {...(!isDragDisabled ? attributes : {})}
+      {...(!isDragDisabled ? listeners : {})}
       className={`relative group rounded-lg transition-all duration-200 ease-in-out hover:bg-gray-50 ${
         isBeingDragged ? 'shadow-md' : ''
       } ${
-        (isOver || isDragOver) ? 'bg-green-50 ring-2 ring-green-400 shadow-lg' : '' // Combined and more prominent styling
+        (!isDragDisabled && (isOver || isDragOver)) ? 'bg-green-50 ring-2 ring-green-400 shadow-lg' : ''
       }`}
       onContextMenu={handleContextMenu}
       onMouseDown={handleMouseDown}
@@ -467,4 +477,4 @@ const PlaylistItem: React.FC<PlaylistItemProps> = ({
   );
 };
 
-export default PlaylistItem;
+export default React.memo(PlaylistItem);

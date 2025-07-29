@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase, queryDatabase } from '../../lib/database';
+import { addCorsHeaders, handleOptionsRequest } from '../../utils/cors';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleOptionsRequest(request.headers);
+}
+
+// API Route startup logging
+console.log('📱 [Tracks API] Route loaded successfully');
+console.log('📱 [Tracks API] Available methods: GET, OPTIONS');
+console.log('📱 [Tracks API] Database integration: SQLite with metadata extraction');
 
 export async function GET(request: NextRequest) {
   console.log('📱 [Next.js API] /api/tracks called from mobile');
@@ -23,7 +33,7 @@ export async function GET(request: NextRequest) {
         ORDER BY t.created_at DESC LIMIT 10
       `);
       
-      console.log('📱 [Next.js API] Database query result:', result);
+      // console.log('📱 [Next.js API] Database query result:', result);
       
       // Map database fields to frontend expected format
       const mappedTracks = (result.data || []).map((track: any) => ({
@@ -53,7 +63,7 @@ export async function GET(request: NextRequest) {
       console.log('📱 [Next.js API] Mapped tracks:', mappedTracks.length);
       console.log('📱 [Next.js API] First track sample:', mappedTracks[0]);
       
-      return NextResponse.json({
+      const response = NextResponse.json({
         data: mappedTracks,
         success: result.success,
         message: result.message || 'Database query completed',
@@ -65,11 +75,13 @@ export async function GET(request: NextRequest) {
           mappedCount: mappedTracks.length
         }
       });
+      
+      return addCorsHeaders(response, request.headers.get('origin') || undefined);
     } else {
       // Database not accessible, return empty array
       console.log('📱 [Next.js API] Database not accessible:', dbConnection.message);
       
-      return NextResponse.json({
+      const errorResponse = NextResponse.json({
         data: [],
         success: false,
         message: `Database not accessible: ${dbConnection.message}`,
@@ -79,12 +91,14 @@ export async function GET(request: NextRequest) {
           cwd: process.cwd()
         }
       });
+      
+      return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
     }
     
   } catch (error) {
     console.error('📱 [Next.js API] Tracks error:', error);
     
-    return NextResponse.json({
+    const errorResponse = NextResponse.json({
       data: [],
       success: false,
       error: 'Failed to fetch tracks',
@@ -93,5 +107,7 @@ export async function GET(request: NextRequest) {
         stack: error instanceof Error ? error.stack : undefined
       }
     }, { status: 500 });
+    
+    return addCorsHeaders(errorResponse);
   }
 } 

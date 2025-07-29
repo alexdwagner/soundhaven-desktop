@@ -9,40 +9,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Enable CORS for development
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'Access-Control-Allow-Origin',
-            value: '*',
-          },
-        ],
-      },
-    ];
-  },
-  // Proxy audio and specific API requests to Electron backend
+  // CORS is now handled dynamically in API routes via utils/cors.ts
+  // This allows mobile device access from 192.168.*.* networks
+  // Proxy only audio requests to Electron backend, let Next.js handle API routes
   async rewrites() {
     const audioServerPort = process.env.AUDIO_SERVER_PORT || '3000';
     return [
       {
         source: '/audio/:path*',
         destination: `http://localhost:${audioServerPort}/audio/:path*`,
-      },
-      // Only proxy specific API routes to Electron, let Next.js handle the rest
-      {
-        source: '/api/tracks',
-        destination: `http://localhost:${audioServerPort}/api/tracks`,
-      },
-      {
-        source: '/api/playlists',
-        destination: `http://localhost:${audioServerPort}/api/playlists`,
-      },
-      {
-        source: '/api/comments',
-        destination: `http://localhost:${audioServerPort}/api/comments`,
       },
     ];
   },

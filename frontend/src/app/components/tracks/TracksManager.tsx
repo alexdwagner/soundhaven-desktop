@@ -361,8 +361,11 @@ export default function TracksManager({
     lastReorderRef.current = { startIndex, endIndex, timestamp: now };
 
     try {
-      setReorderingTracks(true);
-      reorderingRef.current = true;
+      // Defer state update to avoid React render cycle error
+      setTimeout(() => {
+        setReorderingTracks(true);
+        reorderingRef.current = true;
+      }, 0);
       console.log('🔄 [DRAG] Calling updatePlaylistTrackOrder...');
 
       // Create a copy of the tracks array to determine new order
@@ -390,8 +393,11 @@ export default function TracksManager({
       console.error('❌ [DRAG] Error during reorder operation:', error);
       // The PlaylistsProvider will handle error recovery by refetching
     } finally {
-      setReorderingTracks(false);
-      reorderingRef.current = false;
+      // Defer state cleanup to match the initial state update timing
+      setTimeout(() => {
+        setReorderingTracks(false);
+        reorderingRef.current = false;
+      }, 0);
     }
   }, [isPlaylistView, playlistSortMode, tracks, selectedPlaylistId, setReorderingTracks, updatePlaylistTrackOrder]);
 
@@ -1357,51 +1363,10 @@ export default function TracksManager({
           </div>
         )}
 
-        {/* Compact Upload and Debug Tools - Hidden on mobile */}
-        {!isMobile && (
+        {/* Comments button - Only visible on desktop (mobile uses swipe navigation) */}
         <div className="mb-1">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <input
-                type="file"
-                multiple
-                accept="audio/*"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    const files = Array.from(e.target.files);
-                    console.log('🚀 Testing file upload with files:', files.map(f => f.name));
-                    setUploading(true);
-                    setUploadProgress(files.map(file => ({ fileName: file.name, progress: 0 })));
-                    
-                    uploadBatchTracks(files).then(result => {
-                      console.log('📥 Test upload result:', result);
-                      if (result && result.successful > 0) {
-                        fetchTracks();
-                      }
-                      setUploading(false);
-                      setUploadProgress([]);
-                    }).catch(error => {
-                      console.error('❌ Test upload error:', error);
-                      setUploading(false);
-                      setUploadProgress([]);
-                    });
-                  }
-                }}
-                className="hidden"
-                id="file-upload-input"
-              />
-              <label
-                htmlFor="file-upload-input"
-                className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
-              >
-                <svg className="w-3 h-3 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-                Upload Files
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
+            {!isMobile && (
               <button
                 onClick={() => setShowComments(!showComments)}
                 className={`text-xs px-2 py-1 rounded border ${
@@ -1414,20 +1379,66 @@ export default function TracksManager({
               >
                 💬 {showComments ? 'Hide' : 'Show'} Comments
               </button>
-              <button
-                onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
-                className="text-xs px-2 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded"
-                title="Keyboard Shortcuts"
-              >
-                ⌨️ Shortcuts
-              </button>
-              <button
-                onClick={() => setShowDebugTools(!showDebugTools)}
-                className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 border border-gray-300 rounded"
-              >
-                {showDebugTools ? 'Hide' : 'Show'} Debug Tools
-              </button>
-            </div>
+            )}
+            
+            {/* Upload and Debug Tools - Hidden on mobile */}
+            {!isMobile && (
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="file"
+                    multiple
+                    accept="audio/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        const files = Array.from(e.target.files);
+                        console.log('🚀 Testing file upload with files:', files.map(f => f.name));
+                        setUploading(true);
+                        setUploadProgress(files.map(file => ({ fileName: file.name, progress: 0 })));
+                        
+                        uploadBatchTracks(files).then(result => {
+                          console.log('📥 Test upload result:', result);
+                          if (result && result.successful > 0) {
+                            fetchTracks();
+                          }
+                          setUploading(false);
+                          setUploadProgress([]);
+                        }).catch(error => {
+                          console.error('❌ Test upload error:', error);
+                          setUploading(false);
+                          setUploadProgress([]);
+                        });
+                      }
+                    }}
+                    className="hidden"
+                    id="file-upload-input"
+                  />
+                  <label
+                    htmlFor="file-upload-input"
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
+                  >
+                    <svg className="w-3 h-3 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Upload Files
+                  </label>
+                </div>
+                
+                <button
+                  onClick={() => setShowKeyboardHelp(!showKeyboardHelp)}
+                  className="text-xs px-2 py-1 text-blue-600 hover:text-blue-800 border border-blue-300 rounded"
+                  title="Keyboard Shortcuts"
+                >
+                  ⌨️ Shortcuts
+                </button>
+                <button
+                  onClick={() => setShowDebugTools(!showDebugTools)}
+                  className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 border border-gray-300 rounded"
+                >
+                  {showDebugTools ? 'Hide' : 'Show'} Debug Tools
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Collapsible Debug Tools */}
@@ -1491,7 +1502,6 @@ export default function TracksManager({
             </div>
           )}
         </div>
-        )}
 
         {/* Header */}
         <div className="mb-1">

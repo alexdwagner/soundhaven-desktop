@@ -93,7 +93,17 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
 
         if (response.error) {
           console.error('❌ [CommentsProvider] API Error:', response.error);
-          throw new Error(`Failed to fetch comments: ${response.error}`);
+          
+          // Handle specific error cases
+          if (response.error.includes('Failed to fetch') || response.error.includes('Load failed')) {
+            console.error('❌ [CommentsProvider] Network/CORS error detected:', response.error);
+            setError(`Network error - please check connection: ${response.error}`);
+          } else {
+            setError(`API error: ${response.error}`);
+          }
+          
+          setIsLoadingMarkers(false);
+          return;
         }
 
         const responseData = response.data;
@@ -101,13 +111,18 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
 
         // Handle pagination structure from API
         let fetchedComments;
+        let fetchedMarkers;
+        
         if (responseData && typeof responseData === 'object' && 'comments' in responseData) {
-          // New pagination structure
+          // New pagination structure with separate comments and markers arrays
           fetchedComments = responseData.comments;
-          console.log('📋 [CommentsProvider] Using pagination structure, comments:', fetchedComments);
+          fetchedMarkers = responseData.markers || [];
+          console.log('📋 [CommentsProvider] Using pagination structure, comments:', fetchedComments?.length);
+          console.log('📋 [CommentsProvider] Using pagination structure, markers:', fetchedMarkers?.length);
         } else if (Array.isArray(responseData)) {
           // Legacy array structure
           fetchedComments = responseData;
+          fetchedMarkers = [];
           console.log('📋 [CommentsProvider] Using legacy array structure, comments:', fetchedComments);
         } else {
           console.error(
@@ -134,46 +149,69 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
           return;
         }
 
-        // Debug each comment's marker
-        fetchedComments.forEach((comment, index) => {
-          console.log(`🔍 [CommentsProvider] Comment ${index + 1}:`, {
-            id: comment.id,
-            content: comment.content?.substring(0, 30) + '...',
-            hasMarker: !!comment.marker,
-            marker: comment.marker
-          });
+        // Create a map of markers by commentId for easy lookup
+        const markersByCommentId = new Map();
+        fetchedMarkers.forEach((marker) => {
+          if (marker.commentId) {
+            markersByCommentId.set(marker.commentId.toString(), marker);
+          }
         });
 
-        setComments(fetchedComments);
+        // Merge markers into comments for backward compatibility
+        const commentsWithMarkers = fetchedComments.map((comment) => {
+          const associatedMarker = markersByCommentId.get(comment.id.toString());
+          const commentWithMarker = {
+            ...comment,
+            marker: associatedMarker ? {
+              id: associatedMarker.id,
+              time: associatedMarker.timePosition,
+              trackId: associatedMarker.trackId,
+              createdAt: associatedMarker.createdAt,
+              waveSurferRegionID: associatedMarker.label, // API uses 'label' for region ID
+              data: {
+                customColor: "#FF0000", // Default color
+                isVisible: true,
+                isDraggable: true,
+                isResizable: false
+              }
+            } : undefined
+          };
+          
+          console.log(`🔍 [CommentsProvider] Comment ${comment.id}:`, {
+            content: comment.content?.substring(0, 30) + '...',
+            hasMarker: !!commentWithMarker.marker,
+            marker: commentWithMarker.marker
+          });
+          
+          return commentWithMarker;
+        });
+
+        console.log('📋 [CommentsProvider] Comments with merged markers:', commentsWithMarkers);
+        setComments(commentsWithMarkers);
         console.log('✅ [CommentsProvider] Comments set in state');
 
-        const extractedMarkers = fetchedComments
-          .filter((comment) => {
-            const hasMarker = !!comment.marker;
-            console.log(`🎯 [CommentsProvider] Comment ${comment.id} has marker:`, hasMarker);
-            return hasMarker;
-          })
-          .map((comment, index) => {
-            const marker = {
-              id: comment.marker?.id || 0,
-              commentId: comment.id,
-              time: comment.marker?.time || 0,
-              trackId: comment.marker?.trackId ?? 0,
-              createdAt: comment.marker?.createdAt ?? '',
-              waveSurferRegionID: comment.marker?.waveSurferRegionID ?? "",
+        // Process markers for the markers state (convert to expected format)
+        const extractedMarkers = fetchedMarkers.map((marker, index) => {
+            const processedMarker = {
+              id: marker.id,
+              commentId: marker.commentId,
+              time: marker.timePosition, // API uses 'timePosition'
+              trackId: marker.trackId,
+              createdAt: marker.createdAt,
+              waveSurferRegionID: marker.label, // API uses 'label' for region ID
               data: {
-                customColor: comment.marker?.data?.customColor || "#FF0000",
+                customColor: "#FF0000", // Default color
                 isVisible: true,
                 isDraggable: true,
                 isResizable: false
               }
             };
-            console.log(`🎯 [CommentsProvider] Extracted marker ${index + 1}:`, marker);
-            return marker;
+            console.log(`🎯 [CommentsProvider] Processed marker ${index + 1}:`, processedMarker);
+            return processedMarker;
           });
 
-        console.log('🎯 [CommentsProvider] Total extracted markers:', extractedMarkers.length);
-        console.log('🎯 [CommentsProvider] All extracted markers:', extractedMarkers);
+        console.log('🎯 [CommentsProvider] Total processed markers:', extractedMarkers.length);
+        console.log('🎯 [CommentsProvider] All processed markers:', extractedMarkers);
         
         setMarkers(extractedMarkers);
         console.log('✅ [CommentsProvider] Markers set in state');

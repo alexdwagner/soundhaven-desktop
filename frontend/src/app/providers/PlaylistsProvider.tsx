@@ -281,7 +281,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
         return false;
       }
     },
-    [apiService, fetchPlaylists, fetchPlaylistById, currentPlaylistId, currentPlaylistTracks.length]
+    [apiService, fetchPlaylists, currentPlaylistId, currentPlaylistTracks.length]
   );
 
   const addTracksToPlaylist = useCallback(
@@ -334,7 +334,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       console.log(`📓 [PLAYLIST PROVIDER] ✅ Batch add tracks to playlist completed. Successful: ${results.successful}, Failed: ${results.failed}`);
       return results;
     },
-    [apiService, fetchPlaylists, fetchPlaylistById, currentPlaylistId, currentPlaylistTracks.length]
+    [apiService, fetchPlaylists, currentPlaylistId, currentPlaylistTracks.length]
   );
 
   const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string, skipRefresh?: boolean): Promise<boolean> => {
@@ -360,7 +360,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       setError(errorMessage);
       return false;
     }
-  }, [currentPlaylistId, fetchPlaylistById]);
+  }, [currentPlaylistId]);
 
   const clearPlaylists = useCallback(() => {
     setPlaylists([]);
@@ -452,7 +452,7 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       setError(errorMessage);
       return false;
     }
-  }, [currentPlaylistId, fetchPlaylistById]);
+  }, [currentPlaylistId]);
 
   const contextValue: PlaylistsContextType = {
     playlists,
