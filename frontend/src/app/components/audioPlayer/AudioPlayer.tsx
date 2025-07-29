@@ -5,7 +5,7 @@ import type { Region } from 'wavesurfer.js/dist/plugins/regions';
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.js";
 import { useComments } from "@/app/hooks/useComments";
 import { useEnvironment } from "@/app/hooks/useEnvironment";
-import { Marker as MarkerType } from "../../../../../shared/types";
+import { Marker as MarkerType, _Comment } from "../../../../../shared/types";
 import apiService from "../../../services/electronApiService";
 
 // Extend the WaveSurfer type to include our custom properties
@@ -314,16 +314,38 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     console.log('😺 [ISPLAYING EFFECT] === isPlaying effect completed ===');
   }, [isPlaying, isAudioLoaded, externalMobileAudioRef]);
 
-  // Get markers from comments context
-  const { markers, setSelectedCommentId, regionCommentMap, setRegionCommentMap } = useComments(waveSurferRef as any, regionsRef as any);
+  // Get markers from comments context with defensive destructuring and error handling
+  let commentsHookResult;
+  try {
+    commentsHookResult = useComments(waveSurferRef as any, regionsRef as any);
+  } catch (error) {
+    console.error('❌ AudioPlayer: Error calling useComments hook:', error);
+    commentsHookResult = null;
+  }
+  
+  // Defensive destructuring to handle undefined/null hook results
+  const {
+    markers = [],
+    comments = [],
+    setSelectedCommentId = () => {},
+    regionCommentMap = {},
+    setRegionCommentMap = () => {}
+  } = commentsHookResult || {};
+  
+  // Ensure comments is always an array for safe operations - handle undefined/null cases
+  const safeComments: _Comment[] = comments && Array.isArray(comments) ? comments : [];
 
-  // Debug markers in AudioPlayer
+  // Debug markers and comments in AudioPlayer
   useEffect(() => {
-    console.log('=== AUDIOPLAYER MARKERS DEBUG ===');
+    console.log('=== AUDIOPLAYER MARKERS & COMMENTS DEBUG ===');
     console.log('markers from useComments:', markers);
     console.log('markers length:', markers?.length);
     console.log('markers type:', typeof markers);
-  }, [markers]);
+    console.log('comments from useComments:', comments);
+    console.log('comments length:', comments?.length);
+    console.log('comments type:', typeof comments);
+    console.log('safeComments length:', safeComments.length);
+  }, [markers, comments, safeComments]);
 
   // Enhanced error handling and logging for WaveSurfer
   const handleWaveSurferError = useCallback((error: any, url: string) => {
@@ -779,16 +801,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [track?.id, track?.filePath]);
 
-  // Function to add markers to waveform
+  // Function to add markers to waveform with enhanced styling and tooltips
   const addMarkersToWaveform = useCallback(() => {
-    if (!regionsRef.current || !markers || markers.length === 0) {
-      console.log('🎯 Cannot add markers - missing regions plugin or no markers');
-      return;
-    }
-
-    console.log('🎯 Adding markers to waveform:', markers.length);
-    
     try {
+      if (!regionsRef.current || !markers || markers.length === 0) {
+        console.log('🎯 Cannot add markers - missing regions plugin or no markers');
+        return;
+      }
+
+      console.log('🎯 Adding markers to waveform:', markers.length);
+      
       // Clear existing regions
       regionsRef.current.clearRegions();
       
@@ -797,42 +819,109 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         console.log(`🎯 Adding region for marker ${index + 1}:`, marker);
         try {
           // Check if the marker has all required properties
-          if (!marker.time && marker.time !== 0) {
-            console.error('❌ Marker missing time property:', marker);
+          if (typeof marker.time !== 'number' || marker.time < 0) {
+            console.error('❌ Marker missing or invalid time property:', marker);
+            return;
+          }
+          
+          // Ensure marker has required IDs
+          if (!marker.id || !marker.commentId) {
+            console.error('❌ Marker missing required ID properties:', marker);
             return;
           }
           
           const regionId = marker.waveSurferRegionID || `marker-${marker.id}-${Date.now()}`;
+          
+          // Enhanced marker styling with better visibility
+          const defaultColor = 'rgba(59, 130, 246, 0.7)'; // Blue with transparency
+          const markerColor = marker.data?.customColor || defaultColor;
+          
           const region = regionsRef.current.addRegion({
             id: regionId,
             start: marker.time,
-            end: marker.time + 1.0, // 1 second markers
-            color: marker.data?.customColor || 'rgba(255, 0, 0, 0.8)', // More opaque for visibility
+            end: marker.time + 0.5, // Shorter 0.5 second markers for less intrusion
+            color: markerColor,
             drag: false,
             resize: false,
             data: {
               commentId: marker.commentId,
+              markerData: marker,
             },
           });
 
-          // Add hover effects for this region
+          // Enhanced styling and interaction for markers
           if (region && region.element) {
-            const originalColor = marker.data?.customColor || 'rgba(255, 0, 0, 0.8)';
-            const hoverColor = 'rgba(255, 165, 0, 0.9)'; // Orange on hover
+            const originalColor = markerColor;
+            const hoverColor = 'rgba(249, 115, 22, 0.8)'; // Orange on hover
+            const selectedColor = 'rgba(34, 197, 94, 0.8)'; // Green when selected
             
-            // Set cursor and add hover listeners
+            // Enhanced styling
             region.element.style.cursor = 'pointer';
+            region.element.style.borderLeft = '2px solid rgba(59, 130, 246, 1)';
+            region.element.style.borderRadius = '2px';
+            region.element.style.zIndex = '10';
             
-            region.element.addEventListener('mouseenter', () => {
+            // Create tooltip element
+            const tooltip = document.createElement('div');
+            tooltip.className = 'marker-tooltip';
+            tooltip.style.cssText = `
+              position: absolute;
+              background: rgba(0, 0, 0, 0.9);
+              color: white;
+              padding: 8px 12px;
+              border-radius: 6px;
+              font-size: 12px;
+              max-width: 200px;
+              z-index: 1000;
+              pointer-events: none;
+              transform: translateX(-50%);
+              white-space: pre-wrap;
+              word-break: break-word;
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+              display: none;
+            `;
+            
+            // Find the associated comment for tooltip content with error handling
+            const associatedComment = safeComments.find(c => c.id === marker.commentId);
+            let tooltipContent = `Time: ${formatTime(marker.time)}\nComment marker`;
+            
+            if (associatedComment && typeof associatedComment.content === 'string') {
+              try {
+                const contentPreview = associatedComment.content.length > 100 
+                  ? associatedComment.content.substring(0, 100) + '...' 
+                  : associatedComment.content;
+                tooltipContent = `Time: ${formatTime(marker.time)}\n"${contentPreview}"`;
+              } catch (error) {
+                console.warn('⚠️ Error formatting comment content for tooltip:', error);
+                // Fallback to default tooltip content
+              }
+            }
+            
+            tooltip.textContent = tooltipContent;
+            document.body.appendChild(tooltip);
+            
+            // Enhanced hover effects with tooltip
+            region.element.addEventListener('mouseenter', (e) => {
               region.setOptions({ color: hoverColor });
+              
+              // Position and show tooltip
+              const rect = region.element.getBoundingClientRect();
+              tooltip.style.left = `${rect.left + rect.width / 2}px`;
+              tooltip.style.top = `${rect.top - 10}px`;
+              tooltip.style.transform = 'translateX(-50%) translateY(-100%)';
+              tooltip.style.display = 'block';
             });
             
             region.element.addEventListener('mouseleave', () => {
               region.setOptions({ color: originalColor });
+              tooltip.style.display = 'none';
             });
+            
+            // Store tooltip reference for cleanup
+            (region as any).tooltip = tooltip;
           }
           
-          console.log(`✅ Region ${index + 1} created successfully:`, region);
+          console.log(`✅ Enhanced region ${index + 1} created successfully:`, region);
           
           // Update the regionCommentMap
           setRegionCommentMap((prevMap: Record<string, number>) => ({
@@ -845,11 +934,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         }
       });
       
-      console.log('🎯 All markers added successfully');
+      console.log('🎯 All enhanced markers added successfully');
     } catch (error) {
       console.error('❌ Error adding markers to waveform:', error);
     }
-  }, [markers, setRegionCommentMap]);
+  }, [markers, setRegionCommentMap, safeComments]);
 
   // Set audio URL based on track file path
   useEffect(() => {

@@ -13,7 +13,9 @@ import { useTracks } from "@/app/providers/TracksProvider";
 import { usePlayback } from "@/app/hooks/UsePlayback";
 import { useColumnVisibility } from '@/app/hooks/useColumnVisibility';
 import { useEnvironment } from '@/app/hooks/useEnvironment';
+import { useComments } from '@/app/hooks/useComments';
 import MobileSearch from '../search/MobileSearch';
+import CommentsPanel from '../comments/CommentsPanel';
 
 interface MainContentProps {
   searchResults?: {
@@ -74,6 +76,9 @@ export default function MainContent({ searchResults }: MainContentProps) {
   
   // Get tracks from context for playback controls
   const { tracks: contextTracks } = useTracks();
+  
+  // Comments state
+  const { selectedCommentId, setSelectedCommentId } = useComments(waveSurferRef, regionsRef);
   
   // Audio control handlers - moved from TracksManager
   const handleSeek = (time: number) => {
@@ -628,10 +633,12 @@ export default function MainContent({ searchResults }: MainContentProps) {
 
             {/* Mobile Content Area */}
             <div className="flex-1 overflow-hidden">
-              {/* Playlists View */}
+              {/* Playlists View - Mobile */}
               {mobileView === 'playlists' && (
                 <div className="h-full overflow-auto">
                   <PlaylistSidebar 
+                    key="mobile-playlist-sidebar"
+                    keyPrefix="mobile-"
                     onSelectPlaylist={handleSelectPlaylist}
                     onViewAllTracks={handleViewAllTracks}
                     onDeletePlaylist={handleDeletePlaylist}
@@ -680,12 +687,24 @@ export default function MainContent({ searchResults }: MainContentProps) {
               )}
 
               {/* Comments View */}
-              {mobileView === 'comments' && (
+              {mobileView === 'comments' && playbackCurrentTrack?.id && (
+                <div className="h-full relative">
+                  <CommentsPanel
+                    trackId={playbackCurrentTrack.id}
+                    show={true}
+                    onClose={() => setMobileView('library')}
+                    regionsRef={regionsRef}
+                    waveSurferRef={waveSurferRef}
+                    onSelectComment={(commentId) => setSelectedCommentId(commentId)}
+                  />
+                </div>
+              )}
+              {mobileView === 'comments' && !playbackCurrentTrack?.id && (
                 <div className="h-full flex items-center justify-center bg-gray-50">
                   <div className="text-center">
                     <div className="text-4xl mb-4">💬</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Comments</h3>
-                    <p className="text-gray-600">Comments view coming soon...</p>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Track Playing</h3>
+                    <p className="text-gray-600">Select a track to view comments</p>
                   </div>
                 </div>
               )}
@@ -712,6 +731,8 @@ export default function MainContent({ searchResults }: MainContentProps) {
           <div className="flex h-full gap-2">
             <div className="w-1/5 flex-shrink-0">
               <PlaylistSidebar 
+                key="desktop-playlist-sidebar"
+                keyPrefix="desktop-"
                 onSelectPlaylist={handleSelectPlaylist}
                 onViewAllTracks={handleViewAllTracks}
                 onDeletePlaylist={handleDeletePlaylist}

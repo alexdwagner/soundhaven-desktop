@@ -5,6 +5,11 @@ import { createReadStream, statSync, existsSync } from 'fs';
 // Import database helper
 import { queryDatabase } from '../../../lib/database';
 
+// API Route startup logging
+console.log('📱 [Audio API] Route loaded successfully');
+console.log('📱 [Audio API] Available methods: GET');
+console.log('📱 [Audio API] Features: Audio streaming, range requests, mobile support');
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { trackId: string } }

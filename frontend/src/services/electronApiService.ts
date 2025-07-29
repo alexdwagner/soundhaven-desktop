@@ -1042,7 +1042,18 @@ export const apiService = {
       
       console.log('🌐 [ApiService] All comments response:', response);
       console.log('🌐 [ApiService] Response data type:', typeof response.data);
-      console.log('🌐 [ApiService] Response data structure:', response.data);
+      console.log('🌐 [ApiService] Response data keys:', response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'not an object');
+      console.log('🌐 [ApiService] Response data structure:', JSON.stringify(response.data, null, 2));
+      console.log('🌐 [ApiService] Response error:', response.error);
+      console.log('🌐 [ApiService] Response status:', response.status);
+      
+      if (response.error) {
+        console.error('🌐 [ApiService] API returned error:', response.error);
+        return {
+          error: response.error,
+          status: response.status
+        };
+      }
       
       return response;
     } catch (error) {

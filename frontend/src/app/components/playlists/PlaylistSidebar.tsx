@@ -10,12 +10,14 @@ import DuplicateTrackModal from "../modals/DuplicateTrackModal";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { apiService } from "../../../services/electronApiService";
+import { useEnvironment } from "../../hooks/useEnvironment";
 
 interface PlaylistSidebarProps {
   onSelectPlaylist: (tracks: Track[], playlistId: string, playlistName?: string) => void;
   onViewAllTracks: () => void;
   onDeletePlaylist: (playlistId: string) => void;
   onRegisterDragHandler?: (handler: (event: any) => void) => void;
+  keyPrefix?: string; // Add optional key prefix to ensure uniqueness
 }
 
 const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
@@ -23,9 +25,11 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   onViewAllTracks,
   onDeletePlaylist,
   onRegisterDragHandler,
+  keyPrefix = "",
 }) => {
   const { playlists, createPlaylist, deletePlaylist, fetchPlaylists, fetchPlaylistById, updatePlaylistOrder, setPlaylists, loading, error: playlistError, setCurrentPlaylistId, setCurrentPlaylistTracks } = usePlaylists();
   const { user, token } = useAuth();
+  const { isMobile } = useEnvironment();
   
   console.log("🔍 PlaylistSidebar: Component rendering...");
   console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
@@ -85,7 +89,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     }
   };
 
-  const handlePlaylistSelect = async (playlistId: string) => {
+  const handlePlaylistSelect = useCallback(async (playlistId: string) => {
     console.log(`📓 [PLAYLIST SIDEBAR] handlePlaylistSelect called with playlistId: ${playlistId}`);
     
     try {
@@ -113,9 +117,9 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
       console.error("📓 [PLAYLIST SIDEBAR] ❌ Error fetching playlist:", error);
       setError("Failed to load playlist");
     }
-  };
+  }, [fetchPlaylistById, setCurrentPlaylistId, setCurrentPlaylistTracks, onSelectPlaylist]);
 
-  const handleDeletePlaylist = async (playlistId: string) => {
+  const handleDeletePlaylist = useCallback(async (playlistId: string) => {
     try {
       await deletePlaylist(playlistId);
       setSelectedPlaylistId(null);
@@ -132,9 +136,9 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
       console.error("Error deleting playlist:", error);
       setError("Failed to delete playlist");
     }
-  };
+  }, [deletePlaylist, selectedPlaylistId, setCurrentPlaylistId, setCurrentPlaylistTracks, onDeletePlaylist]);
 
-  const handleViewAllTracks = () => {
+  const handleViewAllTracks = useCallback(() => {
     console.log(`📓 [PLAYLIST SIDEBAR] handleViewAllTracks called - clearing playlist selection`);
     
     // Clear the PlaylistsProvider context
@@ -146,7 +150,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     setSelectedPlaylistId(null);
     
     console.log(`📓 [PLAYLIST SIDEBAR] ✅ View all tracks complete`);
-  };
+  }, [setCurrentPlaylistId, setCurrentPlaylistTracks, onViewAllTracks]);
 
   const handleDragEnd = useCallback((event: any) => {
     if (!event) {
@@ -193,23 +197,41 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
         <h3 className="font-medium text-xs uppercase text-gray-400 border-b border-gray-600 pb-1 mb-2">Playlists</h3>
 
-        <DndContext onDragEnd={handleDragEnd}>
-          <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-            <ul className="px-1">
-              {playlists.map((playlist) => (
-                <PlaylistItem 
-                  key={playlist.id} 
-                  playlist={playlist} 
-                  onSelect={() => handlePlaylistSelect(playlist.id)} 
-                  isSelected={playlist.id === selectedPlaylistId} 
-                  onDelete={() => handleDeletePlaylist(playlist.id)} 
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
+        {!isMobile ? (
+          // Desktop: Enable drag and drop
+          <DndContext onDragEnd={handleDragEnd}>
+            <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              <ul className="px-1">
+                {playlists.map((playlist) => (
+                  <PlaylistItem 
+                    key={`${keyPrefix}${playlist.id}`} 
+                    playlist={playlist} 
+                    onSelect={() => handlePlaylistSelect(playlist.id)} 
+                    isSelected={playlist.id === selectedPlaylistId} 
+                    onDelete={() => handleDeletePlaylist(playlist.id)}
+                    isDragDisabled={false}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          // Mobile: Disable drag and drop
+          <ul className="px-1">
+            {playlists.map((playlist) => (
+              <PlaylistItem 
+                key={`${keyPrefix}${playlist.id}`} 
+                playlist={playlist} 
+                onSelect={() => handlePlaylistSelect(playlist.id)} 
+                isSelected={playlist.id === selectedPlaylistId} 
+                onDelete={() => handleDeletePlaylist(playlist.id)}
+                isDragDisabled={true}
+              />
+            ))}
+          </ul>
+        )}
       </div>
   );
 };
 
-export default PlaylistSidebar;
+export default React.memo(PlaylistSidebar);

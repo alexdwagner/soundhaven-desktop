@@ -3,6 +3,7 @@ import { PreprocessService } from './services/preprocessService';
 import { PerformanceMonitor } from './services/performanceMonitor';
 import path from 'path';
 import { createReadStream } from 'fs';
+import { getCorsOrigin, getCorsHeaders, handleCorsPrelight, logCorsRequest } from './utils/cors';
 
 interface StreamRequest {
   filePath: string;
@@ -27,33 +28,42 @@ export class AudioServer {
    */
   public start(port: number): void {
     this.server.listen(port, () => {
-      console.log(`Audio streaming server running on port ${port}`);
+      console.log(`🎵 Audio streaming server started on port ${port}`);
+      console.log('🎵 Audio server endpoints ready:');
+      console.log('   • GET /stream/:trackId - Stream audio with range support');
+      console.log('   • GET /metadata/:trackId - Get track metadata'); 
+      console.log('   • OPTIONS * - CORS preflight handling');
+      console.log('🎵 Audio server services initialized:');
+      console.log('   • PreprocessService - Ready for waveform analysis');
+      console.log('   • PerformanceMonitor - Tracking streaming metrics');
+      console.log('   • CORS handling - Mobile device support enabled');
     });
   }
+
 
   /**
    * Handle incoming streaming requests
    */
   private async handleRequest(req: any, res: any): Promise<void> {
     try {
+      // Enhanced CORS handling for mobile devices on local network
+      const origin = req.headers.origin || req.headers.referer;
+      const corsOrigin = getCorsOrigin(origin);
+
+      // Log CORS request for debugging
+      logCorsRequest(origin, req.headers['user-agent']);
+
       // Handle CORS preflight requests
       if (req.method === 'OPTIONS') {
-        res.writeHead(200, {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Range',
-          'Access-Control-Max-Age': '86400',
-        });
-        res.end();
+        handleCorsPrelight(res, origin);
         return;
       }
 
       // Parse request
       const request = this.parseRequest(req);
       if (!request) {
-        res.writeHead(400, {
-          'Access-Control-Allow-Origin': '*',
-        });
+        const corsHeaders = getCorsHeaders(origin);
+        res.writeHead(400, corsHeaders);
         res.end('Invalid request');
         return;
       }
@@ -61,9 +71,8 @@ export class AudioServer {
       // Check if file exists
       if (!require('fs').existsSync(request.filePath)) {
         console.error(`Audio file not found: ${request.filePath}`);
-        res.writeHead(404, {
-          'Access-Control-Allow-Origin': '*',
-        });
+        const corsHeaders = getCorsHeaders(origin);
+        res.writeHead(404, corsHeaders);
         res.end('Audio file not found');
         return;
       }
@@ -92,14 +101,13 @@ export class AudioServer {
         
         console.log(`[AUDIO SERVER] Range request - Content type: ${contentType}`);
         
+        const corsHeaders = getCorsHeaders(origin);
         res.writeHead(206, {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize,
           'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Range',
+          ...corsHeaders,
         });
         
         file.pipe(res);
@@ -121,13 +129,12 @@ export class AudioServer {
         console.log(`[AUDIO SERVER] Content type: ${contentType}`);
         console.log(`[AUDIO SERVER] File size: ${fileSize} bytes`);
 
+        const corsHeaders = getCorsHeaders(origin);
         res.writeHead(200, {
           'Content-Type': contentType,
           'Content-Length': fileSize,
           'Accept-Ranges': 'bytes',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Range',
+          ...corsHeaders,
         });
 
         // Stream the file instead of loading it entirely into memory
@@ -137,9 +144,10 @@ export class AudioServer {
 
     } catch (error) {
       console.error('Error handling stream request:', error);
-      res.writeHead(500, {
-        'Access-Control-Allow-Origin': '*',
-      });
+      const origin = req.headers.origin || req.headers.referer;
+      const corsHeaders = getCorsHeaders(origin);
+
+      res.writeHead(500, corsHeaders);
       res.end('Internal server error');
     }
   }

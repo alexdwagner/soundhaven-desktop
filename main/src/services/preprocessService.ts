@@ -95,7 +95,7 @@ export class PreprocessService {
           }
           
           waveformData = downsampledData;
-          console.log(`✅ Generated waveform with ${waveformData.length} data points`);
+          
           resolve(waveformData);
         } catch (error) {
           reject(new Error(`Error processing waveform data: ${error}`));

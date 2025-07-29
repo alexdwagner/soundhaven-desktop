@@ -54,6 +54,9 @@ const NavBar: React.FC<NavBarProps> = ({
   const actualTracks = contextTracks.length > 0 ? contextTracks : tracks;
   const actualPlaylists = contextPlaylists.length > 0 ? contextPlaylists : playlists;
   
+  // Ensure comments is always a safe array
+  const safeComments = Array.isArray(comments) ? comments : [];
+  
   console.log('🔍 [NavBar] Data sources:', {
     propTracks: tracks.length,
     propPlaylists: playlists.length,
@@ -61,20 +64,21 @@ const NavBar: React.FC<NavBarProps> = ({
     contextPlaylists: contextPlaylists.length,
     actualTracks: actualTracks.length,
     actualPlaylists: actualPlaylists.length,
-    comments: comments.length
+    comments: safeComments.length,
+    commentsError: !!commentsError
   });
   
   // Log comments state for debugging
   useEffect(() => {
     console.log('🔍 [NavBar] Comments state:', { 
-      commentsCount: comments?.length || 0, 
+      commentsCount: safeComments.length, 
       isLoading: commentsLoading, 
       error: commentsError 
     });
     if (commentsError) {
       console.warn('🔍 [NavBar] Comments error - search will work without comments:', commentsError);
     }
-  }, [comments, commentsLoading, commentsError]);
+  }, [safeComments, commentsLoading, commentsError]);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
@@ -131,7 +135,7 @@ const NavBar: React.FC<NavBarProps> = ({
                 <SearchBar
                   tracks={actualTracks}
                   playlists={actualPlaylists}
-                  comments={commentsError ? [] : comments}
+                  comments={commentsError ? [] : safeComments}
                   onTrackSelect={onTrackSelect}
                   onPlaylistSelect={onPlaylistSelect}
                   onCommentSelect={onCommentSelect}
