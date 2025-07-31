@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { addCorsHeaders, handleOptionsRequest } from '../../../utils/cors';
+
+export async function OPTIONS(request: NextRequest) {
+  return handleOptionsRequest(request.headers);
+}
 
 export async function GET(
   request: NextRequest,
@@ -35,7 +40,7 @@ export async function GET(
         'base64'
       );
       
-      return new NextResponse(transparentPng, {
+      const errorResponse = new NextResponse(transparentPng, {
         status: 200,
         headers: {
           'Content-Type': 'image/png',
@@ -43,6 +48,8 @@ export async function GET(
           'Cache-Control': 'public, max-age=3600'
         }
       });
+      
+      return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
     }
     
     // Read and serve the actual album art file
@@ -56,7 +63,7 @@ export async function GET(
     
     console.log('📱 [Album Art API] Serving file:', filename, 'Type:', contentType, 'Size:', fileBuffer.length);
     
-    return new NextResponse(fileBuffer, {
+    const successResponse = new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
@@ -64,6 +71,8 @@ export async function GET(
         'Cache-Control': 'public, max-age=3600'
       }
     });
+    
+    return addCorsHeaders(successResponse, request.headers.get('origin') || undefined);
     
   } catch (error) {
     console.error('📱 [Album Art API] Error serving album art:', error);
@@ -74,7 +83,7 @@ export async function GET(
       'base64'
     );
     
-    return new NextResponse(transparentPng, {
+    const fallbackResponse = new NextResponse(transparentPng, {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
@@ -82,5 +91,7 @@ export async function GET(
         'Cache-Control': 'public, max-age=3600'
       }
     });
+    
+    return addCorsHeaders(fallbackResponse, request.headers.get('origin') || undefined);
   }
 } 

@@ -175,39 +175,69 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Handle playback state changes from PlaybackProvider - Unified WaveSurfer approach
   useEffect(() => {
-    console.log('🎵 [UNIFIED PLAYBACK] isPlaying changed:', isPlaying, 'isAudioLoaded:', isAudioLoaded);
+    console.log('👂 [AUDIO TRACKING] isPlaying changed:', isPlaying, 'isAudioLoaded:', isAudioLoaded);
+    console.log('👂 [AUDIO TRACKING] WaveSurfer exists:', !!waveSurferRef.current);
+    console.log('👂 [AUDIO TRACKING] Track:', track?.name);
     
     if (isPlaying) {
+      console.log('👂 [AUDIO TRACKING] Attempting to play audio...');
       // Use WaveSurfer for all platforms
       if (waveSurferRef.current && isAudioLoaded) {
-        console.log('🎵 [UNIFIED PLAYBACK] Playing via WaveSurfer');
+        console.log('👂 [AUDIO TRACKING] WaveSurfer ready, calling play()');
+        console.log('👂 [AUDIO TRACKING] WaveSurfer.isPlaying() before play:', waveSurferRef.current.isPlaying());
         
         if (!waveSurferRef.current.isPlaying()) {
+          // Mobile audio context activation before play attempt
+          const isMobileBrowser = typeof window !== 'undefined' && !window.electron?.ipcRenderer;
+          if (isMobileBrowser) {
+            console.log('👂 [AUDIO TRACKING] 📱 Mobile browser - checking audio context...');
+            try {
+              // Try to access the MediaElement for mobile browsers
+              const mediaElement = waveSurferRef.current.getMediaElement?.();
+              if (mediaElement) {
+                console.log('👂 [AUDIO TRACKING] 📱 Found MediaElement:', mediaElement.tagName);
+                console.log('👂 [AUDIO TRACKING] 📱 MediaElement readyState:', mediaElement.readyState);
+                console.log('👂 [AUDIO TRACKING] 📱 MediaElement src:', mediaElement.src ? 'Set' : 'Not set');
+              }
+            } catch (error) {
+              console.log('👂 [AUDIO TRACKING] 📱 Could not access MediaElement:', error.message);
+            }
+          }
+          
           const playPromise = waveSurferRef.current.play();
+          console.log('👂 [AUDIO TRACKING] WaveSurfer.play() called, promise:', !!playPromise);
           if (playPromise && typeof playPromise.catch === 'function') {
             playPromise.then(() => {
-              console.log('🎵 [UNIFIED PLAYBACK] WaveSurfer play successful!');
+              console.log('👂 [AUDIO TRACKING] ✅ WaveSurfer play successful!');
+              console.log('👂 [AUDIO TRACKING] WaveSurfer.isPlaying() after play:', waveSurferRef.current?.isPlaying());
             }).catch(error => {
               // Ignore AbortError - it's expected when play() is interrupted
               if (error.name !== 'AbortError') {
-                console.error('🎵 [UNIFIED PLAYBACK] WaveSurfer play failed:', error);
+                console.error('👂 [AUDIO TRACKING] ❌ WaveSurfer play failed:', error);
+                if (isMobileBrowser) {
+                  console.error('👂 [AUDIO TRACKING] 📱 Mobile play failure - may need user gesture or CORS issue');
+                }
               }
             });
           }
+        } else {
+          console.log('👂 [AUDIO TRACKING] WaveSurfer already playing');
         }
       } else if (!isAudioLoaded) {
-        console.log('🎵 [UNIFIED PLAYBACK] Audio not loaded yet, skipping play attempt');
+        console.log('👂 [AUDIO TRACKING] ⏳ Audio not loaded yet, skipping play attempt');
       } else {
-        console.warn('🎵 [UNIFIED PLAYBACK] No WaveSurfer available for playback!');
+        console.warn('👂 [AUDIO TRACKING] ❌ No WaveSurfer available for playback!');
       }
     } else {
+      console.log('👂 [AUDIO TRACKING] Attempting to pause audio...');
       // Pause WaveSurfer
       if (waveSurferRef.current) {
-        console.log('🎵 [UNIFIED PLAYBACK] Pausing WaveSurfer');
+        console.log('👂 [AUDIO TRACKING] Pausing WaveSurfer');
         try {
           waveSurferRef.current.pause();
+          console.log('👂 [AUDIO TRACKING] ✅ WaveSurfer paused');
         } catch (error) {
-          console.error('🎵 [UNIFIED PLAYBACK] Error pausing WaveSurfer:', error);
+          console.error('👂 [AUDIO TRACKING] ❌ Error pausing WaveSurfer:', error);
         }
       }
     }
@@ -614,8 +644,36 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       console.log('🎵 AudioPlayer: File URL resolved:', fileUrl);
 
-      // Step 3: Create new WaveSurfer instance
+      // Step 3: Create new WaveSurfer instance with mobile optimizations
       console.log('🎵 AudioPlayer: Creating new WaveSurfer instance...');
+      
+      // Mobile browser detection
+      const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
+      const isMobileBrowser = !isElectron;
+      
+      console.log('👂 [AUDIO TRACKING] Environment:', { isElectron, isMobileBrowser });
+      
+      // Mobile-specific configuration
+      const mobileConfig = isMobileBrowser ? {
+        backend: 'MediaElementAudio', // More reliable on mobile than WebAudio
+        mediaControls: false,
+        interact: true,
+        // Remove custom XHR headers that might cause CORS issues on mobile
+        xhr: undefined
+      } : {
+        backend: 'WebAudio',
+        xhr: {
+          requestHeaders: [
+            {
+              key: 'Range',
+              value: 'bytes=0-'
+            }
+          ]
+        }
+      };
+      
+      console.log('👂 [AUDIO TRACKING] Using config for mobile:', mobileConfig);
+      
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
         waveColor: '#4F46E5',
@@ -628,18 +686,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         barGap: 3,
         responsive: true,
         normalize: true,
-        backend: 'WebAudio',
         minPxPerSec: 1,
         maxCanvasWidth: 4000,
         progressiveLoad: true,
-        xhr: {
-          requestHeaders: [
-            {
-              key: 'Range',
-              value: 'bytes=0-'
-            }
-          ]
-        },
+        ...mobileConfig,
         plugins: [
           RegionsPlugin.create({
             dragSelection: {
@@ -651,6 +701,24 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
       // Set reference immediately after creation
       waveSurferRef.current = wavesurfer;
+      
+      // Mobile audio context activation (required for iOS/Safari)
+      if (isMobileBrowser) {
+        console.log('👂 [AUDIO TRACKING] Activating mobile audio context...');
+        try {
+          // Get the underlying audio context and resume it
+          const audioContext = wavesurfer.backend?.ac || wavesurfer.backend?.audioContext;
+          if (audioContext && audioContext.state === 'suspended') {
+            console.log('👂 [AUDIO TRACKING] Audio context suspended, attempting to resume...');
+            await audioContext.resume();
+            console.log('👂 [AUDIO TRACKING] ✅ Audio context resumed');
+          } else {
+            console.log('👂 [AUDIO TRACKING] Audio context state:', audioContext?.state);
+          }
+        } catch (contextError) {
+          console.warn('👂 [AUDIO TRACKING] ⚠️ Could not activate audio context:', contextError);
+        }
+      }
 
       // Check if still current after instance creation
       if (currentTrackRef.current !== trackId || !isMountedRef.current) {

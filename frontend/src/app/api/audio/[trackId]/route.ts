@@ -4,11 +4,16 @@ import { createReadStream, statSync, existsSync } from 'fs';
 
 // Import database helper
 import { queryDatabase } from '../../../lib/database';
+import { addCorsHeaders, handleOptionsRequest } from '../../../utils/cors';
 
 // API Route startup logging
 // console.log('📱 [Audio API] Route loaded successfully');
-// console.log('📱 [Audio API] Available methods: GET');
-// console.log('📱 [Audio API] Features: Audio streaming, range requests, mobile support');
+// console.log('📱 [Audio API] Available methods: GET, OPTIONS');
+// console.log('📱 [Audio API] Features: Audio streaming, range requests, mobile support, CORS');
+
+export async function OPTIONS(request: NextRequest) {
+  return handleOptionsRequest(request.headers);
+}
 
 export async function GET(
   request: NextRequest,
@@ -25,7 +30,8 @@ export async function GET(
     if (!result.success || !result.data || result.data.length === 0) {
       console.log('🎵 [Audio Streaming API] Track not found:', trackId);
       console.log('🎵 [Audio Streaming API] Database result:', result);
-      return NextResponse.json({ error: 'Track not found' }, { status: 404 });
+      const errorResponse = NextResponse.json({ error: 'Track not found' }, { status: 404 });
+      return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
     }
     
     const track = result.data[0];
@@ -44,7 +50,8 @@ export async function GET(
     
     if (!existsSync(absolutePath)) {
       console.log('🎵 [Audio Streaming API] Audio file not found:', absolutePath);
-      return NextResponse.json({ error: 'Audio file not found' }, { status: 404 });
+      const errorResponse = NextResponse.json({ error: 'Audio file not found' }, { status: 404 });
+      return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
     }
     
     const stat = statSync(absolutePath);
@@ -62,7 +69,7 @@ export async function GET(
       
       const fileStream = createReadStream(absolutePath, { start, end });
       
-      return new NextResponse(fileStream as any, {
+      const rangeResponse = new NextResponse(fileStream as any, {
         status: 206,
         headers: {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -72,12 +79,14 @@ export async function GET(
           'Cache-Control': 'public, max-age=3600'
         }
       });
+      
+      return addCorsHeaders(rangeResponse, request.headers.get('origin') || undefined);
     } else {
       // Serve entire file
       console.log('🎵 [Audio Streaming API] Serving complete file, size:', fileSize);
       const fileStream = createReadStream(absolutePath);
       
-      return new NextResponse(fileStream as any, {
+      const fullResponse = new NextResponse(fileStream as any, {
         status: 200,
         headers: {
           'Content-Type': 'audio/mpeg',
@@ -86,13 +95,16 @@ export async function GET(
           'Cache-Control': 'public, max-age=3600'
         }
       });
+      
+      return addCorsHeaders(fullResponse, request.headers.get('origin') || undefined);
     }
     
   } catch (error) {
     console.error('🎵 [Audio Streaming API] Error:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Audio streaming error' },
       { status: 500 }
     );
+    return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
   }
 } 

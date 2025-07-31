@@ -546,6 +546,38 @@ export default function MainContent({ searchResults }: MainContentProps) {
               </div>
             </div>
 
+            {/* Persistent Mobile AudioPlayer - Hidden when not in library view */}
+            {playbackCurrentTrack && (
+              <div 
+                className={
+                  mobileView === 'library' 
+                    ? "border-b bg-white p-2 flex-shrink-0" 
+                    : ""
+                }
+                style={
+                  mobileView !== 'library' 
+                    ? { height: 0, overflow: 'hidden' }
+                    : undefined
+                }
+              >
+                <AudioPlayer 
+                  track={playbackCurrentTrack}
+                  isPlaying={isPlaying}
+                  onPlayPause={togglePlayback}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  onSeek={handleSeek}
+                  onVolumeChange={setVolume}
+                  onPlaybackSpeedChange={setPlaybackSpeed}
+                  onAddComment={handleAddComment}
+                  volume={volume}
+                  playbackSpeed={playbackSpeed}
+                  waveSurferRef={waveSurferRef}
+                  regionsRef={regionsRef}
+                />
+              </div>
+            )}
+
             {/* Mobile Content Area */}
             <div className="flex-1 overflow-hidden">
               {/* Playlists View - Mobile */}
@@ -565,26 +597,6 @@ export default function MainContent({ searchResults }: MainContentProps) {
               {/* Library View */}
               {mobileView === 'library' && (
                 <div className="h-full overflow-hidden flex flex-col">
-                  {/* Audio Player - Fixed to Library View */}
-                  {playbackCurrentTrack && (
-                    <div className="border-b bg-white p-2 flex-shrink-0">
-                      <AudioPlayer 
-                        track={playbackCurrentTrack}
-                        isPlaying={isPlaying}
-                        onPlayPause={togglePlayback}
-                        onNext={handleNext}
-                        onPrevious={handlePrevious}
-                        onSeek={handleSeek}
-                        onVolumeChange={setVolume}
-                        onPlaybackSpeedChange={setPlaybackSpeed}
-                        onAddComment={handleAddComment}
-                        volume={volume}
-                        playbackSpeed={playbackSpeed}
-                        waveSurferRef={waveSurferRef}
-                        regionsRef={regionsRef}
-                      />
-                    </div>
-                  )}
                   {/* Tracks Manager Content */}
                   <div className="flex-1 overflow-hidden">
                     <TracksManager 
@@ -658,25 +670,27 @@ export default function MainContent({ searchResults }: MainContentProps) {
             
             {/* Main Content Area - AudioPlayer above TracksManager */}
             <div className={`flex flex-col gap-2 transition-all duration-300 ${selectedCommentId ? 'w-3/5' : 'w-4/5'} min-w-0`}>
-              {/* Audio Player - Top */}
-              <div className="flex-shrink-0 border border-gray-300 rounded bg-white">
-                <div className="text-xs text-gray-500 mb-1 px-2 pt-2">🎵 Audio Player</div>
-                <AudioPlayer 
-                  track={playbackCurrentTrack}
-                  isPlaying={isPlaying}
-                  onPlayPause={togglePlayback}
-                  onNext={handleNext}
-                  onPrevious={handlePrevious}
-                  onSeek={handleSeek}
-                  onVolumeChange={setVolume}
-                  onPlaybackSpeedChange={setPlaybackSpeed}
-                  onAddComment={handleAddComment}
-                  volume={volume}
-                  playbackSpeed={playbackSpeed}
-                  waveSurferRef={waveSurferRef}
-                  regionsRef={regionsRef}
-                />
-              </div>
+              {/* Desktop Audio Player - Inside content area */}
+              {!isMobile && playbackCurrentTrack && (
+                <div className="flex-shrink-0 border border-gray-300 rounded bg-white">
+                  <div className="text-xs text-gray-500 mb-1 px-2 pt-2">🎵 Audio Player</div>
+                  <AudioPlayer 
+                    track={playbackCurrentTrack}
+                    isPlaying={isPlaying}
+                    onPlayPause={togglePlayback}
+                    onNext={handleNext}
+                    onPrevious={handlePrevious}
+                    onSeek={handleSeek}
+                    onVolumeChange={setVolume}
+                    onPlaybackSpeedChange={setPlaybackSpeed}
+                    onAddComment={handleAddComment}
+                    volume={volume}
+                    playbackSpeed={playbackSpeed}
+                    waveSurferRef={waveSurferRef}
+                    regionsRef={regionsRef}
+                  />
+                </div>
+              )}
               
               {/* Tracks Manager - Bottom */}
               <div className="flex-1 min-h-0">
@@ -800,6 +814,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
           }}
         />
       )}
+
     </main>
   );
 }

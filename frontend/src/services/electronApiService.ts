@@ -65,10 +65,39 @@ if (typeof window !== 'undefined') {
   console.log('🔍 [ELECTRON DETECTION] Running on server (SSR)');
 }
 
+// Detect if we're on a mobile browser
+const isMobileBrowser = () => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+// Get the current hostname (will be network IP on mobile)
+const getCurrentHost = () => {
+  if (typeof window === 'undefined') return 'localhost';
+  return window.location.hostname;
+};
+
 // Base URL for API requests (only used in web mode)
 const getBaseUrl = () => {
   if (isElectron) return ''; // In Electron, we use IPC
-  return process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  
+  // If we have an explicit environment variable, use it
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL;
+  }
+  
+  // Auto-detect based on current location
+  const host = getCurrentHost();
+  const port = process.env.FRONTEND_PORT || '3001';
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+  
+  const baseUrl = `${protocol}://${host}:${port}`;
+  
+  console.log('📱 [DataLayer] Auto-detected base URL:', baseUrl);
+  console.log('📱 [DataLayer] Current host:', host);
+  console.log('📱 [DataLayer] Is mobile browser:', isMobileBrowser());
+  
+  return baseUrl;
 };
 
 // Make an API request using the appropriate method based on the environment
@@ -213,6 +242,14 @@ const makeRequest = async <T = any>(
       return { data, status: response.status };
     } catch (error) {
       console.error('API request failed:', error);
+      console.error('🌐 [ApiService] API returned error:', error instanceof Error ? error.message : 'Network error');
+      console.error('🌐 [ApiService] Request details:', {
+        endpoint,
+        baseUrl: getBaseUrl(),
+        fullUrl: `${getBaseUrl()}${endpoint}`,
+        isMobile: isMobileBrowser(),
+        host: getCurrentHost()
+      });
       return {
         error: error instanceof Error ? error.message : 'Network error',
         status: 0
