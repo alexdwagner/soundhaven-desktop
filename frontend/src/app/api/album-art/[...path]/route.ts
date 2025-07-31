@@ -5,9 +5,10 @@ import { existsSync } from 'fs';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const filename = params.path?.join('/') || '';
+  const { path } = await params;
+  const filename = path?.join('/') || '';
   
   console.log('📱 [Album Art API] ===============================');
   console.log('📱 [Album Art API] NEW REQUEST RECEIVED');

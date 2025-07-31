@@ -36,11 +36,11 @@ const defaultFilters: SearchFilters = {
 };
 
 export function useSearch(tracks: Track[], playlists: Playlist[] = [], comments: Comment[] = []) {
-  console.log('🔍 [useSearch] Hook called with:', { 
-    tracksCount: tracks.length, 
-    playlistsCount: playlists.length, 
-    commentsCount: comments.length 
-  });
+  // console.log('🔍 [useSearch] Hook called with:', { 
+  //   tracksCount: tracks.length, 
+  //   playlistsCount: playlists.length, 
+  //   commentsCount: comments.length 
+  // });
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState(''); // Manual search query (only updates on Enter)

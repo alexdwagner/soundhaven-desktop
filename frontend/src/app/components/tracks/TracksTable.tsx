@@ -63,7 +63,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
   const isDragEnabled = isPlaylistView ? playlistSortMode === 'manual' : true; // Always enabled for library view
   
   // Add debugging
-  console.log('🔧 [TRACKS TABLE] isDragEnabled:', isDragEnabled, 'isPlaylistView:', isPlaylistView, 'playlistSortMode:', playlistSortMode);
+  // console.log('🔧 [TRACKS TABLE] isDragEnabled:', isDragEnabled, 'isPlaylistView:', isPlaylistView, 'playlistSortMode:', playlistSortMode);
 
 
 
@@ -94,14 +94,14 @@ const TracksTable: React.FC<TracksTableProps> = ({
       return;
     }
 
-    console.log('👉 [LOCAL DRAG] Track reordering in TracksTable:', { activeId: active.id, overId: over.id });
+    // console.log('👉 [LOCAL DRAG] Track reordering in TracksTable:', { activeId: active.id, overId: over.id });
 
     // Only handle reordering for playlist view
     if (isPlaylistView && playlistSortMode === 'manual' && onReorderTracks) {
       const oldIndex = tracks.findIndex(track => (track.playlist_track_id || track.id) === active.id);
       const newIndex = tracks.findIndex(track => (track.playlist_track_id || track.id) === over.id);
       
-      console.log('👉 [LOCAL DRAG] Reordering from index', oldIndex, 'to', newIndex);
+      // console.log('👉 [LOCAL DRAG] Reordering from index', oldIndex, 'to', newIndex);
       
       if (oldIndex !== -1 && newIndex !== -1) {
         onReorderTracks(oldIndex, newIndex);

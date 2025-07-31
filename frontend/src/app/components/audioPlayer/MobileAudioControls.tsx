@@ -61,11 +61,11 @@ const MobileAudioControls: React.FC<MobileAudioControlsProps> = ({
 
 
 
-  console.log('🍅 [MOBILE CONTROLS] MobileAudioControls component rendering', {
-    track: track?.name,
-    isPlaying,
-    hasTrack: !!track
-  });
+  // console.log('🍅 [MOBILE CONTROLS] MobileAudioControls component rendering', {
+  //   track: track?.name,
+  //   isPlaying,
+  //   hasTrack: !!track
+  // });
 
   return (
     <>

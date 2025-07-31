@@ -12,9 +12,9 @@ import { queryDatabase } from '../../../lib/database';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { trackId: string } }
+  { params }: { params: Promise<{ trackId: string }> }
 ) {
-  const trackId = params.trackId;
+  const { trackId } = await params;
   
   console.log('🎵 [Audio Streaming API] Request for track:', trackId);
   

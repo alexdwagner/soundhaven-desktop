@@ -119,7 +119,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const internalRegionsRef = useRef<any>(null);
   
   // Log markers for debugging
-  console.log('🎯 AudioPlayer using markers from context');
+  // console.log('🎯 AudioPlayer using markers from context');
   
   // Use external refs if provided, otherwise use internal refs
   const waveSurferRef = externalWaveSurferRef || internalWaveSurferRef;
@@ -250,22 +250,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     // Check if it's a local file access error
     if (url.startsWith('file://') && error.message.includes('Failed to fetch')) {
-      console.log('🔄 AudioPlayer: Local file access failed, attempting audio server fallback...');
+      // console.log('🔄 AudioPlayer: Local file access failed, attempting audio server fallback...');
       
       // Convert file:// URL to audio server URL
       const fileName = url.split('/').pop();
       const audioServerUrl = `http://localhost:3002/audio/${fileName}`;
       
-      console.log('🔄 AudioPlayer: Fallback URL:', {
-        originalUrl: url,
-        fallbackUrl: audioServerUrl,
-        fileName: fileName
-      });
+      // console.log('🔄 AudioPlayer: Fallback URL:', {
+      //   originalUrl: url,
+      //   fallbackUrl: audioServerUrl,
+      //   fileName: fileName
+      // });
       
       // Try loading with audio server URL
       if (waveSurferRef.current) {
         try {
-          console.log('🔄 AudioPlayer: Loading audio with fallback URL...');
+          // console.log('🔄 AudioPlayer: Loading audio with fallback URL...');
           waveSurferRef.current.load(audioServerUrl);
         } catch (fallbackError) {
           console.error('❌ AudioPlayer: Fallback loading also failed:', {
@@ -977,12 +977,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Handle volume change
   const handleVolumeChange = useCallback((newVolume: number) => {
     if (!waveSurferRef.current) {
-      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for volume change');
+      // console.warn('🎵 AudioPlayer: No WaveSurfer instance available for volume change');
       return;
     }
 
     try {
-      console.log('🎵 AudioPlayer: Setting volume to:', newVolume);
+      // console.log('🎵 AudioPlayer: Setting volume to:', newVolume);
       waveSurferRef.current.setVolume(newVolume / 100);
       onVolumeChange(newVolume / 100); // Sync with prop
     } catch (error) {
@@ -993,12 +993,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Handle playback speed change
   const handleSpeedChange = useCallback((newSpeed: number) => {
     if (!waveSurferRef.current) {
-      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for speed change');
+      // console.warn('🎵 AudioPlayer: No WaveSurfer instance available for speed change');
       return;
     }
 
     try {
-      console.log('🎵 AudioPlayer: Setting playback speed to:', newSpeed);
+      // console.log('🎵 AudioPlayer: Setting playback speed to:', newSpeed);
       waveSurferRef.current.setPlaybackRate(newSpeed);
       onPlaybackSpeedChange(newSpeed); // Sync with prop
     } catch (error) {
