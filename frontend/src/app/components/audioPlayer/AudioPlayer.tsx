@@ -89,7 +89,6 @@ interface AudioPlayerProps {
   playbackSpeed: number;
   waveSurferRef?: React.MutableRefObject<WaveSurferWithRegions | null>;
   regionsRef?: React.MutableRefObject<any>;
-  externalMobileAudioRef?: React.MutableRefObject<HTMLAudioElement | null>;
 }
 
 // Define the region type
@@ -114,41 +113,49 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   playbackSpeed,
   waveSurferRef: externalWaveSurferRef,
   regionsRef: externalRegionsRef,
-  externalMobileAudioRef,
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const internalWaveSurferRef = useRef<WaveSurferWithRegions | null>(null);
   const internalRegionsRef = useRef<any>(null);
   
-  // Mobile HTML5 audio element - internal fallback
-  const internalMobileAudioRef = useRef<HTMLAudioElement>(null);
+  // Log markers for debugging
+  console.log('🎯 AudioPlayer using markers from context');
   
   // Use external refs if provided, otherwise use internal refs
   const waveSurferRef = externalWaveSurferRef || internalWaveSurferRef;
   const regionsRef = externalRegionsRef || internalRegionsRef;
-  const mobileAudioRef = externalMobileAudioRef || internalMobileAudioRef;
   
   const [isReady, setIsReady] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string>('');
-  const [isPlayingState, setIsPlaying] = useState(isPlaying);
   // Convert volume from 0-1 range to 0-100 range for the slider
   const [volumeState, setVolume] = useState(Math.round(volume * 100));
   const [playbackSpeedState, setPlaybackSpeed] = useState(playbackSpeed);
 
   // Track if WaveSurfer is loaded and ready to play audio
   const [isAudioLoaded, setIsAudioLoaded] = useState(false);
-  
-  // Track if we should auto-play once audio is loaded
-  const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
   // Environment detection for mobile/desktop behavior
   const { isMobile } = useEnvironment();
   
+  // Debug environment detection
+  useEffect(() => {
+    console.log('🌍 [AUDIO PLAYER] Environment detection:', { 
+      isMobile, 
+      userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'N/A',
+      screenWidth: typeof window !== 'undefined' ? window.innerWidth : 'N/A'
+    });
+  }, [isMobile]);
+  
   // Touch tracking for mobile waveform seeking
   const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  
+  // Double-tap detection for mobile
+  const [lastTapTime, setLastTapTime] = useState<number>(0);
+  const [lastTapPosition, setLastTapPosition] = useState<number | null>(null);
+  const DOUBLE_TAP_DELAY = 300; // milliseconds
 
   // Sync internal volume state with external volume prop
   useEffect(() => {
@@ -165,172 +172,56 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [playbackSpeed]);
 
-  // Sync with external mobile audio when provided (for persistent audio across view switches)
-  useEffect(() => {
-    if (!externalMobileAudioRef?.current) return;
-    
-    const externalAudio = externalMobileAudioRef.current;
-    
-    console.log('🎵 [AUDIO PLAYER] Setting up sync with external mobile audio');
-    
-    const syncTimeUpdate = () => {
-      setCurrentTime(externalAudio.currentTime);
-      
-      // Sync WaveSurfer visualization position
-      if (waveSurferRef.current && externalAudio.duration > 0) {
-        const progress = externalAudio.currentTime / externalAudio.duration;
-        try {
-          waveSurferRef.current.seekTo(progress);
-        } catch (error) {
-          // Ignore seek errors during sync
-        }
-      }
-    };
-    
-    const syncDurationChange = () => {
-      setDuration(externalAudio.duration);
-    };
-    
-    const syncLoadedData = () => {
-      console.log('🎵 [AUDIO PLAYER] External mobile audio loaded');
-      setIsAudioLoaded(true);
-      setIsReady(true);
-      setDuration(externalAudio.duration);
-    };
-    
-    // Initial sync
-    if (externalAudio.duration > 0) {
-      setDuration(externalAudio.duration);
-      setCurrentTime(externalAudio.currentTime);
-    }
-    
-    // Set up event listeners for sync
-    externalAudio.addEventListener('timeupdate', syncTimeUpdate);
-    externalAudio.addEventListener('durationchange', syncDurationChange);
-    externalAudio.addEventListener('loadeddata', syncLoadedData);
-    
-    return () => {
-      externalAudio.removeEventListener('timeupdate', syncTimeUpdate);
-      externalAudio.removeEventListener('durationchange', syncDurationChange);
-      externalAudio.removeEventListener('loadeddata', syncLoadedData);
-    };
-  }, [externalMobileAudioRef?.current, track?.id]);
 
-  // Sync internal isPlayingState with external isPlaying prop
+  // Handle playback state changes from PlaybackProvider - Unified WaveSurfer approach
   useEffect(() => {
-    console.log('😺 [ISPLAYING EFFECT] === isPlaying prop changed ===');
-    console.log('😺 [ISPLAYING EFFECT] New isPlaying value:', isPlaying);
-    console.log('😺 [ISPLAYING EFFECT] Has external mobile audio ref:', !!externalMobileAudioRef);
-    console.log('😺 [ISPLAYING EFFECT] Current isAudioLoaded:', isAudioLoaded);
-    
-    setIsPlaying(isPlaying);
-    
-    // Detect environment for proper audio handling
-    const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
-    const isMobileBrowser = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    console.log('🎵 [UNIFIED PLAYBACK] isPlaying changed:', isPlaying, 'isAudioLoaded:', isAudioLoaded);
     
     if (isPlaying) {
-      console.log('😺 [ISPLAYING EFFECT] isPlaying=true, checking audio playback options...');
-      
-      // Mobile browser with external audio ref: Audio is managed externally, just sync visualization
-      if (isMobileBrowser && externalMobileAudioRef) {
-        console.log('😺 [ISPLAYING EFFECT] Mobile with external audio - audio managed externally, AudioPlayer is visualization only');
-        // External audio is managed by MainContent, AudioPlayer just provides visualization
-        return;
-      }
-      // Mobile browser without external ref: Use internal audio
-      else if (isMobileBrowser && !externalMobileAudioRef && mobileAudioRef.current) {
-        console.log('😺 [ISPLAYING EFFECT] Mobile detected - using internal HTML5 audio for autoplay');
-        console.log('😺 [ISPLAYING EFFECT] Mobile audio src:', mobileAudioRef.current.src);
-        console.log('😺 [ISPLAYING EFFECT] Mobile audio readyState:', mobileAudioRef.current.readyState);
+      // Use WaveSurfer for all platforms
+      if (waveSurferRef.current && isAudioLoaded) {
+        console.log('🎵 [UNIFIED PLAYBACK] Playing via WaveSurfer');
         
-        try {
-          const playPromise = mobileAudioRef.current.play();
-          console.log('😺 [ISPLAYING EFFECT] Mobile audio play() called, promise:', !!playPromise);
-          
+        if (!waveSurferRef.current.isPlaying()) {
+          const playPromise = waveSurferRef.current.play();
           if (playPromise && typeof playPromise.catch === 'function') {
             playPromise.then(() => {
-              console.log('😺 [ISPLAYING EFFECT] Mobile audio autoplay successful!');
+              console.log('🎵 [UNIFIED PLAYBACK] WaveSurfer play successful!');
             }).catch(error => {
-              console.error('😺 [ISPLAYING EFFECT] Mobile audio autoplay failed:', error);
+              // Ignore AbortError - it's expected when play() is interrupted
+              if (error.name !== 'AbortError') {
+                console.error('🎵 [UNIFIED PLAYBACK] WaveSurfer play failed:', error);
+              }
             });
           }
-        } catch (error) {
-          console.error('😺 [ISPLAYING EFFECT] Error starting mobile audio autoplay:', error);
         }
-      } 
-      // Desktop/Electron: Use WaveSurfer
-      else if (waveSurferRef.current && isAudioLoaded) {
-        console.log('😺 [ISPLAYING EFFECT] Desktop detected - using WaveSurfer for autoplay');
-        const playPromise = waveSurferRef.current.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.then(() => {
-            console.log('😺 [ISPLAYING EFFECT] WaveSurfer autoplay successful!');
-          }).catch(error => {
-            // Ignore AbortError - it's expected when play() is interrupted
-            if (error.name !== 'AbortError') {
-              console.error('😺 [ISPLAYING EFFECT] WaveSurfer autoplay failed:', error);
-            }
-          });
-        }
-      } 
-      // Audio not ready yet
-      else if (!isAudioLoaded) {
-        console.log('😺 [ISPLAYING EFFECT] Audio not loaded yet, setting shouldAutoPlay flag');
-        setShouldAutoPlay(true);
+      } else if (!isAudioLoaded) {
+        console.log('🎵 [UNIFIED PLAYBACK] Audio not loaded yet, skipping play attempt');
       } else {
-        console.warn('😺 [ISPLAYING EFFECT] No audio element available for autoplay!');
+        console.warn('🎵 [UNIFIED PLAYBACK] No WaveSurfer available for playback!');
       }
     } else {
-      console.log('😺 [ISPLAYING EFFECT] isPlaying=false, pausing audio...');
-      
-      // Mobile browser with external audio ref: Audio is managed externally
-      if (isMobileBrowser && externalMobileAudioRef) {
-        console.log('😺 [ISPLAYING EFFECT] Mobile with external audio - pause managed externally');
-        // External audio is managed by MainContent
-        return;
-      }
-      // Pause internal mobile audio (only if no external ref provided)
-      else if (isMobileBrowser && !externalMobileAudioRef && mobileAudioRef.current) {
-        console.log('😺 [ISPLAYING EFFECT] Pausing internal mobile audio');
-        try {
-          mobileAudioRef.current.pause();
-        } catch (error) {
-          console.error('😺 [ISPLAYING EFFECT] Error pausing mobile audio:', error);
-        }
-      }
-      
       // Pause WaveSurfer
       if (waveSurferRef.current) {
-        console.log('😺 [ISPLAYING EFFECT] Pausing WaveSurfer audio');
+        console.log('🎵 [UNIFIED PLAYBACK] Pausing WaveSurfer');
         try {
           waveSurferRef.current.pause();
         } catch (error) {
-          console.error('😺 [ISPLAYING EFFECT] Error pausing WaveSurfer audio:', error);
+          console.error('🎵 [UNIFIED PLAYBACK] Error pausing WaveSurfer:', error);
         }
       }
     }
-    
-    console.log('😺 [ISPLAYING EFFECT] === isPlaying effect completed ===');
-  }, [isPlaying, isAudioLoaded, externalMobileAudioRef]);
+  }, [isPlaying, isAudioLoaded]);
 
-  // Get markers from comments context with defensive destructuring and error handling
-  let commentsHookResult;
-  try {
-    commentsHookResult = useComments(waveSurferRef as any, regionsRef as any);
-  } catch (error) {
-    console.error('❌ AudioPlayer: Error calling useComments hook:', error);
-    commentsHookResult = null;
-  }
-  
-  // Defensive destructuring to handle undefined/null hook results
-  const {
-    markers = [],
+
+  // Get markers and comments from context via useComments hook
+  const { 
+    markers: activeMarkers = [], 
     comments = [],
-    setSelectedCommentId = () => {},
-    regionCommentMap = {},
-    setRegionCommentMap = () => {}
-  } = commentsHookResult || {};
+    regionCommentMap,
+    setRegionCommentMap,
+    setSelectedCommentId = () => {}
+  } = useComments(waveSurferRef, regionsRef);
   
   // Ensure comments is always an array for safe operations - handle undefined/null cases
   const safeComments: _Comment[] = comments && Array.isArray(comments) ? comments : [];
@@ -338,14 +229,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Debug markers and comments in AudioPlayer
   useEffect(() => {
     console.log('=== AUDIOPLAYER MARKERS & COMMENTS DEBUG ===');
-    console.log('markers from useComments:', markers);
-    console.log('markers length:', markers?.length);
-    console.log('markers type:', typeof markers);
-    console.log('comments from useComments:', comments);
+    console.log('activeMarkers from context:', activeMarkers);
+    console.log('activeMarkers length:', activeMarkers?.length);
+    console.log('comments from context:', comments);
     console.log('comments length:', comments?.length);
-    console.log('comments type:', typeof comments);
     console.log('safeComments length:', safeComments.length);
-  }, [markers, comments, safeComments]);
+  }, [activeMarkers, comments]);
 
   // Enhanced error handling and logging for WaveSurfer
   const handleWaveSurferError = useCallback((error: any, url: string) => {
@@ -365,7 +254,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
       // Convert file:// URL to audio server URL
       const fileName = url.split('/').pop();
-      const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+      const audioServerUrl = `http://localhost:3002/audio/${fileName}`;
       
       console.log('🔄 AudioPlayer: Fallback URL:', {
         originalUrl: url,
@@ -395,7 +284,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Enhanced getFileUrl function with mobile browser support
   const getFileUrl = useCallback(async (filePath: string): Promise<string> => {
-    console.log('🎵 AudioPlayer: Getting file URL for track:', track?.id, 'filePath:', filePath);
+    console.log('🎵 AudioPlayer: Getting file URL for track:', track?.id, track?.name, 'filePath:', filePath);
     
     // Detect if we're in mobile browser (no Electron APIs) - use consistent detection
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
@@ -409,6 +298,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         const streamingUrl = `/api/audio/${track?.id}`;
         console.log('🎵 AudioPlayer: Using Next.js API streaming URL for mobile:', {
           trackId: track?.id,
+          trackName: track?.name,
           streamingUrl: streamingUrl,
           note: 'Using Next.js /api/audio/[trackId] endpoint'
         });
@@ -416,9 +306,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       } else {
         // Electron: use audio server with actual filename
         const fileName = filePath.replace('/uploads/', '');
-        const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+        const audioServerUrl = `http://localhost:3002/audio/${fileName}`;
         
         console.log('🎵 AudioPlayer: Using audio server URL for Electron:', {
+          trackId: track?.id,
+          trackName: track?.name,
           originalPath: filePath,
           fileName: fileName,
           audioServerUrl: audioServerUrl
@@ -429,6 +321,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
     } catch (error) {
       console.warn('⚠️ AudioPlayer: Error getting file URL, using fallback:', {
+        trackId: track?.id,
+        trackName: track?.name,
         error: error,
         filePath: filePath
       });
@@ -440,382 +334,125 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         return fallbackUrl;
       } else {
         const fileName = filePath.replace('/uploads/', '');
-        const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+        const audioServerUrl = `http://localhost:3002/audio/${fileName}`;
         console.log('🎵 AudioPlayer: Using Electron fallback:', audioServerUrl);
         return audioServerUrl;
       }
     }
-  }, [track?.id]);
+  }, [track?.id, track?.name]);
 
-  // Enhanced WaveSurfer initialization with mobile browser detection
-  const initializeWaveSurfer = useCallback(async () => {
-    if (!track || !waveformRef.current) {
-      console.log('🎵 AudioPlayer: Cannot initialize WaveSurfer - missing track or container');
-      return;
-    }
+  // Track current initialization to prevent race conditions
+  const currentTrackRef = useRef<string | null>(null);
+  
+  // Track component mount state
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-    // Detect mobile browser and handle gracefully - use consistent detection
-    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
-    const isMobileBrowser = !isElectron;
-    
-    console.log('🎵 AudioPlayer: Environment detection:', { isElectron, isMobileBrowser, hasElectron: !!window.electron, hasIpcRenderer: !!window.electron?.ipcRenderer });
-    
-    // WaveSurfer works on mobile browsers too! No need to skip it
-    console.log('🎵 AudioPlayer: Initializing WaveSurfer for environment:', { isElectron, isMobileBrowser });
-
-    // Destroy any existing instance before creating a new one
-    if (waveSurferRef.current) {
-      try {
-        console.log('🧹 AudioPlayer: Destroying previous WaveSurfer instance...');
-        
-        const oldInstance = waveSurferRef.current;
-        waveSurferRef.current = null; // Clear reference immediately to prevent race conditions
-        setIsReady(false);
-        setIsAudioLoaded(false); // Reset audio loaded state
-        
-        // Safely destroy the old instance
-        try {
-          // Try to pause and stop any ongoing operations first
-          if (typeof oldInstance.isPlaying === 'function' && oldInstance.isPlaying()) {
-            oldInstance.pause();
-          }
-          
-          // Try to unsubscribe from events to prevent further callbacks
-          if (typeof (oldInstance as any).unAll === 'function') {
-            (oldInstance as any).unAll();
-          }
-        } catch (pauseError) {
-          // Ignore pause/cleanup errors, instance might be in invalid state
-          console.log('🧹 AudioPlayer: Could not pause/cleanup old instance, continuing with destroy...');
-        }
-        
-        // Add a micro-delay to let any pending operations settle
-        await new Promise(resolve => setTimeout(resolve, 10));
-        
-        // Destroy with maximum error suppression
-        const originalConsoleError = console.error;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleLog = console.log;
-        
-        // Track if we handled the destroy to prevent multiple calls
-        let destroyAttempted = false;
-        
-        try {
-          // Aggressively suppress ALL console output during destroy
-          console.error = () => {}; // Suppress all errors
-          console.warn = () => {};  // Suppress all warnings  
-          console.log = () => {};   // Suppress all logs
-          
-          // Set up a global error handler to catch unhandled errors
-          const handleGlobalError = (event: ErrorEvent) => {
-            event.preventDefault();
-            event.stopPropagation();
-            return true; // Prevent default handling
-          };
-          
-          const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-            event.preventDefault();
-            event.stopPropagation();
-          };
-          
-          // Add global error handlers
-          window.addEventListener('error', handleGlobalError, true);
-          window.addEventListener('unhandledrejection', handleUnhandledRejection, true);
-          
-          // Destroy the instance
-          if (!destroyAttempted && oldInstance && typeof oldInstance.destroy === 'function') {
-            destroyAttempted = true;
-            oldInstance.destroy();
-          }
-          
-          // Clean up global error handlers
-          setTimeout(() => {
-            window.removeEventListener('error', handleGlobalError, true);
-            window.removeEventListener('unhandledrejection', handleUnhandledRejection, true);
-          }, 100);
-          
-        } catch (destroyError: any) {
-          // Silently ignore ALL errors during destroy
-          // AbortError is expected when destroying during audio loading
-          } finally {
-          // Always restore console methods after a delay
-          setTimeout(() => {
-            console.error = originalConsoleError;
-            console.warn = originalConsoleWarn;
-            console.log = originalConsoleLog;
-          }, 100);
-        }
-        
-        // Add a small delay to ensure proper cleanup
-        await new Promise(resolve => setTimeout(resolve, 20));
-      } catch (destroyError) {
-        console.error('❌ AudioPlayer: Error destroying previous instance:', destroyError);
+  // Proper WaveSurfer destruction with completion promise
+  const destroyWaveSurfer = useCallback((): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!waveSurferRef.current) {
+        console.log('🧹 AudioPlayer: No WaveSurfer instance to destroy');
+        resolve();
+        return;
       }
-    }
 
-    try {
-      console.log('🎵 AudioPlayer: Creating new WaveSurfer instance...');
+      console.log('🧹 AudioPlayer: Starting proper WaveSurfer destruction...');
+      const oldInstance = waveSurferRef.current;
       
-      // Get the file URL
-      const fileUrl = await getFileUrl(track.filePath);
-      
-      // Type check to ensure we have a string URL
-      if (typeof fileUrl !== 'string') {
-        throw new Error(`Invalid file URL type: ${typeof fileUrl}, expected string`);
-      }
-      
-      console.log('🎵 AudioPlayer: File URL resolved:', {
-        originalPath: track.filePath,
-        resolvedUrl: fileUrl,
-        urlType: typeof fileUrl
-      });
+      // Clear reference immediately to prevent new operations
+      waveSurferRef.current = null;
+      setIsReady(false);
+      setIsAudioLoaded(false);
 
-      // Create WaveSurfer instance - OPTIMIZED for immediate audio playback
-      console.log('🎵 AudioPlayer: Creating WaveSurfer instance for immediate audio playback...');
-      const wavesurfer = WaveSurfer.create({
-        container: waveformRef.current,
-          waveColor: '#4F46E5',
-          progressColor: '#7C3AED',
-        cursorColor: '#1F2937',
-          barWidth: 2,
-        barRadius: 3,
-        cursorWidth: 1,
-        height: 128,
-        barGap: 3,
-        responsive: true,
-          normalize: true,
-          backend: 'WebAudio',
-        // Ensure we see the full waveform
-        minPxPerSec: 1, // Allow very zoomed out view to see entire track
-        maxCanvasWidth: 4000, // Allow wide canvas for full track view
-        // OPTIMIZATION: Enable immediate playback
-        progressiveLoad: true, // Allow playback to start before full file is loaded
-        xhr: {
-          // Enable range requests for progressive loading
-          requestHeaders: [
-            {
-              key: 'Range',
-              value: 'bytes=0-'
-            }
-          ]
-        },
-          plugins: [
-          RegionsPlugin.create({
-            dragSelection: {
-              slop: 5
-            }
-          })
-        ]
-      });
-
-      waveSurferRef.current = wavesurfer;
-      
-      // Get the regions plugin instance - use the correct API for WaveSurfer v7
-      let regionsPlugin = null;
       try {
-        // Try multiple ways to access the regions plugin
-        console.log('🔍 Debugging regions plugin access...');
-        console.log('wavesurfer object keys:', Object.keys(wavesurfer));
-        console.log('wavesurfer.regions:', wavesurfer.regions);
-        
-        if (wavesurfer.regions) {
-          regionsPlugin = wavesurfer.regions;
-          regionsRef.current = regionsPlugin;
-          console.log('✅ Regions plugin found via wavesurfer.regions');
-        } else if (wavesurfer.plugins && Array.isArray(wavesurfer.plugins)) {
-          regionsPlugin = wavesurfer.plugins.find(plugin => 
-            plugin && typeof plugin === 'object' && 'addRegion' in plugin
-          );
-          if (regionsPlugin) {
-            regionsRef.current = regionsPlugin;
-            console.log('✅ Regions plugin found via wavesurfer.plugins array');
-          }
+        // Step 1: Pause and stop any ongoing operations
+        if (typeof oldInstance.isPlaying === 'function' && oldInstance.isPlaying()) {
+          oldInstance.pause();
         }
         
-        if (regionsPlugin) {
-          // Add markers if they exist
-          if (markers && markers.length > 0) {
-            console.log('🎯 Adding markers after regions plugin ready:', markers.length);
-            addMarkersToWaveform();
-          }
-        } else {
-          console.warn('⚠️ Regions plugin not found, trying delayed access');
-          // Try again after a short delay
-          setTimeout(() => {
-            if (wavesurfer.regions) {
-              regionsRef.current = wavesurfer.regions;
-              console.log('✅ Regions plugin found via delayed access');
-              
-              if (markers && markers.length > 0) {
-                console.log('🎯 Adding markers after delayed regions plugin ready:', markers.length);
-                addMarkersToWaveform();
-              }
-            } else {
-              console.warn('⚠️ Regions plugin still not found after delay');
-            }
-          }, 200);
+        // Step 2: Remove all event listeners
+        if (typeof (oldInstance as any).unAll === 'function') {
+          (oldInstance as any).unAll();
         }
+        
+        // Step 3: Destroy the instance
+        if (typeof oldInstance.destroy === 'function') {
+          oldInstance.destroy();
+        }
+        
+        console.log('✅ AudioPlayer: WaveSurfer destruction completed');
+        resolve();
+        
       } catch (error) {
-        console.error('❌ Error accessing regions plugin:', error);
+        console.error('❌ AudioPlayer: Error during destruction:', error);
+        // Still resolve to not block the process
+        resolve();
       }
+    });
+  }, []);
+
+  // Proper audio loading with completion promise
+  const loadAudioWithPromise = useCallback((wavesurfer: any, url: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      console.log('🎵 AudioPlayer: Starting audio load with promise...');
       
-      console.log('🎵 AudioPlayer: WaveSurfer instance created successfully:', {
-        container: waveformRef.current,
-        hasRegions: !!wavesurfer.regions,
-        regionsPlugin: !!regionsPlugin
-      });
+      const handleReady = () => {
+        console.log('✅ AudioPlayer: Audio actually loaded and ready');
+        wavesurfer.un('ready', handleReady);
+        wavesurfer.un('error', handleError);
         
-        // Set up event listeners
-      wavesurfer.on('ready', () => {
-        console.log('🎵 AudioPlayer: WaveSurfer ready event - audio can play immediately');
-          setIsReady(true);
-        setIsAudioLoaded(true); // Audio is loaded and ready to play
+        // Set state after actual completion
+        setIsReady(true);
+        setIsAudioLoaded(true);
         setDuration(wavesurfer.getDuration());
         
-        // Check if we should auto-play now that audio is loaded
-        if (shouldAutoPlay) {
-          console.log('🎵 AudioPlayer: Auto-playing because shouldAutoPlay flag is set');
-          setShouldAutoPlay(false); // Reset flag
-          const playPromise = wavesurfer.play();
-          if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(error => {
-              if (error.name !== 'AbortError') {
-                console.error('❌ AudioPlayer: Error auto-playing on ready:', error);
-              }
-            });
-          }
-        }
-        
-        // Add markers after WaveSurfer is ready
-          if (markers && markers.length > 0) {
-          console.log('🎯 Adding markers after WaveSurfer ready:', markers.length);
-          addMarkersToWaveform();
-          }
-        });
-        
-      // WaveSurfer events handle audio playback
-      wavesurfer.on('play', () => {
-        console.log('🎵 AudioPlayer: WaveSurfer play event');
-          setIsPlaying(true);
-        });
-        
-      wavesurfer.on('pause', () => {
-        console.log('🎵 AudioPlayer: WaveSurfer pause event');
-          setIsPlaying(false);
-        });
-        
-      wavesurfer.on('finish', () => {
-        console.log('🎵 AudioPlayer: WaveSurfer finish event');
-          setIsPlaying(false);
-        onNext();
-        });
-        
-      wavesurfer.on('timeupdate', (currentTime: number) => {
-          setCurrentTime(currentTime);
-        });
-        
-      wavesurfer.on('loading', (progress: number) => {
-        // console.log('🎵 AudioPlayer: WaveSurfer loading progress:', {
-        //   progress: progress,
-        //   trackId: track.id
-        // });
-      });
-
-      wavesurfer.on('error', (error: any) => {
-        console.error('🎵 AudioPlayer: WaveSurfer error event triggered:', error);
-      });
-
-      // Try to load preprocessed waveform data first
-      console.log('🎵 AudioPlayer: Attempting to load preprocessed waveform data...');
-      const startTime = performance.now();
+        resolve();
+      };
       
-      // TEMPORARY: Add flag to test direct loading vs preprocessing
-      const DISABLE_PREPROCESSING = false; // Set to true to test direct loading
+      const handleError = (error: any) => {
+        console.error('❌ AudioPlayer: Audio load failed:', error);
+        wavesurfer.un('ready', handleReady);
+        wavesurfer.un('error', handleError);
+        reject(error);
+      };
       
+      // Set up event listeners
+      wavesurfer.on('ready', handleReady);
+      wavesurfer.on('error', handleError);
+      
+      // Start loading
       try {
-        if (DISABLE_PREPROCESSING) {
-          console.log('🧪 AudioPlayer: Preprocessing disabled for testing - loading directly');
-          await wavesurfer.load(fileUrl);
-          const endTime = performance.now();
-          console.log(`🧪 AudioPlayer: DIRECT TEST load completed in ${(endTime - startTime).toFixed(2)}ms`);
-          console.log('🎵 AudioPlayer: Audio file loaded successfully (direct test)');
-        } else {
-          const preprocessStartTime = performance.now();
-          const { waveformData } = await apiService.getWaveformData(track.id.toString());
-          const preprocessEndTime = performance.now();
-          
-          console.log(`📊 AudioPlayer: Preprocessing data fetch took ${(preprocessEndTime - preprocessStartTime).toFixed(2)}ms`);
-          
-          if (waveformData && waveformData.length > 0) {
-            console.log(`✅ AudioPlayer: Using preprocessed waveform data with ${waveformData.length} points`);
-            console.log(`📊 AudioPlayer: Peaks data size: ${JSON.stringify(waveformData).length} bytes`);
-            console.log(`📊 AudioPlayer: Expected benefit: Using ${waveformData.length} peaks instead of full audio decode`);
-            
-            // Load with the audio URL and preprocessed peaks data
-            const loadStartTime = performance.now();
-            await wavesurfer.load(fileUrl, waveformData);
-            const loadEndTime = performance.now();
-            const endTime = performance.now();
-            
-            console.log(`🚀 AudioPlayer: PREPROCESSED load completed in ${(endTime - startTime).toFixed(2)}ms`);
-            console.log(`   └── Data fetch: ${(preprocessEndTime - preprocessStartTime).toFixed(2)}ms`);
-            console.log(`   └── WaveSurfer load: ${(loadEndTime - loadStartTime).toFixed(2)}ms`);
-            console.log('🎵 AudioPlayer: WaveSurfer loaded with preprocessed peaks data');
-            
-          } else {
-            console.log('⚠️ AudioPlayer: No preprocessed waveform data found, loading audio file directly');
-            await wavesurfer.load(fileUrl);
-            const endTime = performance.now();
-            console.log(`🐌 AudioPlayer: DIRECT load completed in ${(endTime - startTime).toFixed(2)}ms`);
-            console.log('🎵 AudioPlayer: Audio file loaded successfully (direct)');
-          }
-        }
-      } catch (preprocessError) {
-        console.error('❌ AudioPlayer: Error loading preprocessed data, falling back to audio file:', preprocessError);
-        try {
-          await wavesurfer.load(fileUrl);
-          const endTime = performance.now();
-          console.log(`🐌 AudioPlayer: FALLBACK load completed in ${(endTime - startTime).toFixed(2)}ms`);
-          console.log('🎵 AudioPlayer: Audio file loaded successfully (fallback)');
-        } catch (loadError) {
-          console.error('❌ AudioPlayer: Failed to load audio file:', loadError);
-          throw loadError;
-        }
+        wavesurfer.load(url);
+      } catch (loadError) {
+        wavesurfer.un('ready', handleReady);
+        wavesurfer.un('error', handleError);
+        reject(loadError);
       }
-
-      console.log('🎵 AudioPlayer: WaveSurfer initialization completed successfully');
-
-          } catch (error) {
-      console.error('🎵 AudioPlayer: WaveSurfer error occurred:', error);
-      
-      // Check if it's a CORS or network error
-      if (error.message && error.message.includes('CORS')) {
-        console.error('❌ AudioPlayer: CORS error detected, cannot use fallback');
-      } else if (error.message && error.message.includes('fetch')) {
-        console.error('❌ AudioPlayer: Network error detected');
-            } else {
-        console.error('❌ AudioPlayer: Non-local file error, cannot use fallback:', error);
-      }
-      
-      console.error('❌ AudioPlayer: Failed to load audio file:', error);
-    }
-  }, [track?.id, track?.filePath]);
+    });
+  }, []);
 
   // Function to add markers to waveform with enhanced styling and tooltips
   const addMarkersToWaveform = useCallback(() => {
     try {
-      if (!regionsRef.current || !markers || markers.length === 0) {
+      if (!regionsRef.current || !activeMarkers || activeMarkers.length === 0) {
         console.log('🎯 Cannot add markers - missing regions plugin or no markers');
         return;
       }
 
-      console.log('🎯 Adding markers to waveform:', markers.length);
+      console.log('🎯 Adding markers to waveform:', activeMarkers.length);
       
       // Clear existing regions
       regionsRef.current.clearRegions();
       
       // Add new regions for each marker
-      markers.forEach((marker: any, index: number) => {
+      activeMarkers.forEach((marker: any, index: number) => {
         console.log(`🎯 Adding region for marker ${index + 1}:`, marker);
         try {
           // Check if the marker has all required properties
@@ -938,15 +575,156 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     } catch (error) {
       console.error('❌ Error adding markers to waveform:', error);
     }
-  }, [markers, setRegionCommentMap, safeComments]);
+  }, [activeMarkers, setRegionCommentMap, comments]);
+
+  // Enhanced WaveSurfer initialization with race condition protection
+  const initializeWaveSurfer = useCallback(async () => {
+    if (!track || !waveformRef.current) {
+      console.log('🎵 AudioPlayer: Cannot initialize WaveSurfer - missing track or container');
+      return;
+    }
+
+    const trackId = `${track.id}-${track.filePath}`;
+    currentTrackRef.current = trackId;
+    console.log('🎵 AudioPlayer: Starting initialization for track:', trackId);
+
+    try {
+      // Step 1: Proper cleanup with real completion check
+      await destroyWaveSurfer();
+      
+      // Check if still current after cleanup
+      if (currentTrackRef.current !== trackId || !isMountedRef.current) {
+        console.log('🎵 AudioPlayer: Track changed or component unmounted during cleanup');
+        return;
+      }
+
+      // Step 2: Get file URL
+      const fileUrl = await getFileUrl(track.filePath);
+      
+      // Check if still current after URL resolution
+      if (currentTrackRef.current !== trackId || !isMountedRef.current) {
+        console.log('🎵 AudioPlayer: Track changed or component unmounted during URL resolution');
+        return;
+      }
+      
+      // Type check
+      if (typeof fileUrl !== 'string') {
+        throw new Error(`Invalid file URL type: ${typeof fileUrl}, expected string`);
+      }
+
+      console.log('🎵 AudioPlayer: File URL resolved:', fileUrl);
+
+      // Step 3: Create new WaveSurfer instance
+      console.log('🎵 AudioPlayer: Creating new WaveSurfer instance...');
+      const wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: '#4F46E5',
+        progressColor: '#7C3AED',
+        cursorColor: '#1F2937',
+        barWidth: 2,
+        barRadius: 3,
+        cursorWidth: 1,
+        height: 128,
+        barGap: 3,
+        responsive: true,
+        normalize: true,
+        backend: 'WebAudio',
+        minPxPerSec: 1,
+        maxCanvasWidth: 4000,
+        progressiveLoad: true,
+        xhr: {
+          requestHeaders: [
+            {
+              key: 'Range',
+              value: 'bytes=0-'
+            }
+          ]
+        },
+        plugins: [
+          RegionsPlugin.create({
+            dragSelection: {
+              slop: 5
+            }
+          })
+        ]
+      });
+
+      // Set reference immediately after creation
+      waveSurferRef.current = wavesurfer;
+
+      // Check if still current after instance creation
+      if (currentTrackRef.current !== trackId || !isMountedRef.current) {
+        console.log('🎵 AudioPlayer: Track changed or component unmounted during instance creation');
+        await destroyWaveSurfer();
+        return;
+      }
+
+      // Step 4: Set up regions plugin
+      let regionsPlugin = null;
+      try {
+        if (wavesurfer.regions) {
+          regionsPlugin = wavesurfer.regions;
+          regionsRef.current = regionsPlugin;
+          console.log('✅ Regions plugin found via wavesurfer.regions');
+        }
+      } catch (error) {
+        console.error('❌ Error accessing regions plugin:', error);
+      }
+
+      // Step 5: Set up core event listeners (not including ready - handled by loadAudioWithPromise)
+      wavesurfer.on('play', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer play event');
+      });
+      
+      wavesurfer.on('pause', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer pause event');
+      });
+      
+      wavesurfer.on('finish', () => {
+        console.log('🎵 AudioPlayer: WaveSurfer finish event');
+        onNext();
+      });
+      
+      wavesurfer.on('timeupdate', (currentTime: number) => {
+        setCurrentTime(currentTime);
+      });
+
+      // Step 6: Load audio with proper completion check
+      console.log('🎵 AudioPlayer: Loading audio...');
+      await loadAudioWithPromise(wavesurfer, fileUrl);
+
+      // Final check - ensure we're still current after loading
+      if (currentTrackRef.current === trackId && isMountedRef.current) {
+        console.log('✅ AudioPlayer: Initialization completed successfully for track:', trackId);
+        
+        // Add markers if they exist
+        if (activeMarkers && activeMarkers.length > 0) {
+          console.log('🎯 Adding markers after successful initialization:', activeMarkers.length);
+          addMarkersToWaveform();
+        }
+      } else {
+        console.log('🚫 AudioPlayer: Track changed during loading, cleaning up');
+        await destroyWaveSurfer();
+      }
+
+    } catch (error) {
+      console.error('❌ AudioPlayer: Initialization failed:', error);
+      // Cleanup on failure
+      await destroyWaveSurfer();
+    }
+  }, [track?.id, track?.filePath, destroyWaveSurfer, loadAudioWithPromise, getFileUrl, onNext, activeMarkers, addMarkersToWaveform]);
+
 
   // Set audio URL based on track file path
   useEffect(() => {
-    console.log('🎵 AudioPlayer: Track changed effect triggered');
-    console.log('🎵 AudioPlayer: Track object:', track);
-    console.log('🎵 AudioPlayer: Track filePath:', track?.filePath);
-    console.log('🎵 AudioPlayer: Track filePath type:', typeof track?.filePath);
-    console.log('🎵 AudioPlayer: Track keys:', track ? Object.keys(track) : 'null');
+    console.log('🦇 AudioPlayer: Track changed effect triggered');
+    console.log('🦇 AudioPlayer: Track object:', JSON.stringify(track, null, 2));
+    console.log('🦇 AudioPlayer: Track id:', track?.id);
+    console.log('🦇 AudioPlayer: Track name:', track?.name);
+    console.log('🦇 AudioPlayer: Track filePath:', track?.filePath);
+    console.log('🦇 AudioPlayer: Track file_path:', track?.file_path);
+    console.log('🦇 AudioPlayer: Track filePath type:', typeof track?.filePath);
+    console.log('🦇 AudioPlayer: Track keys:', track ? Object.keys(track) : 'null');
     
     if (!track) {
       console.log('AudioPlayer: No track provided, clearing audio');
@@ -975,26 +753,31 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       setRegionCommentMap({});
     }
     
-    if (!waveformRef.current || !track?.filePath) {
-      console.log('AudioPlayer: Missing waveformRef or filePath, returning early');
-      console.log('AudioPlayer: waveformRef.current:', !!waveformRef.current);
-      console.log('AudioPlayer: track?.filePath:', track?.filePath);
+    // Handle both filePath and file_path for compatibility
+    const trackFilePath = track?.filePath || (track as any)?.file_path;
+    
+    if (!waveformRef.current || !trackFilePath) {
+      console.log('🦇 AudioPlayer: Missing waveformRef or filePath, returning early');
+      console.log('🦇 AudioPlayer: waveformRef.current:', !!waveformRef.current);
+      console.log('🦇 AudioPlayer: track?.filePath:', track?.filePath);
+      console.log('🦇 AudioPlayer: track?.file_path:', (track as any)?.file_path);
+      console.log('🦇 AudioPlayer: trackFilePath:', trackFilePath);
       return;
     }
 
-    console.log('AudioPlayer: Creating WaveSurfer instance...');
+    console.log('🦇 AudioPlayer: Processing track with filePath:', trackFilePath);
     
     // Validate the audio file path
-    if (!track.filePath || typeof track.filePath !== 'string') {
-      console.error('AudioPlayer: Invalid filePath:', track.filePath);
+    if (!trackFilePath || typeof trackFilePath !== 'string') {
+      console.error('🦇 AudioPlayer: Invalid filePath:', trackFilePath);
         return;
       }
       
     // Use environment-aware URL (mobile API vs desktop audio server)
     const getAudioUrl = async () => {
       try {
-        const audioServerUrl = await getFileUrl(track.filePath);
-        console.log('🎵 AudioPlayer: Setting audioUrl via getFileUrl:', audioServerUrl);
+        const audioServerUrl = await getFileUrl(trackFilePath);
+        console.log('🦇 AudioPlayer: Setting audioUrl via getFileUrl:', audioServerUrl);
         setAudioUrl(audioServerUrl);
       } catch (error) {
         console.error('❌ AudioPlayer: Error getting audio URL:', error);
@@ -1002,7 +785,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     };
     
     getAudioUrl();
-  }, [track?.filePath, getFileUrl]);
+  }, [track?.filePath, (track as any)?.file_path, track?.id, getFileUrl]);
 
   // Reset states when audioUrl changes
   useEffect(() => {
@@ -1029,112 +812,22 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [audioUrl]);
 
-  // Handle play/pause - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
+  // Handle play/pause - Unified WaveSurfer approach for all platforms
   const handlePlayPause = useCallback(() => {
-    console.log('😺 [MAIN AUDIO CONTROLS] handlePlayPause called in AudioPlayer');
+    console.log('🎵 [UNIFIED PLAYBACK] handlePlayPause called - using WaveSurfer for all platforms');
     
-    // Detect environment for audio control
-    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
-    const isMobileBrowser = !isElectron;
-    
-    console.log('😺 [AUDIO STATE] Current audio state when handlePlayPause called:', { 
-      isElectron, 
-      isMobileBrowser, 
-      hasExternalMobileAudioRef: !!externalMobileAudioRef,
-      hasMobileAudioRef: !!mobileAudioRef.current,
-      hasWaveSurferRef: !!waveSurferRef.current,
-      audioUrl: audioUrl,
-      isPlayingState: isPlayingState,
-      isAudioLoaded: isAudioLoaded,
-      isReady: isReady
-    });
-    
-    // Mobile with external audio ref: Audio is managed externally, just call the prop
-    if (isMobileBrowser && externalMobileAudioRef) {
-      console.log('😺 [MOBILE AUDIO] External mobile audio ref provided - delegating to onPlayPause prop');
-      onPlayPause();
-      return;
-    }
-    
-    // Mobile with internal audio: Use HTML5 audio for playback, WaveSurfer for visualization only
-    if (isMobileBrowser && !externalMobileAudioRef) {
-      console.log('😺 [MOBILE AUDIO] Attempting internal mobile audio control');
-      if (mobileAudioRef.current) {
-        console.log('😺 [MOBILE AUDIO] Internal mobile audio element exists');
-        try {
-          if (isPlayingState) {
-            console.log('😺 [MOBILE AUDIO] Pausing internal mobile audio (isPlayingState=true)');
-            mobileAudioRef.current.pause();
-            // Also pause WaveSurfer visualization if it exists
-            if (waveSurferRef.current) {
-              waveSurferRef.current.pause();
-            }
-            setIsPlaying(false);
-          } else {
-            console.log('😺 [MOBILE AUDIO] Attempting to play internal mobile audio (isPlayingState=false)');
-            console.log('😺 [MOBILE AUDIO] Mobile audio src:', mobileAudioRef.current.src);
-            console.log('😺 [MOBILE AUDIO] Mobile audio readyState:', mobileAudioRef.current.readyState);
-            const playPromise = mobileAudioRef.current.play();
-            console.log('😺 [MOBILE AUDIO] Play promise created:', !!playPromise);
-            if (playPromise) {
-              playPromise
-                .then(() => {
-                  console.log('✅ Internal mobile audio play succeeded');
-                  setIsPlaying(true);
-                  // Sync WaveSurfer visualization if it exists
-                  if (waveSurferRef.current && mobileAudioRef.current) {
-                    const progress = mobileAudioRef.current.currentTime / mobileAudioRef.current.duration;
-                    if (!isNaN(progress)) {
-                      waveSurferRef.current.seekTo(progress);
-                    }
-                  }
-                })
-                .catch(error => {
-                  console.error('❌ Internal mobile audio play failed:', error);
-                  console.log('🔄 Attempting to unlock audio context...');
-                  // Try to enable audio context
-                  mobileAudioRef.current?.load();
-                });
-            } else {
-              setIsPlaying(true);
-            }
-          }
-        } catch (error) {
-          console.error('❌ AudioPlayer: Error during internal mobile audio play/pause:', error);
-        }
-      } else {
-        console.error('😺 [MOBILE AUDIO] Internal mobile audio element not available!');
-      }
-      
-      // Also call the prop to sync higher-level state
-      onPlayPause();
-      return;
-    }
-    
-    // Desktop: Use WaveSurfer
-    console.log('😺 [DESKTOP AUDIO] Attempting desktop WaveSurfer control');
-    if (!waveSurferRef.current) {
-      console.warn('😺 [DESKTOP AUDIO] No WaveSurfer instance available for play/pause');
-      onPlayPause(); // Still call prop for state sync
-      return;
-    }
-
-    if (!isAudioLoaded) {
-      console.warn('😺 [DESKTOP AUDIO] WaveSurfer audio not yet loaded, cannot play/pause');
-      console.warn('😺 [DESKTOP AUDIO] This might be why audio doesn\'t start on track load!');
+    // Use WaveSurfer for all platforms
+    if (!waveSurferRef.current || !isAudioLoaded) {
+      console.warn('🎵 [UNIFIED PLAYBACK] WaveSurfer not ready for play/pause');
       onPlayPause(); // Still call prop for state sync
       return;
     }
       
     try {
-      console.log('😺 [DESKTOP AUDIO] WaveSurfer ready, proceeding with play/pause');
-      if (isPlayingState) {
-        console.log('😺 [DESKTOP AUDIO] Pausing WaveSurfer audio (isPlayingState=true)');
-        waveSurferRef.current.pause();
-      } else {
-        console.log('😺 [DESKTOP AUDIO] Playing WaveSurfer audio (isPlayingState=false)');
+      console.log('🎵 [UNIFIED PLAYBACK] WaveSurfer ready, proceeding with play/pause');
+      if (isPlaying && !waveSurferRef.current.isPlaying()) {
+        console.log('🎵 [UNIFIED PLAYBACK] Playing WaveSurfer audio');
         const playPromise = waveSurferRef.current.play();
-        console.log('😺 [DESKTOP AUDIO] WaveSurfer play promise created:', !!playPromise);
         if (playPromise && typeof playPromise.catch === 'function') {
           playPromise.catch(error => {
             // Ignore AbortError - it's expected when play() is interrupted
@@ -1143,81 +836,34 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             }
           });
         }
+      } else if (!isPlaying && waveSurferRef.current.isPlaying()) {
+        console.log('🎵 [UNIFIED PLAYBACK] Pausing WaveSurfer audio');
+        waveSurferRef.current.pause();
       }
     } catch (error) {
       console.error('❌ AudioPlayer: Error during WaveSurfer audio play/pause:', error);
     }
     
     // Finally, call the onPlayPause prop to sync with higher-level state
-    console.log('😺 [MAIN AUDIO CONTROLS] About to call onPlayPause prop after audio control');
     onPlayPause();
-    console.log('😺 [MAIN AUDIO CONTROLS] onPlayPause prop called successfully');
-  }, [isPlayingState, isAudioLoaded, onPlayPause, externalMobileAudioRef]);
+  }, [isPlaying, isAudioLoaded, onPlayPause]);
 
-  // Handle seek - Works for both WaveSurfer (desktop) and HTML5 audio (mobile)
+  // Handle seek - Unified WaveSurfer approach for all platforms
   const handleSeek = useCallback((time: number) => {
-    // Detect environment
-    const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
-    const isMobileBrowser = !isElectron;
+    console.log('🎵 [UNIFIED SEEK] Seeking to time:', time, 'seconds');
     
-    console.log('🎵 AudioPlayer: Seeking to time:', time, 'seconds - Environment:', { isElectron, isMobileBrowser, hasExternalMobileAudioRef: !!externalMobileAudioRef });
-    
-    // Mobile with external audio ref: Seeking is managed externally
-    if (isMobileBrowser && externalMobileAudioRef) {
-      console.log('🎵 AudioPlayer: External mobile audio ref provided - seek managed externally');
-      if (externalMobileAudioRef.current) {
-        try {
-          externalMobileAudioRef.current.currentTime = time;
-          console.log('✅ External mobile audio seeked to:', time);
-          
-          // Sync WaveSurfer visualization if it exists
-          if (waveSurferRef.current && duration > 0) {
-            const seekPercent = time / duration;
-            waveSurferRef.current.seekTo(seekPercent);
-            console.log('✅ WaveSurfer visualization synced to:', seekPercent);
-          }
-        } catch (error) {
-          console.error('❌ AudioPlayer: Error during external mobile audio seek:', error);
-        }
-      }
-      return;
-    }
-    
-    // Mobile with internal audio: Use internal HTML5 audio for seeking
-    if (isMobileBrowser && !externalMobileAudioRef) {
-      if (mobileAudioRef.current) {
-        try {
-          mobileAudioRef.current.currentTime = time;
-          console.log('✅ Internal mobile audio seeked to:', time);
-          
-          // Sync WaveSurfer visualization if it exists
-          if (waveSurferRef.current && duration > 0) {
-            const seekPercent = time / duration;
-            waveSurferRef.current.seekTo(seekPercent);
-            console.log('✅ WaveSurfer visualization synced to:', seekPercent);
-          }
-        } catch (error) {
-          console.error('❌ AudioPlayer: Error during internal mobile audio seek:', error);
-        }
-      } else {
-        console.error('❌ AudioPlayer: Internal mobile audio element not available for seek');
-      }
-      return;
-    }
-    
-    // Desktop: Use WaveSurfer for seeking
     if (!waveSurferRef.current) {
-      console.warn('🎵 AudioPlayer: No WaveSurfer instance available for seek');
+      console.warn('🎵 [UNIFIED SEEK] No WaveSurfer instance available for seek');
       return;
     }
 
     try {
-      console.log('🎵 AudioPlayer: Seeking WaveSurfer to time:', time);
+      console.log('🎵 [UNIFIED SEEK] Seeking WaveSurfer to time:', time);
       waveSurferRef.current.seekTo(time / duration);
     } catch (error) {
       console.error('❌ AudioPlayer: Error during WaveSurfer seek:', error);
     }
-  }, [duration, externalMobileAudioRef]);
+  }, [duration]);
 
   // Handle mobile waveform touch/click for seeking
   const handleWaveformTouch = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -1226,7 +872,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     // Get touch/click position
     let clientX: number;
     if ('touches' in e) {
-      // Touch event
+      // Touch event - only handle on mobile
+      if (!isMobile) {
+        console.log('🎵 [DESKTOP] Touch start handler disabled on desktop');
+        return;
+      }
       if (e.touches.length === 0) return;
       clientX = e.touches[0].clientX;
       setTouchStartTime(Date.now());
@@ -1258,6 +908,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   // Handle touch end for mobile (to distinguish from swipe gestures)
   const handleWaveformTouchEnd = useCallback((e: React.TouchEvent) => {
+    // Only handle touch events on mobile
+    if (!isMobile) {
+      console.log('🎵 [DESKTOP] Touch end handler disabled on desktop');
+      return;
+    }
+    
     const touchEndTime = Date.now();
     
     // Only proceed if we have touch start data
@@ -1274,13 +930,49 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       isQuickTap: touchDuration < 200 && touchDistance < 10
     });
     
+    // Check for double-tap on mobile
+    if (touchDuration < 200 && touchDistance < 10) {
+      const currentTime = Date.now();
+      const tapX = touch.clientX;
+      
+      // Check if this tap is close in time and position to the last tap
+      if (lastTapTime && currentTime - lastTapTime < DOUBLE_TAP_DELAY) {
+        if (lastTapPosition !== null && Math.abs(tapX - lastTapPosition) < 30) {
+          // Double-tap detected!
+          console.log('🎵 [DOUBLE TAP] Detected at position:', tapX);
+          
+          // Calculate time position for the comment
+          if (waveformRef.current && duration > 0) {
+            const rect = waveformRef.current.getBoundingClientRect();
+            const clickX = tapX - rect.left;
+            const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
+            const clickTime = clickPercent * duration;
+            
+            console.log('🎵 [DOUBLE TAP] Adding comment at time:', clickTime, 'seconds');
+            
+            if (onAddComment) {
+              onAddComment(clickTime);
+            }
+          }
+          
+          // Reset double-tap tracking
+          setLastTapTime(0);
+          setLastTapPosition(null);
+        }
+      } else {
+        // First tap - record it
+        setLastTapTime(currentTime);
+        setLastTapPosition(tapX);
+      }
+    }
+    
     // Reset touch tracking
     setTouchStartTime(null);
     setTouchStartX(null);
     
     // If it was a quick tap (not a swipe), we already handled the seek in touchstart
     // This is just cleanup - the actual seeking happens in handleWaveformTouch
-  }, [touchStartTime, touchStartX]);
+  }, [touchStartTime, touchStartX, lastTapTime, lastTapPosition, DOUBLE_TAP_DELAY, duration, onAddComment]);
 
   // Handle volume change
   const handleVolumeChange = useCallback((newVolume: number) => {
@@ -1352,23 +1044,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       // @ts-ignore - The events exist on the regions plugin
       regionsRef.current?.un('region-clicked', handleRegionClick);
     };
-  }, [regionsRef.current, setSelectedCommentId, regionCommentMap]);
+  }, [setSelectedCommentId, regionCommentMap]);
 
   // Handle markers updates when they change
   useEffect(() => {
     if (isReady && regionsRef.current) {
-      if (markers && markers.length > 0) {
-        console.log('🎯 Markers updated, refreshing regions:', markers.length);
+      if (activeMarkers && activeMarkers.length > 0) {
+        console.log('🎯 Markers updated, refreshing regions:', activeMarkers.length);
         addMarkersToWaveform();
       } else {
         console.log('🎯 No markers or empty markers array, clearing regions');
         regionsRef.current.clearRegions();
         setRegionCommentMap({});
       }
-    } else if (markers && markers.length > 0 && !regionsRef.current) {
+    } else if (activeMarkers && activeMarkers.length > 0 && !regionsRef.current) {
       console.log('🎯 Markers available but regions plugin not ready, will add when ready');
     }
-  }, [markers, isReady, addMarkersToWaveform]);
+  }, [activeMarkers, isReady, addMarkersToWaveform]);
 
   // Add CSS for region cursor styling
   useEffect(() => {
@@ -1453,46 +1145,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Hidden HTML5 audio element for mobile - only render if audioUrl exists and no external audio ref */}
-      {audioUrl && !externalMobileAudioRef && (
-        <audio
-          ref={internalMobileAudioRef}
-          src={audioUrl}
-          onLoadedData={() => {
-            console.log('🎵 [AUDIO PLAYER] Internal mobile audio loaded');
-            setIsAudioLoaded(true);
-            setIsReady(true);
-            // Set volume for mobile
-            if (mobileAudioRef.current) {
-              mobileAudioRef.current.volume = volume;
-              console.log('🎵 [AUDIO PLAYER] Internal mobile audio volume set to:', volume);
-            }
-          }}
-          onPlay={() => {
-            console.log('🎵 [AUDIO PLAYER] Internal mobile audio playing');
-            setIsPlaying(true);
-          }}
-          onPause={() => {
-            console.log('🎵 [AUDIO PLAYER] Internal mobile audio paused');
-            setIsPlaying(false);
-          }}
-          onTimeUpdate={(e) => {
-            const target = e.target as HTMLAudioElement;
-            setCurrentTime(target.currentTime);
-            // Sync WaveSurfer visualization with mobile audio progress
-            if (waveSurferRef.current && target.duration > 0) {
-              const progress = target.currentTime / target.duration;
-              waveSurferRef.current.seekTo(progress);
-            }
-          }}
-          onDurationChange={(e) => {
-            const target = e.target as HTMLAudioElement;
-            setDuration(target.duration);
-          }}
-          preload="metadata"
-          style={{ display: 'none' }}
-        />
-      )}
       
       {/* Full Height Waveform */}
     <div 
@@ -1507,8 +1159,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         "--region-border-color": "rgb(59, 130, 246)",
         "--region-handle-color": "rgb(59, 130, 246)",
       } as React.CSSProperties}
-      onTouchStart={handleWaveformTouch}
-      onTouchEnd={handleWaveformTouchEnd}
+      {...(isMobile ? {
+        onTouchStart: handleWaveformTouch,
+        onTouchEnd: handleWaveformTouchEnd
+      } : {})}
       onClick={(e) => {
         // Only handle click on desktop (not mobile) to avoid interference with touch
         if (!isMobile) {
@@ -1516,20 +1170,23 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         }
       }}
       onDoubleClick={(e) => {
-        if (!waveSurferRef.current) return;
-        
-        const rect = e.currentTarget.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickPercent = clickX / rect.width;
-        const clickTime = clickPercent * duration;
-        
-        console.log('Double-click at time:', clickTime, 'seconds');
-        
-        if (onAddComment) {
-          onAddComment(clickTime);
+        // Only enable waveform double-click to add comments on mobile
+        if (isMobile && waveSurferRef.current) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickPercent = clickX / rect.width;
+          const clickTime = clickPercent * duration;
+          
+          console.log('🎵 [MOBILE] Waveform double-click at time:', clickTime, 'seconds');
+          
+          if (onAddComment) {
+            onAddComment(clickTime);
+          }
+        } else {
+          console.log('🎵 [DESKTOP] Waveform double-click disabled - use track double-click instead');
         }
       }}
-      title={isMobile ? "Tap to seek, double-tap to add comment" : "Click to seek, double-click to add comment"}
+      title={isMobile ? "Tap to seek, double-tap to add comment" : "Click to seek, double-click track in list to show comments"}
     />
 
       {/* Compact Transport Controls - Single Row */}
@@ -1559,9 +1216,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 ? 'text-white bg-gray-800 hover:bg-gray-700' 
                 : 'text-gray-400 bg-gray-200 cursor-not-allowed'
             }`}
-            aria-label={isPlayingState ? 'Pause' : 'Play'}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlayingState ? (
+            {isPlaying ? (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
               </svg>

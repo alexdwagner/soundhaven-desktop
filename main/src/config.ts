@@ -18,7 +18,7 @@ export const config = {
   
   // Server Ports
   frontendPort: parseInt(process.env.FRONTEND_PORT || '3001'),
-  audioServerPort: parseInt(process.env.AUDIO_SERVER_PORT || '3000'),
+  audioServerPort: parseInt(process.env.AUDIO_SERVER_PORT || '3002'),
   
   // Legacy port config (for backward compatibility)
   port: process.env.PORT || 3000,

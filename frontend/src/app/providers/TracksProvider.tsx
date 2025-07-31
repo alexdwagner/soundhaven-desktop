@@ -66,10 +66,10 @@ const defaultContextValue: TracksContextType = {
 
 export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   // console.log('🎯 TracksProvider component rendering...');
-  console.log('🎯 TracksProvider component mounted/rendered at:', new Date().toISOString());
+  // console.log('🎯 TracksProvider component mounted/rendered at:', new Date().toISOString());
   
   // TEST: Simple test to see if component is mounting
-  console.log('🎯 TracksProvider: Component is mounting...');
+  // console.log('🎯 TracksProvider: Component is mounting...');
   
   // State
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -91,22 +91,22 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   
   // Manual test function for browser console - READ ONLY
   const manualTestAPI = useCallback(async () => {
-    console.log('🧪 [MANUAL TEST] Testing API without affecting state...');
+    // console.log('🧪 [MANUAL TEST] Testing API without affecting state...');
     try {
       const response = await fetch('/api/tracks');
       if (response.ok) {
         const data = await response.json();
         const tracksData = data.data || data;
-        console.log('🧪 [MANUAL TEST] API Response:', tracksData);
-        console.log('🧪 [MANUAL TEST] Tracks count:', Array.isArray(tracksData) ? tracksData.length : 0);
-        console.log('🧪 [MANUAL TEST] Note: This test does not modify app state - use normal flow instead');
+        // console.log('🧪 [MANUAL TEST] API Response:', tracksData);
+        // console.log('🧪 [MANUAL TEST] Tracks count:', Array.isArray(tracksData) ? tracksData.length : 0);
+        // console.log('🧪 [MANUAL TEST] Note: This test does not modify app state - use normal flow instead');
         return tracksData;
       } else {
-        console.log('🧪 [MANUAL TEST] API Response not OK:', response.status);
+        // console.log('🧪 [MANUAL TEST] API Response not OK:', response.status);
         return null;
       }
     } catch (error) {
-      console.error('🧪 [MANUAL TEST] API Error:', error);
+      // console.error('🧪 [MANUAL TEST] API Error:', error);
       return null;
     }
   }, []);
@@ -115,18 +115,18 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).testTracksAPI = manualTestAPI;
-      console.log('🧪 [MANUAL TEST] Available in console: window.testTracksAPI()');
+      // console.log('🧪 [MANUAL TEST] Available in console: window.testTracksAPI()');
     }
   }, [manualTestAPI]);
   
-  console.log('🎯 TracksProvider state:', { 
-    tracksLength: tracks.length, 
-    isLoading, 
-    error,
-    token: token ? 'present' : 'null',
-    tracks: tracks.map(t => ({ id: t.id, name: t.name })),
-    testState
-  });
+  // console.log('🎯 TracksProvider state:', { 
+  //   tracksLength: tracks.length, 
+  //   isLoading, 
+  //   error,
+  //   token: token ? 'present' : 'null',
+  //   tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+  //   testState
+  // });
   
   // Derived state
   const currentTrack = useMemo(() => 
@@ -152,7 +152,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   //       setIsLoading(true);
         
   //       const tracksData = await dataLayer.getTracks();
-  //       console.log('🎯 TracksProvider: Data layer response:', tracksData);
+  //       // console.log('🎯 TracksProvider: Data layer response:', tracksData);
         
   //       if (!isMountedRef.current) return;
         
@@ -192,7 +192,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
 
   // TEST: Simple useEffect to see if any useEffect fires
   useEffect(() => {
-    console.log('🎯 TracksProvider: TEST useEffect FIRED at:', new Date().toISOString());
+    // console.log('🎯 TracksProvider: TEST useEffect FIRED at:', new Date().toISOString());
     setTestState(prev => prev + 1);
   }, []);
 
@@ -213,24 +213,24 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   
   // Re-enabled fetchTracks with proper stabilization
   const fetchTracks = useCallback(async () => {
-    console.log('🎯 TracksProvider fetchTracks called');
+    // console.log('🎯 TracksProvider fetchTracks called');
     if (!isMountedRef.current) return;
     
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('🎯 TracksProvider: Calling dataLayer.getTracks()');
+      // console.log('🎯 TracksProvider: Calling dataLayer.getTracks()');
       const tracksData = await dataLayer.getTracks();
-      console.log('🎯 TracksProvider: Data layer response:', tracksData);
+      // console.log('🎯 TracksProvider: Data layer response:', tracksData);
       
       if (!isMountedRef.current) return;
       
       if (Array.isArray(tracksData)) {
-        console.log('🎯 TracksProvider: Setting tracks:', tracksData.length);
+        // console.log('🎯 TracksProvider: Setting tracks:', tracksData.length);
         setTracks(tracksData);
       } else {
-        console.log('🎯 TracksProvider: No tracks found or invalid format');
+        // console.log('🎯 TracksProvider: No tracks found or invalid format');
         setTracks([]);
       }
     } catch (error) {
@@ -247,7 +247,7 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   // Re-enabled auto-fetching on mount with proper cleanup
   useEffect(() => {
     isMountedRef.current = true;
-    console.log('🎯 TracksProvider: Mounted - Auto-fetching tracks...');
+    // console.log('🎯 TracksProvider: Mounted - Auto-fetching tracks...');
     
     // Call fetchTracks only once on mount
     fetchTracks();
@@ -356,14 +356,14 @@ export const TracksProvider: React.FC<TracksProviderProps> = ({ children }) => {
   const syncMetadata = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('[TRACKS PROVIDER] Starting metadata sync...');
+      // console.log('[TRACKS PROVIDER] Starting metadata sync...');
       
       const response = await apiService.syncMetadata();
       if (response.error) {
         throw new Error(response.error);
       }
       
-      console.log('[TRACKS PROVIDER] Metadata sync completed:', response.data);
+      // console.log('[TRACKS PROVIDER] Metadata sync completed:', response.data);
       
       // Refresh tracks list to show updated metadata
       await fetchTracks();

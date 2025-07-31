@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // API Route startup logging
-console.log('📱 [Tags API] Route loaded successfully');
-console.log('📱 [Tags API] Available methods: GET');
-console.log('📱 [Tags API] Features: Tag management, track associations');
+// console.log('📱 [Tags API] Route loaded successfully');
+// console.log('📱 [Tags API] Available methods: GET');
+// console.log('📱 [Tags API] Features: Tag management, track associations');
 
 export async function GET(request: NextRequest) {
   console.log('📱 [Next.js API] /api/tags called from mobile');

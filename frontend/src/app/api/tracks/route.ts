@@ -7,9 +7,9 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 // API Route startup logging
-console.log('📱 [Tracks API] Route loaded successfully');
-console.log('📱 [Tracks API] Available methods: GET, OPTIONS');
-console.log('📱 [Tracks API] Database integration: SQLite with metadata extraction');
+// console.log('📱 [Tracks API] Route loaded successfully');
+// console.log('📱 [Tracks API] Available methods: GET, OPTIONS');
+// console.log('📱 [Tracks API] Database integration: SQLite with metadata extraction');
 
 export async function GET(request: NextRequest) {
   console.log('📱 [Next.js API] /api/tracks called from mobile');

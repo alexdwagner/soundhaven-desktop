@@ -38,6 +38,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const [tracksManagerReorderHandler, setTracksManagerReorderHandler] = useState<((startIndex: number, endIndex: number) => void) | null>(null);
   const [tracksManagerSelectHandler, setTracksManagerSelectHandler] = useState<((trackId: string) => void) | null>(null);
   const [tracksManagerPlayHandler, setTracksManagerPlayHandler] = useState<((trackId: string) => void) | null>(null);
+  const [tracksManagerAddCommentHandler, setTracksManagerAddCommentHandler] = useState<((time: number) => void) | null>(null);
   const [playlistSidebarDragHandler, setPlaylistSidebarDragHandler] = useState<((event: any) => void) | null>(null);
   
   // Mobile navigation state
@@ -71,14 +72,12 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const waveSurferRef = useRef<any>(null);
   const regionsRef = useRef<any>(null);
   
-  // Persistent mobile audio element - survives view switches
-  const persistentMobileAudioRef = useRef<HTMLAudioElement>(null);
   
   // Get tracks from context for playback controls
   const { tracks: contextTracks } = useTracks();
   
   // Comments state
-  const { selectedCommentId, setSelectedCommentId } = useComments(waveSurferRef, regionsRef);
+  const { selectedCommentId, setSelectedCommentId, fetchCommentsAndMarkers } = useComments(waveSurferRef, regionsRef);
   
   // Audio control handlers - moved from TracksManager
   const handleSeek = (time: number) => {
@@ -97,159 +96,81 @@ export default function MainContent({ searchResults }: MainContentProps) {
   };
   
   const handleAddComment = async (time: number) => {
-    // Comments functionality - TODO: implement if needed
     console.log('💬 [MAIN CONTENT] Add comment at time:', time);
+    
+    // Ensure we have a track playing
+    if (!playbackCurrentTrack) {
+      console.error('💬 [MAIN CONTENT] No track currently playing, cannot add comment');
+      return;
+    }
+    
+    // Use TracksManager's add comment handler if available
+    if (tracksManagerAddCommentHandler) {
+      console.log('💬 [MAIN CONTENT] Calling TracksManager add comment handler');
+      tracksManagerAddCommentHandler(time);
+    } else {
+      console.error('💬 [MAIN CONTENT] TracksManager add comment handler not available');
+      // Fallback: switch to comments view on mobile
+      if (isMobile && mobileView !== 'comments') {
+        setMobileView('comments');
+        console.log('💬 [MAIN CONTENT] Fallback: Switched to comments view for adding comment');
+      }
+    }
   };
   
-  // Persistent mobile audio management
-  useEffect(() => {
-    if (!isMobile || !persistentMobileAudioRef.current || !playbackCurrentTrack) return;
-    
-    const audio = persistentMobileAudioRef.current;
-    console.log('🎵 [PERSISTENT AUDIO] Setting up persistent audio for track:', playbackCurrentTrack.name);
-    console.log('🎵 [PERSISTENT AUDIO] Track data:', {
-      id: playbackCurrentTrack.id,
-      streamingUrl: playbackCurrentTrack.streamingUrl,
-      filePath: playbackCurrentTrack.filePath
-    });
-    
-    // Set up audio source - always use correct API endpoint for persistent mobile audio
-    const audioUrl = `/api/audio/${playbackCurrentTrack.id}`;
-    const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `${window.location.origin}${audioUrl}`;
-    
-    if (audio.src !== fullAudioUrl) {
-      console.log('🎵 [PERSISTENT AUDIO] Loading new track:', fullAudioUrl);
-      audio.src = fullAudioUrl;
-      audio.load();
-    }
-    
-    // Set volume and playback speed
-    audio.volume = volume;
-    audio.playbackRate = playbackSpeed;
-    
-    // Sync playback state - only try to play if audio is ready
-    if (isPlaying && audio.paused) {
-      console.log('🎵 [PERSISTENT AUDIO] Starting playback', {
-        readyState: audio.readyState,
-        networkState: audio.networkState,
-        src: audio.src
-      });
-      
-      if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-        audio.play().catch(error => {
-          console.error('🎵 [PERSISTENT AUDIO] Play failed:', error);
-        });
-      } else {
-        console.log('🎵 [PERSISTENT AUDIO] Audio not ready yet, waiting for canplaythrough');
-        // Set up one-time listener for when audio is ready
-        const playWhenReady = () => {
-          if (isPlaying && audio.paused) {
-            audio.play().catch(error => {
-              console.error('🎵 [PERSISTENT AUDIO] Delayed play failed:', error);
-            });
-          }
-          audio.removeEventListener('canplaythrough', playWhenReady);
-        };
-        audio.addEventListener('canplaythrough', playWhenReady);
-      }
-    } else if (!isPlaying && !audio.paused) {
-      console.log('🎵 [PERSISTENT AUDIO] Pausing playback');
-      audio.pause();
-    }
-    
-  }, [playbackCurrentTrack, isPlaying, volume, playbackSpeed, isMobile]);
   
-  // Handle persistent audio events
-  useEffect(() => {
-    if (!isMobile || !persistentMobileAudioRef.current) return;
-    
-    const audio = persistentMobileAudioRef.current;
-    
-    const handleEnded = () => {
-      console.log('🎵 [PERSISTENT AUDIO] Track ended');
-      handleNext();
-    };
-    
-    const handleCanPlayThrough = () => {
-      console.log('🎵 [PERSISTENT AUDIO] Audio can play through');
-    };
-    
-    const handleLoadedData = () => {
-      console.log('🎵 [PERSISTENT AUDIO] Audio data loaded');
-    };
-    
-    const handleError = (e: Event) => {
-      const audio = e.target as HTMLAudioElement;
-      console.error('🎵 [PERSISTENT AUDIO] Audio error:', {
-        error: e,
-        audioSrc: audio.src,
-        audioError: audio.error,
-        networkState: audio.networkState,
-        readyState: audio.readyState
-      });
-    };
-    
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('canplaythrough', handleCanPlayThrough);
-    audio.addEventListener('loadeddata', handleLoadedData);
-    audio.addEventListener('error', handleError);
-    
-    return () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('canplaythrough', handleCanPlayThrough);
-      audio.removeEventListener('loadeddata', handleLoadedData);
-      audio.removeEventListener('error', handleError);
-    };
-  }, [handleNext, isMobile]);
   
-  // Sync WaveSurfer visualization with persistent mobile audio position
+  // Fetch comments and markers when track changes
   useEffect(() => {
-    if (!isMobile || !persistentMobileAudioRef.current || !waveSurferRef.current) return;
-    
-    const audio = persistentMobileAudioRef.current;
-    const waveSurfer = waveSurferRef.current;
-    
-    const syncWaveformPosition = () => {
-      if (audio.duration > 0 && waveSurfer.getDuration && waveSurfer.getDuration() > 0) {
-        const progress = audio.currentTime / audio.duration;
-        try {
-          waveSurfer.seekTo(progress);
-        } catch (error) {
-          // Ignore seek errors during switching
-        }
-      }
-    };
-    
-    // Initial sync when switching to library view
-    syncWaveformPosition();
-    
-    // Sync during playback
-    const syncInterval = setInterval(syncWaveformPosition, 100);
-    
-    return () => {
-      clearInterval(syncInterval);
-    };
-  }, [mobileView, playbackCurrentTrack, isMobile]);
+    if (playbackCurrentTrack?.id) {
+      console.log('🎯 Fetching comments and markers for track:', playbackCurrentTrack.id);
+      fetchCommentsAndMarkers(playbackCurrentTrack.id);
+    }
+  }, [playbackCurrentTrack?.id, fetchCommentsAndMarkers]);
+
   
   // Debug handler registration
   const handleRegisterReorderHandler = useCallback((handler: (startIndex: number, endIndex: number) => void) => {
-    console.log('🔧 [MAIN CONTENT] Registering reorder handler:', typeof handler);
-    setTracksManagerReorderHandler(handler); // Remove function wrapper
+    // console.log('🔧 [MAIN CONTENT] Registering reorder handler:', typeof handler);
+    setTracksManagerReorderHandler(handler);
   }, []);
 
   const handleRegisterPlaylistDragHandler = useCallback((handler: (event: any) => void) => {
-    console.log('🔧 [MAIN CONTENT] Registering playlist drag handler:', typeof handler);
-    setPlaylistSidebarDragHandler(handler); // Remove function wrapper
+    // console.log('🔧 [MAIN CONTENT] Registering playlist drag handler:', typeof handler);
+    setPlaylistSidebarDragHandler(handler);
   }, []);
 
   const handleRegisterSelectHandler = useCallback((handler: (trackId: string) => void) => {
-    console.log('🔧 [MAIN CONTENT] Registering select handler:', typeof handler);
-    setTracksManagerSelectHandler(() => handler);
+    // console.log('🔧 [MAIN CONTENT] Registering select handler:', typeof handler);
+    // Wrap handler to ensure it's not called with invalid values during registration
+    const safeHandler = (trackId: string) => {
+      if (trackId === undefined || trackId === null) {
+        console.warn('Select handler called with invalid trackId during registration, ignoring');
+        return;
+      }
+      handler(trackId);
+    };
+    setTracksManagerSelectHandler(() => safeHandler);
   }, []);
 
   const handleRegisterPlayHandler = useCallback((handler: (trackId: string) => void) => {
-    console.log('🔧 [MAIN CONTENT] Registering play handler:', typeof handler);
-    setTracksManagerPlayHandler(() => handler);
+    // console.log('🔧 [MAIN CONTENT] Registering play handler:', typeof handler);
+    // Wrap handler to ensure it's not called with invalid values during registration
+    const safeHandler = (trackId: string) => {
+      if (trackId === undefined || trackId === null) {
+        console.warn('Play handler called with invalid trackId during registration, ignoring');
+        return;
+      }
+      
+      // Call the original handler
+      handler(trackId);
+    };
+    setTracksManagerPlayHandler(() => safeHandler);
+  }, [isMobile, setSelectedCommentId]);
+
+  const handleRegisterAddCommentHandler = useCallback((handler: (time: number) => void) => {
+    // console.log('🔧 [MAIN CONTENT] Registering add comment handler:', typeof handler);
+    setTracksManagerAddCommentHandler(() => handler);
   }, []);
   
   // Use playlists provider for cross-playlist operations and track reordering
@@ -351,16 +272,16 @@ export default function MainContent({ searchResults }: MainContentProps) {
 
   // Global drag start handler
   const handleDragStart = (event: any) => {
-    console.log('👉 [DRAG START] Global drag start triggered');
+    // console.log('👉 [DRAG START] Global drag start triggered');
     setIsDragging(true);
     const activeData = event.active.data.current;
     
-    console.log('👉 [DRAG START] Setting isDragging to true');
-    console.log('🌍 [GLOBAL DND] *** DRAG STARTED ***', { 
-      activeId: event.active.id, 
-      activeData: activeData,
-      activeType: activeData?.type 
-    });
+    // console.log('👉 [DRAG START] Setting isDragging to true');
+    // console.log('🌍 [GLOBAL DND] *** DRAG STARTED ***', { 
+    //   activeId: event.active.id, 
+    //   activeData: activeData,
+    //   activeType: activeData?.type 
+    // });
 
     // Find the track being dragged for the preview
     if (activeData?.type === 'track') {
@@ -371,15 +292,15 @@ export default function MainContent({ searchResults }: MainContentProps) {
       );
       
       if (track) {
-        console.log('👉 [DRAG START] Found track for preview:', track.name);
+        // console.log('👉 [DRAG START] Found track for preview:', track.name);
         setActiveTrack(track);
         // Set the count of tracks being dragged
         const selectedCount = activeData.selectedTrackIds?.length || 1;
         setDragTrackCount(selectedCount);
-        console.log('👉 [DRAG START] Setting active track and count:', track.name, 'count:', selectedCount);
-        console.log('🌍 [GLOBAL DND] Setting active track for preview:', track.name, 'count:', selectedCount);
+        // console.log('👉 [DRAG START] Setting active track and count:', track.name, 'count:', selectedCount);
+        // console.log('🌍 [GLOBAL DND] Setting active track for preview:', track.name, 'count:', selectedCount);
       } else {
-        console.log('👉 [DRAG START] No track found for preview');
+        // console.log('👉 [DRAG START] No track found for preview');
       }
     }
   };
@@ -388,98 +309,98 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     
-    console.log('👉 [DRAG END] Global drag end triggered');
-    console.log('👉 [DRAG END] Active ID:', active.id);
-    console.log('👉 [DRAG END] Over ID:', over?.id);
-    console.log('👉 [DRAG END] Has valid drop target:', !!over);
+    // console.log('👉 [DRAG END] Global drag end triggered');
+    // console.log('👉 [DRAG END] Active ID:', active.id);
+    // console.log('👉 [DRAG END] Over ID:', over?.id);
+    // console.log('👉 [DRAG END] Has valid drop target:', !!over);
     
-    console.log('🌍 [GLOBAL DND] *** DRAG ENDED ***', { 
-      activeId: active.id, 
-      overId: over?.id, 
-      activeData: active.data.current,
-      overData: over?.data.current,
-      activeType: active.data.current?.type,
-      overType: over?.data.current?.type
-    });
+    // console.log('🌍 [GLOBAL DND] *** DRAG ENDED ***', { 
+    //   activeId: active.id, 
+    //   overId: over?.id, 
+    //   activeData: active.data.current,
+    //   overData: over?.data.current,
+    //   activeType: active.data.current?.type,
+    //   overType: over?.data.current?.type
+    // });
 
     // Always clean up our drag state immediately to let @dnd-kit handle its own lifecycle
-    console.log('👉 [DRAG END] Cleaning up drag state');
+    // console.log('👉 [DRAG END] Cleaning up drag state');
     setIsDragging(false);
     setActiveTrack(null);
     setDragTrackCount(1);
 
     if (!over) {
-      console.log('👉 [DRAG END] No drop target - failed drop');
-      console.log('🌍 [GLOBAL DND] No drop target');
+      // console.log('👉 [DRAG END] No drop target - failed drop');
+      // console.log('🌍 [GLOBAL DND] No drop target');
       return;
     }
 
     const activeData = active.data.current;
     const overData = over.data.current;
 
-    console.log('👉 [DRAG END] Active data type:', activeData?.type);
-    console.log('👉 [DRAG END] Over data type:', overData?.type);
+    // console.log('👉 [DRAG END] Active data type:', activeData?.type);
+    // console.log('👉 [DRAG END] Over data type:', overData?.type);
     
-    console.log('🌍 [GLOBAL DND] Detailed drag analysis:', {
-      activeType: activeData?.type,
-      overType: overData?.type,
-      isTrackToTrack: activeData?.type === 'track' && overData?.type === 'track',
-      isTrackToPlaylist: activeData?.type === 'track' && overData?.type === 'playlist',
-      isPlaylistToPlaylist: activeData?.type === 'playlist' && overData?.type === 'playlist'
-    });
+    // console.log('🌍 [GLOBAL DND] Detailed drag analysis:', {
+    //   activeType: activeData?.type,
+    //   overType: overData?.type,
+    //   isTrackToTrack: activeData?.type === 'track' && overData?.type === 'track',
+    //   isTrackToPlaylist: activeData?.type === 'track' && overData?.type === 'playlist',
+    //   isPlaylistToPlaylist: activeData?.type === 'playlist' && overData?.type === 'playlist'
+    // });
 
     // Case 1: Track dropped on another track (playlist reordering)
     if (activeData?.type === 'track' && overData?.type === 'track') {
-      console.log('👉 [DRAG END] CASE 1: Track-to-track reordering');
-      console.log('👉 [DRAG END] Skipping - now handled by local DndContext in TracksTable');
-      console.log('🌍 [GLOBAL DND] Track-to-track drag detected (playlist reordering)');
+      // console.log('👉 [DRAG END] CASE 1: Track-to-track reordering');
+      // console.log('👉 [DRAG END] Skipping - now handled by local DndContext in TracksTable');
+      // console.log('🌍 [GLOBAL DND] Track-to-track drag detected (playlist reordering)');
       
       // Track reordering is now handled by the local DndContext in TracksTable
       // This global handler only deals with cross-playlist operations
-      console.log('👉 [DRAG END] Delegating to local TracksTable DndContext');
+      // console.log('👉 [DRAG END] Delegating to local TracksTable DndContext');
       return;
     }
 
     // Case 2: Track dropped on playlist (cross-playlist operation)
     if (activeData?.type === 'track' && overData?.type === 'playlist') {
-      console.log('👉 [DRAG END] CASE 2: Track-to-playlist operation');
-      console.log('🌍 [GLOBAL DND] Track-to-playlist drag detected (cross-playlist)');
-      console.log('🌍 [GLOBAL DND] Track data:', activeData);
-      console.log('🌍 [GLOBAL DND] Playlist data:', overData);
+      // console.log('👉 [DRAG END] CASE 2: Track-to-playlist operation');
+      // console.log('🌍 [GLOBAL DND] Track-to-playlist drag detected (cross-playlist)');
+      // console.log('🌍 [GLOBAL DND] Track data:', activeData);
+      // console.log('🌍 [GLOBAL DND] Playlist data:', overData);
       
       // Handle cross-playlist operation
-      console.log('👉 [DRAG END] Calling handleCrossPlaylistDrag');
+      // console.log('👉 [DRAG END] Calling handleCrossPlaylistDrag');
       handleCrossPlaylistDrag(activeData, overData);
-      console.log('👉 [DRAG END] Exiting track-to-playlist case');
+      // console.log('👉 [DRAG END] Exiting track-to-playlist case');
       return;
     }
 
     // Case 3: Playlist dropped on playlist (playlist reordering)
     if (activeData?.type === 'playlist' && overData?.type === 'playlist') {
-      console.log('👉 [DRAG END] CASE 3: Playlist-to-playlist reordering');
-      console.log('🌍 [GLOBAL DND] Playlist-to-playlist drag detected (playlist reordering)');
+      // console.log('👉 [DRAG END] CASE 3: Playlist-to-playlist reordering');
+      // console.log('🌍 [GLOBAL DND] Playlist-to-playlist drag detected (playlist reordering)');
       // Delegate to PlaylistSidebar's drag handler
       if (playlistSidebarDragHandler && typeof playlistSidebarDragHandler === 'function') {
-        console.log('👉 [DRAG END] Calling PlaylistSidebar drag handler');
-        console.log('🌍 [GLOBAL DND] Calling PlaylistSidebar drag handler');
+        // console.log('👉 [DRAG END] Calling PlaylistSidebar drag handler');
+        // console.log('🌍 [GLOBAL DND] Calling PlaylistSidebar drag handler');
         playlistSidebarDragHandler(event);
       } else {
-        console.log('👉 [DRAG END] No PlaylistSidebar drag handler available');
-        console.warn('🌍 [GLOBAL DND] No PlaylistSidebar drag handler registered');
+        // console.log('👉 [DRAG END] No PlaylistSidebar drag handler available');
+        // console.warn('🌍 [GLOBAL DND] No PlaylistSidebar drag handler registered');
       }
-      console.log('👉 [DRAG END] Exiting playlist-to-playlist case');
+      // console.log('👉 [DRAG END] Exiting playlist-to-playlist case');
       return;
     }
 
-    console.log('👉 [DRAG END] Unhandled drag type - no case matched');
-    console.log('🌍 [GLOBAL DND] Unhandled drag type');
+    // console.log('👉 [DRAG END] Unhandled drag type - no case matched');
+    // console.log('🌍 [GLOBAL DND] Unhandled drag type');
   };
 
   // Handle cross-playlist drag operations
   const handleCrossPlaylistDrag = async (trackData: any, playlistData: any) => {
-    console.log('🎯 [CROSS PLAYLIST] Handling cross-playlist drag');
-    console.log('🎯 [CROSS PLAYLIST] Track data:', trackData);
-    console.log('🎯 [CROSS PLAYLIST] Playlist data:', playlistData);
+    // console.log('🎯 [CROSS PLAYLIST] Handling cross-playlist drag');
+    // console.log('🎯 [CROSS PLAYLIST] Track data:', trackData);
+    // console.log('🎯 [CROSS PLAYLIST] Playlist data:', playlistData);
     
     try {
       // Extract track IDs from the drag data
@@ -496,12 +417,12 @@ export default function MainContent({ searchResults }: MainContentProps) {
         trackIds = [trackData.trackId];
       }
 
-      console.log('🎯 [CROSS PLAYLIST] Final track IDs to add:', trackIds);
-      console.log('🎯 [CROSS PLAYLIST] Target playlist ID:', playlistData.playlistId);
+      // console.log('🎯 [CROSS PLAYLIST] Final track IDs to add:', trackIds);
+      // console.log('🎯 [CROSS PLAYLIST] Target playlist ID:', playlistData.playlistId);
       
       // Add tracks to the target playlist
       const result = await addTracksToPlaylist(playlistData.playlistId, trackIds);
-      console.log('🎯 [CROSS PLAYLIST] Add tracks result:', result);
+      // console.log('🎯 [CROSS PLAYLIST] Add tracks result:', result);
       
       if (result.successful > 0) {
         console.log(`🎯 [CROSS PLAYLIST] ✅ Successfully added ${result.successful} tracks to playlist ${playlistData.playlistName}`);
@@ -524,28 +445,28 @@ export default function MainContent({ searchResults }: MainContentProps) {
         sensors={sensors}
         collisionDetection={closestCenter} 
         onDragStart={(event) => {
-          console.log('👉 [DND LIFECYCLE] DndContext onDragStart triggered');
-          console.log('🎯 [DND CONTEXT] onDragStart triggered!', event);
+          // console.log('👉 [DND LIFECYCLE] DndContext onDragStart triggered');
+          // console.log('🎯 [DND CONTEXT] onDragStart triggered!', event);
           handleDragStart(event);
         }}
         onDragEnd={(event) => {
-          console.log('👉 [DND LIFECYCLE] DndContext onDragEnd triggered');
-          console.log('🎯 [DND CONTEXT] onDragEnd triggered!', event);
+          // console.log('👉 [DND LIFECYCLE] DndContext onDragEnd triggered');
+          // console.log('🎯 [DND CONTEXT] onDragEnd triggered!', event);
           handleDragEnd(event);
         }}
         onDragMove={(event) => {
-          console.log('👉 [DND LIFECYCLE] DndContext onDragMove triggered for:', event.active.id);
-          console.log('🎯 [DND CONTEXT] onDragMove triggered!', event.active.id);
+          // console.log('👉 [DND LIFECYCLE] DndContext onDragMove triggered for:', event.active.id);
+          // console.log('🎯 [DND CONTEXT] onDragMove triggered!', event.active.id);
         }}
         onDragOver={(event) => {
-          console.log('👉 [DND LIFECYCLE] DndContext onDragOver triggered');
+          // console.log('👉 [DND LIFECYCLE] DndContext onDragOver triggered');
         }}
         onDragCancel={(event) => {
-          console.log('👉 [DND LIFECYCLE] DndContext onDragCancel triggered');
+          // console.log('👉 [DND LIFECYCLE] DndContext onDragCancel triggered');
         }}
       >
         {isMobile ? (
-          console.log('🔍 [MOBILE SEARCH] Rendering mobile layout with search field'),
+          // console.log('🔍 [MOBILE SEARCH] Rendering mobile layout with search field'),
           // Mobile Layout with Swipe Navigation
           <div 
             ref={containerRef}
@@ -554,12 +475,6 @@ export default function MainContent({ searchResults }: MainContentProps) {
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           >
-            {/* Persistent Mobile Audio Element - Hidden */}
-            <audio 
-              ref={persistentMobileAudioRef}
-              preload="metadata"
-              style={{ display: 'none' }}
-            />
             {/* Mobile Navigation Header */}
             <div className="flex items-center justify-center bg-white border-b border-gray-200 px-4 py-3 relative">
               <div className="flex space-x-8">
@@ -667,7 +582,6 @@ export default function MainContent({ searchResults }: MainContentProps) {
                         playbackSpeed={playbackSpeed}
                         waveSurferRef={waveSurferRef}
                         regionsRef={regionsRef}
-                        externalMobileAudioRef={persistentMobileAudioRef}
                       />
                     </div>
                   )}
@@ -680,6 +594,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
                       onRegisterReorderHandler={handleRegisterReorderHandler}
                       onRegisterSelectHandler={handleRegisterSelectHandler}
                       onRegisterPlayHandler={handleRegisterPlayHandler}
+                      onRegisterAddCommentHandler={handleRegisterAddCommentHandler}
                       searchResults={searchResults}
                     />
                   </div>
@@ -727,8 +642,9 @@ export default function MainContent({ searchResults }: MainContentProps) {
             )}
           </div>
         ) : (
-          // Desktop Layout (unchanged)
+          // Desktop Layout: Sidebar | (AudioPlayer above TracksManager) | CommentsPanel
           <div className="flex h-full gap-2">
+            {/* Playlists Sidebar - Left */}
             <div className="w-1/5 flex-shrink-0">
               <PlaylistSidebar 
                 key="desktop-playlist-sidebar"
@@ -739,16 +655,56 @@ export default function MainContent({ searchResults }: MainContentProps) {
                 onRegisterDragHandler={handleRegisterPlaylistDragHandler}
               />
             </div>
-            <div className="w-4/5 flex-1 min-w-0">
-              <TracksManager 
-                selectedPlaylistTracks={selectedPlaylistTracks}
-                selectedPlaylistId={selectedPlaylistId}
-                selectedPlaylistName={selectedPlaylistName}
-                onRegisterReorderHandler={handleRegisterReorderHandler}
-                onRegisterSelectHandler={handleRegisterSelectHandler}
-                onRegisterPlayHandler={handleRegisterPlayHandler}
-                searchResults={searchResults}
-              />
+            
+            {/* Main Content Area - AudioPlayer above TracksManager */}
+            <div className={`flex flex-col gap-2 transition-all duration-300 ${selectedCommentId ? 'w-3/5' : 'w-4/5'} min-w-0`}>
+              {/* Audio Player - Top */}
+              <div className="flex-shrink-0 border border-gray-300 rounded bg-white">
+                <div className="text-xs text-gray-500 mb-1 px-2 pt-2">🎵 Audio Player</div>
+                <AudioPlayer 
+                  track={playbackCurrentTrack}
+                  isPlaying={isPlaying}
+                  onPlayPause={togglePlayback}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  onSeek={handleSeek}
+                  onVolumeChange={setVolume}
+                  onPlaybackSpeedChange={setPlaybackSpeed}
+                  onAddComment={handleAddComment}
+                  volume={volume}
+                  playbackSpeed={playbackSpeed}
+                  waveSurferRef={waveSurferRef}
+                  regionsRef={regionsRef}
+                />
+              </div>
+              
+              {/* Tracks Manager - Bottom */}
+              <div className="flex-1 min-h-0">
+                <TracksManager 
+                  selectedPlaylistTracks={selectedPlaylistTracks}
+                  selectedPlaylistId={selectedPlaylistId}
+                  selectedPlaylistName={selectedPlaylistName}
+                  onRegisterReorderHandler={handleRegisterReorderHandler}
+                  onRegisterSelectHandler={handleRegisterSelectHandler}
+                  onRegisterPlayHandler={handleRegisterPlayHandler}
+                  onRegisterAddCommentHandler={handleRegisterAddCommentHandler}
+                  searchResults={searchResults}
+                />
+              </div>
+            </div>
+            
+            {/* Comments Panel - Right (slides in when active) */}
+            <div className={`transition-all duration-300 ${selectedCommentId ? 'w-1/5' : 'w-0'} border-l border-gray-300 overflow-hidden flex-shrink-0`}>
+              {selectedCommentId && playbackCurrentTrack?.id && (
+                <CommentsPanel
+                  trackId={playbackCurrentTrack.id}
+                  show={true}
+                  onClose={() => setSelectedCommentId(null)}
+                  regionsRef={regionsRef}
+                  waveSurferRef={waveSurferRef}
+                  onSelectComment={(commentId) => setSelectedCommentId(commentId)}
+                />
+              )}
             </div>
           </div>
         )}
@@ -757,7 +713,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
         <DragOverlay>
           {activeTrack ? (
             <>
-              {console.log('👉 [DRAG OVERLAY] Rendering drag overlay for:', activeTrack.name)}
+              {/* console.log('👉 [DRAG OVERLAY] Rendering drag overlay for:', activeTrack.name) */}
               <div className="bg-white border border-gray-200 rounded-lg shadow-xl opacity-95 max-w-2xl">
               <table className="min-w-full">
                 <tbody>
@@ -814,6 +770,13 @@ export default function MainContent({ searchResults }: MainContentProps) {
           }}
           onTrackPlay={(trackId) => {
             console.log('🔍 [MOBILE SEARCH] Track play requested:', trackId);
+            
+            // Validate trackId before proceeding
+            if (!trackId) {
+              console.error('🔍 [MOBILE SEARCH] Invalid trackId received:', trackId);
+              return;
+            }
+            
             // Call the TracksManager's play handler FIRST before closing search
             if (tracksManagerPlayHandler) {
               console.log('🔍 [MOBILE SEARCH] Calling play handler for track:', trackId);

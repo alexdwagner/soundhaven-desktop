@@ -23,7 +23,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('soundhaven-volume');
             const savedVolume = saved ? parseFloat(saved) : 0.75;
-            console.log('🔊 [PLAYBACK PROVIDER] Loading volume from localStorage:', savedVolume);
+            // console.log('🔊 [PLAYBACK PROVIDER] Loading volume from localStorage:', savedVolume);
             return savedVolume;
         }
         return 0.75;
@@ -34,7 +34,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('soundhaven-playback-speed');
             const savedSpeed = saved ? parseFloat(saved) : 1.0;
-            console.log('⚡ [PLAYBACK PROVIDER] Loading playback speed from localStorage:', savedSpeed);
+            // console.log('⚡ [PLAYBACK PROVIDER] Loading playback speed from localStorage:', savedSpeed);
             return savedSpeed;
         }
         return 1.0;
@@ -44,7 +44,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem('soundhaven-volume', volume.toString());
-            console.log('🔊 [PLAYBACK PROVIDER] Saved volume to localStorage:', volume);
+            // console.log('🔊 [PLAYBACK PROVIDER] Saved volume to localStorage:', volume);
         }
     }, [volume]);
 
@@ -52,7 +52,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem('soundhaven-playback-speed', playbackSpeed.toString());
-            console.log('⚡ [PLAYBACK PROVIDER] Saved playback speed to localStorage:', playbackSpeed);
+            // console.log('⚡ [PLAYBACK PROVIDER] Saved playback speed to localStorage:', playbackSpeed);
         }
     }, [playbackSpeed]);
 
@@ -84,24 +84,24 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
     }, []);
 
     const togglePlayback = useCallback(() => {
-        console.log("😺 [TOGGLE PLAYBACK] === togglePlayback called ===");
-        console.log("😺 [TOGGLE PLAYBACK] Current isPlaying before toggle:", isPlaying);
+        // console.log("😺 [TOGGLE PLAYBACK] === togglePlayback called ===");
+        // console.log("😺 [TOGGLE PLAYBACK] Current isPlaying before toggle:", isPlaying);
         setIsPlaying(prevIsPlaying => {
             const newIsPlaying = !prevIsPlaying;
-            console.log(`😺 [TOGGLE PLAYBACK] Toggling isPlaying: ${prevIsPlaying} → ${newIsPlaying}`);
+            // console.log(`😺 [TOGGLE PLAYBACK] Toggling isPlaying: ${prevIsPlaying} → ${newIsPlaying}`);
             return newIsPlaying;
         });
-        console.log("😺 [TOGGLE PLAYBACK] === togglePlayback end ===");
+        // console.log("😺 [TOGGLE PLAYBACK] === togglePlayback end ===");
     }, [isPlaying]);
 
     const selectTrack = useCallback((track: Track | null, index: number | null, autoPlay: boolean = false, context?: { isPlaylistView?: boolean; playlistId?: string | null }) => {
-        console.log("😺 [SELECT TRACK] === selectTrack START ===");
-        console.log("😺 [SELECT TRACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay, "context:", context);
-        console.log("😺 [SELECT TRACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
-        console.log("😺 [SELECT TRACK] Current isPlaying:", isPlaying);
+        // // console.log("😺 [SELECT TRACK] === selectTrack START ===");
+        // // console.log("😺 [SELECT TRACK] Selecting track:", track?.name, "at index:", index, "autoPlay:", autoPlay, "context:", context);
+        // console.log("😺 [SELECT TRACK] Current track:", currentTrack?.name, "at index:", currentTrackIndex);
+        // console.log("😺 [SELECT TRACK] Current isPlaying:", isPlaying);
         
         if (track === null) {
-            console.log("😺 [SELECT TRACK] Setting track to null");
+            // console.log("😺 [SELECT TRACK] Setting track to null");
             setCurrentTrack(null);
             setCurrentTrackIndex(null);
             setCurrentPlaylistContext({ isPlaylistView: false, playlistId: null });
@@ -116,28 +116,28 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
             // Check if this is the same track AND same position (for duplicates)
             const isSameTrackAndIndex = currentTrackId === newTrackId && currentIndex === newIndex;
             
-            console.log("😺 [SELECT TRACK] Comparison:", {
-                currentTrackId,
-                newTrackId,
-                currentIndex,
-                newIndex,
-                isSameTrackAndIndex,
-                isPlaying
-            });
+            // console.log("😺 [SELECT TRACK] Comparison:", {
+            //     currentTrackId,
+            //     newTrackId,
+            //     currentIndex,
+            //     newIndex,
+            //     isSameTrackAndIndex,
+            //     isPlaying
+            // });
             
             if (isSameTrackAndIndex && isPlaying && !autoPlay) {
-                console.log("😺 [SELECT TRACK] Same track and index already playing - pausing");
+                // console.log("😺 [SELECT TRACK] Same track and index already playing - pausing");
                 setIsPlaying(false);
             } else {
-                console.log("😺 [SELECT TRACK] Setting new track:", {
-                    trackName: track.name,
-                    trackId: track.id,
-                    index: index,
-                    willAutoPlay: autoPlay,
-                    context: context
-                });
+                // console.log("😺 [SELECT TRACK] Setting new track:", {
+                //     trackName: track.name,
+                //     trackId: track.id,
+                //     index: index,
+                //     willAutoPlay: autoPlay,
+                //     context: context
+                // });
                 
-                console.log("😺 [SELECT TRACK] About to call setCurrentTrack, setCurrentTrackIndex, setCurrentPlaylistContext");
+                // console.log("😺 [SELECT TRACK] About to call setCurrentTrack, setCurrentTrackIndex, setCurrentPlaylistContext");
                 setCurrentTrack(track);
                 setCurrentTrackIndex(index);
                 setCurrentPlaylistContext(context || { isPlaylistView: false, playlistId: null });
@@ -148,11 +148,11 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
             }
         }
         
-        console.log("😺 [SELECT TRACK] === selectTrack END ===");
+        // console.log("😺 [SELECT TRACK] === selectTrack END ===");
     }, [currentTrack, currentTrackIndex, isPlaying]);
 
     const nextTrack = useCallback((tracks: Track[], autoPlay: boolean = false) => {
-        console.log("🎵 [PLAYBACK] nextTrack called, mode:", playbackMode, "autoPlay:", autoPlay);
+        // console.log("🎵 [PLAYBACK] nextTrack called, mode:", playbackMode, "autoPlay:", autoPlay);
         
         if (tracks.length === 0) return; // No tracks to play
         
@@ -199,7 +199,7 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
                     } else if (playbackMode === 'repeat-all') {
                         nextIndex = 0; // Loop back to start
                     } else {
-                        console.log("🎵 [PLAYBACK] End of playlist reached");
+                        // console.log("🎵 [PLAYBACK] End of playlist reached");
                         return; // Stop playing
                     }
                 } else {
@@ -208,13 +208,13 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
                 break;
         }
         
-        console.log("🎵 [PLAYBACK] Next track index:", nextIndex);
+        // console.log("🎵 [PLAYBACK] Next track index:", nextIndex);
         // Keep the same context when advancing tracks
         selectTrack(tracks[nextIndex], nextIndex, autoPlay, currentPlaylistContext);
     }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue, currentPlaylistContext]);
       
     const previousTrack = useCallback((tracks: Track[], autoPlay: boolean = false) => {
-        console.log("🎵 [PLAYBACK] previousTrack called, mode:", playbackMode, "autoPlay:", autoPlay);
+        // console.log("🎵 [PLAYBACK] previousTrack called, mode:", playbackMode, "autoPlay:", autoPlay);
         
         if (tracks.length === 0) return; // No tracks to play
         
@@ -267,14 +267,14 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
                 break;
         }
         
-        console.log("🎵 [PLAYBACK] Previous track index:", prevIndex);
+        // console.log("🎵 [PLAYBACK] Previous track index:", prevIndex);
         // Keep the same context when going to previous tracks
         selectTrack(tracks[prevIndex], prevIndex, autoPlay, currentPlaylistContext);
     }, [currentTrackIndex, playbackMode, shuffleQueue, selectTrack, createShuffleQueue, currentPlaylistContext]);
 
     // Function to change playback mode
     const handleSetPlaybackMode = useCallback((mode: PlaybackMode) => {
-        console.log("🎵 [PLAYBACK] Setting playback mode to:", mode);
+        // console.log("🎵 [PLAYBACK] Setting playback mode to:", mode);
         setPlaybackMode(mode);
         
         // Clear shuffle queue when changing modes

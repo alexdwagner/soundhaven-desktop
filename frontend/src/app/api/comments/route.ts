@@ -3,9 +3,9 @@ import { connectToDatabase, queryDatabase, writeDatabase } from '../../lib/datab
 import { addCorsHeaders, handleOptionsRequest } from '../../utils/cors';
 
 // API Route startup logging
-console.log('📱 [Comments API] Route loaded successfully');
-console.log('📱 [Comments API] Available methods: GET, POST, OPTIONS');
-console.log('📱 [Comments API] Features: Comments, markers, pagination, CORS support');
+// console.log('📱 [Comments API] Route loaded successfully');
+// console.log('📱 [Comments API] Available methods: GET, POST, OPTIONS');
+// console.log('📱 [Comments API] Features: Comments, markers, pagination, CORS support');
 
 export async function OPTIONS(request: NextRequest) {
   return handleOptionsRequest(request.headers);
@@ -174,15 +174,20 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { content, trackId, userId, timestamp } = body;
+    console.log('📱 [Next.js API] Request body:', body);
     
-    console.log('📱 [Next.js API] Comment creation request:', { content, trackId, userId, timestamp });
+    // Handle both 'time' and 'timestamp' for backward compatibility
+    const { content, trackId, userId, timestamp, time, color } = body;
+    const actualTime = time !== undefined ? time : timestamp;
+    
+    console.log('📱 [Next.js API] Comment creation request:', { content, trackId, userId, time: actualTime, color });
     
     // Validate required fields
-    if (!content || !trackId || !userId || timestamp === undefined) {
+    if (!content || !trackId || !userId || actualTime === undefined) {
       const errorResponse = NextResponse.json({
         success: false,
-        error: 'Missing required fields: content, trackId, userId, timestamp'
+        error: 'Missing required fields: content, trackId, userId, time',
+        received: { content: !!content, trackId: !!trackId, userId: !!userId, time: actualTime }
       }, { status: 400 });
       
       return addCorsHeaders(errorResponse, request.headers.get('origin') || undefined);
@@ -200,12 +205,27 @@ export async function POST(request: NextRequest) {
       const insertResult = await writeDatabase(
         `INSERT INTO comments (id, content, track_id, user_id, timestamp, created_at, updated_at) 
          VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`,
-        [commentId, content, trackId, userId, timestamp]
+        [commentId, content, trackId, userId, actualTime]
       );
       
       console.log('📱 [Next.js API] Comment insert result:', insertResult);
       
       if (insertResult.success) {
+        // If time > 0, also create a marker
+        let markerId = null;
+        if (actualTime > 0) {
+          markerId = `marker_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const markerColor = color || '#FF0000';
+          
+          const markerResult = await writeDatabase(
+            `INSERT INTO markers (id, time, comment_id, track_id, color, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`,
+            [markerId, actualTime, commentId, trackId, markerColor]
+          );
+          
+          console.log('📱 [Next.js API] Marker insert result:', markerResult);
+        }
+        
         // Fetch the created comment with user and track info
         const createdCommentResult = await queryDatabase(
           `SELECT 
@@ -230,7 +250,14 @@ export async function POST(request: NextRequest) {
             userId: comment.user_id,
             userEmail: comment.user_email,
             createdAt: comment.created_at,
-            updatedAt: comment.updated_at
+            updatedAt: comment.updated_at,
+            marker: markerId && actualTime > 0 ? {
+              id: markerId,
+              time: actualTime,
+              commentId: comment.id,
+              trackId: comment.track_id,
+              color: color || '#FF0000'
+            } : undefined
           };
           
           const response = NextResponse.json({

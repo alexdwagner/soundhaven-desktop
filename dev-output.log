@@ -1,0 +1,1863 @@
+yarn run v1.22.22
+$ chmod +x cleanup-ports.sh && ./cleanup-ports.sh && concurrently "cd frontend && yarn dev -H 0.0.0.0" "cd main && yarn start"
+🔍 Cleaning up ports 3000 and 3001...
+🔥 Killed processes on port 3000
+🔥 Killed processes on port 3001
+🔥 Killed old yarn dev processes
+🔥 Killed old Next.js dev processes
+✅ Port cleanup complete
+[1] $ electron dist/main/src/main.js
+[0] $ sh -c 'next dev -p ${FRONTEND_PORT:-3001} -H 0.0.0.0' -H 0.0.0.0
+[1] 🗄️ [DB INIT] Config path: /Users/adwda/Repos/soundhaven-desktop/main/db.sqlite
+[1] 🗄️ [DB INIT] Process cwd: /Users/adwda/Repos/soundhaven-desktop/main
+[1] 🗄️ [DB INIT] Resolved DB path: /Users/adwda/Repos/soundhaven-desktop/main/db.sqlite
+[1] 📡 Registering IPC handlers...
+[1] ✅ IPC handlers registered successfully
+[1] ✅ SQLite database connected successfully
+[1] 🚀 Electron app starting...
+[1] 🎵 Audio server started
+[1] 🎵 Audio streaming server started on port 3000
+[1] 🎵 Audio server endpoints ready:
+[1]    • GET /stream/:trackId - Stream audio with range support
+[1]    • GET /metadata/:trackId - Get track metadata
+[1]    • OPTIONS * - CORS preflight handling
+[1] 🎵 Audio server services initialized:
+[1]    • PreprocessService - Ready for waveform analysis
+[1]    • PerformanceMonitor - Tracking streaming metrics
+[1]    • CORS handling - Mobile device support enabled
+[1] About to create users table...
+[1] Users table created (or already exists).
+[1] ✅ Database tables created successfully!
+[1] 🗄️ Database initialized
+[1] Test user already exists
+[1] 👤 Test user ensured
+[1] Test track already exists
+[1] 🎵 Test track ensured
+[1] 🏷️ Ensuring test tags exist...
+[1] 🏷️ Test tags ensured
+[1] 🔗 Assigning sample tags to test track...
+[1] 🔗 Sample tags assigned
+[1] 🔍 Starting database integrity check...
+[1] 📁 Files found in uploads directory: 32
+[1] 📁 Files: [
+[1]   '1750981215188-01_-_Death_of_the_West.mp3',
+[1]   '1750981940529-02_-_Fields.mp3',
+[1]   '1750983651520-05_-_Black_Radio.mp3',
+[1]   '1751047942507-04_-_Sons_of_Europe.mp3',
+[1]   '1751050218869-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3',
+[1]   '1751081819874-08_-_Fields__live_.mp3',
+[1]   '1751085559067-04_-_Sons_of_Europe.mp3',
+[1]   '1751257452872-09_-_We_Drive_East__live_.mp3',
+[1]   '1751257453130-01_-_Death_of_the_West.mp3',
+[1]   '1751257453293-02_-_Fields.mp3',
+[1]   '1751257453487-03_-_All_Alone_in_Her_Nirvana.mp3',
+[1]   '1751257453690-04_-_Sons_of_Europe.mp3',
+[1]   '1751257453885-05_-_Black_Radio.mp3',
+[1]   '1751257454336-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3',
+[1]   '1751257454789-07_-_All_Alone_in_Her_Nirvana__live_.mp3',
+[1]   '1751257455067-08_-_Fields__live_.mp3',
+[1]   '1751258751657-01_-_Death_of_the_West.mp3',
+[1]   '1751258751838-02_-_Fields.mp3',
+[1]   '1751258752048-03_-_All_Alone_in_Her_Nirvana.mp3',
+[1]   '1751258752260-04_-_Sons_of_Europe.mp3',
+[1]   '1751258752447-05_-_Black_Radio.mp3',
+[1]   '1751258752955-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3',
+[1]   '1751258753415-07_-_All_Alone_in_Her_Nirvana__live_.mp3',
+[1]   '1751258753697-08_-_Fields__live_.mp3',
+[1]   '1751258753954-09_-_We_Drive_East__live_.mp3',
+[1]   '1751258813035-16_-_Chonkyfire.mp3',
+[1]   '1751258870455-04_-_Skew_It_On_The_Bar-B.mp3',
+[1]   '1751260151380-05_-_Aquemini.mp3',
+[1]   '1751260294973-06_-_Synthesizer.mp3',
+[1]   '1752023744934-Nirvana_-_Beeswax.mp3',
+[1]   '1752123483970-Always_Coming_Home_01.mp3',
+[1]   'careless_whisper.mp3'
+[1] ]
+[1] ⚠️  Orphaned file found: 1750981215188-01_-_Death_of_the_West.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1750981940529-02_-_Fields.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1750983651520-05_-_Black_Radio.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751047942507-04_-_Sons_of_Europe.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751050218869-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751081819874-08_-_Fields__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751085559067-04_-_Sons_of_Europe.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257452872-09_-_We_Drive_East__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257453130-01_-_Death_of_the_West.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257453293-02_-_Fields.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257453487-03_-_All_Alone_in_Her_Nirvana.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257453690-04_-_Sons_of_Europe.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257453885-05_-_Black_Radio.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257454336-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257454789-07_-_All_Alone_in_Her_Nirvana__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751257455067-08_-_Fields__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258751657-01_-_Death_of_the_West.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258751838-02_-_Fields.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258752048-03_-_All_Alone_in_Her_Nirvana.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258752260-04_-_Sons_of_Europe.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258752447-05_-_Black_Radio.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258752955-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258753415-07_-_All_Alone_in_Her_Nirvana__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258753697-08_-_Fields__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258753954-09_-_We_Drive_East__live_.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258813035-16_-_Chonkyfire.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751258870455-04_-_Skew_It_On_The_Bar-B.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1751260294973-06_-_Synthesizer.mp3 (not in database)
+[1] ⚠️  Orphaned file found: 1752123483970-Always_Coming_Home_01.mp3 (not in database)
+[1] 
+[1] 📊 Database Integrity Check Summary:
+[1]    ✅ Files in uploads directory: 32
+[1]    ✅ Tracks in database: 3
+[1]    ⚠️  Orphaned files: 29
+[1]    ❌ Missing files: 0
+[1]    ⚠️  Invalid file paths: 0
+[1] 
+[1] 🗑️  Orphaned files (can be safely deleted):
+[1]    - 1750981215188-01_-_Death_of_the_West.mp3
+[1]    - 1750981940529-02_-_Fields.mp3
+[1]    - 1750983651520-05_-_Black_Radio.mp3
+[1]    - 1751047942507-04_-_Sons_of_Europe.mp3
+[1]    - 1751050218869-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3
+[1]    - 1751081819874-08_-_Fields__live_.mp3
+[1]    - 1751085559067-04_-_Sons_of_Europe.mp3
+[1]    - 1751257452872-09_-_We_Drive_East__live_.mp3
+[1]    - 1751257453130-01_-_Death_of_the_West.mp3
+[1]    - 1751257453293-02_-_Fields.mp3
+[1]    - 1751257453487-03_-_All_Alone_in_Her_Nirvana.mp3
+[1]    - 1751257453690-04_-_Sons_of_Europe.mp3
+[1]    - 1751257453885-05_-_Black_Radio.mp3
+[1]    - 1751257454336-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3
+[1]    - 1751257454789-07_-_All_Alone_in_Her_Nirvana__live_.mp3
+[1]    - 1751257455067-08_-_Fields__live_.mp3
+[1]    - 1751258751657-01_-_Death_of_the_West.mp3
+[1]    - 1751258751838-02_-_Fields.mp3
+[1]    - 1751258752048-03_-_All_Alone_in_Her_Nirvana.mp3
+[1]    - 1751258752260-04_-_Sons_of_Europe.mp3
+[1]    - 1751258752447-05_-_Black_Radio.mp3
+[1]    - 1751258752955-06_-_Till_the_Living_Flesh_is_Burned__live_.mp3
+[1]    - 1751258753415-07_-_All_Alone_in_Her_Nirvana__live_.mp3
+[1]    - 1751258753697-08_-_Fields__live_.mp3
+[1]    - 1751258753954-09_-_We_Drive_East__live_.mp3
+[1]    - 1751258813035-16_-_Chonkyfire.mp3
+[1]    - 1751258870455-04_-_Skew_It_On_The_Bar-B.mp3
+[1]    - 1751260294973-06_-_Synthesizer.mp3
+[1]    - 1752123483970-Always_Coming_Home_01.mp3
+[1] 🔍 Database integrity check completed
+[1] mainWindow started
+[1] 🪟 Main window created
+[1] 📡 Registered IPC handlers:
+[1]   ✓ debug:test
+[1]   ✓ upload:single-track
+[1]   ✓ upload:batch-tracks
+[1]   ✓ getTracks
+[1]   ✓ get-waveform-data
+[1]   ✓ getUser
+[1]   ✓ getUsers
+[1]   ✓ auth:login
+[1]   ✓ auth:register
+[1]   ✓ auth:refresh-token
+[1]   ✓ auth:logout
+[1]   ✓ api-request
+[1]   ✓ music:fetch-artists
+[1]   ✓ music:create-artist
+[1]   ✓ music:update-artist
+[1]   ✓ music:delete-artist
+[1] 🎵 Audio streaming server endpoints:
+[1]   ✓ GET /stream/:trackId - Audio streaming
+[1]   ✓ GET /metadata/:trackId - Track metadata
+[1]   ✓ OPTIONS * - CORS preflight
+[1]   📍 Server running on port 3000
+[1] 🗄️ Database status:
+[1]   ✓ SQLite connection established
+[1]   ✓ Schema migrations completed
+[1]   ✓ Test data populated
+[1]   ✓ Database integrity verified
+[1] ⚙️ System services status:
+[1]   ✓ PreprocessService - Ready for audio analysis
+[1]   ✓ MetadataService - Ready for metadata extraction
+[1]   ✓ PerformanceMonitor - Active
+[1]   ✓ FileManagementService - Ready for uploads
+[1] 
+[1] 🎉 ===== ELECTRON BACKEND FULLY INITIALIZED =====
+[1] 📋 Summary:
+[1]    • 16 IPC handlers registered
+[1]    • Audio server running on port 3000
+[1]    • Database connection established
+[1]    • All services ready
+[1] ✅ Backend is ready to accept requests!
+[1] ⏳ Waiting for Next.js server... (attempt 1/30)
+[0]    ▲ Next.js 15.1.7
+[0]    - Local:        http://localhost:3001
+[0]    - Network:      http://0.0.0.0:3001
+[0]    - Environments: .env
+[0] 
+[0]  ✓ Starting...
+[1] ⏳ Waiting for Next.js server... (attempt 2/30)
+[0]  ✓ Ready in 2.7s
+[0]  ○ Compiling / ...
+[1] ⏳ Waiting for Next.js server... (attempt 3/30)
+[1] ⏳ Waiting for Next.js server... (attempt 4/30)
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:509:1]
+[0]  [2m506[0m |           // console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+[0]  [2m507[0m |           setCurrentPlaylistTracks((prev: Track[]) => {
+[0]  [2m508[0m |             // console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+[0]  [2m509[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           prevLength: prev.length,
+[0]  [2m510[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                    ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m511[0m |               tracksToRemove: [trackId]
+[0]  [2m512[0m |             });
+[0]  [2m513[0m |             
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[1] ⏳ Waiting for Next.js server... (attempt 5/30)
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:509:1]
+[0]  [2m506[0m |           // console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+[0]  [2m507[0m |           setCurrentPlaylistTracks((prev: Track[]) => {
+[0]  [2m508[0m |             // console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+[0]  [2m509[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           prevLength: prev.length,
+[0]  [2m510[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                    ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m511[0m |               tracksToRemove: [trackId]
+[0]  [2m512[0m |             });
+[0]  [2m513[0m |             
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[1] ⏳ Waiting for Next.js server... (attempt 6/30)
+[1] ⏳ Waiting for Next.js server... (attempt 7/30)
+[1] ⏳ Waiting for Next.js server... (attempt 8/30)
+[1] ⏳ Waiting for Next.js server... (attempt 9/30)
+[1] ⏳ Waiting for Next.js server... (attempt 10/30)
+[1] ⏳ Waiting for Next.js server... (attempt 11/30)
+[0] <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz'
+[0] <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz'
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:509:1]
+[0]  [2m506[0m |           // console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+[0]  [2m507[0m |           setCurrentPlaylistTracks((prev: Track[]) => {
+[0]  [2m508[0m |             // console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+[0]  [2m509[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           prevLength: prev.length,
+[0]  [2m510[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                    ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m511[0m |               tracksToRemove: [trackId]
+[0]  [2m512[0m |             });
+[0]  [2m513[0m |             
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  GET / 500 in 35ms
+[1] ⏳ Waiting for Next.js server... (attempt 12/30)
+[0] <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz'
+[0] <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/Users/adwda/Repos/soundhaven-desktop/frontend/.next/cache/webpack/client-development-fallback/0.pack.gz'
+[0]  GET / 500 in 22ms
+[1] ⏳ Waiting for Next.js server... (attempt 13/30)
+[0]  GET / 500 in 22ms
+[1] ⏳ Waiting for Next.js server... (attempt 14/30)
+[0]  GET / 500 in 37ms
+[1] ⏳ Waiting for Next.js server... (attempt 15/30)
+[0]  GET / 500 in 28ms
+[1] ⏳ Waiting for Next.js server... (attempt 16/30)
+[1] ⏳ Waiting for Next.js server... (attempt 17/30)
+[0]  GET / 500 in 30ms
+[1] ⏳ Waiting for Next.js server... (attempt 18/30)
+[0]  GET / 500 in 25ms
+[1] ⏳ Waiting for Next.js server... (attempt 19/30)
+[0]  GET / 500 in 72ms
+[1] ⏳ Waiting for Next.js server... (attempt 20/30)
+[0]  GET / 500 in 102ms
+[0]  GET / 500 in 61ms
+[1] ⏳ Waiting for Next.js server... (attempt 21/30)
+[0]  GET / 500 in 36ms
+[1] ⏳ Waiting for Next.js server... (attempt 22/30)
+[0]  GET / 500 in 29ms
+[1] ⏳ Waiting for Next.js server... (attempt 23/30)
+[1] ⏳ Waiting for Next.js server... (attempt 24/30)
+[0]  GET / 500 in 27ms
+[0]  GET / 500 in 23ms
+[1] ⏳ Waiting for Next.js server... (attempt 25/30)
+[0]  GET / 500 in 21ms
+[1] ⏳ Waiting for Next.js server... (attempt 26/30)
+[0]  GET / 500 in 21ms
+[1] ⏳ Waiting for Next.js server... (attempt 27/30)
+[0]  GET / 500 in 18ms
+[1] ⏳ Waiting for Next.js server... (attempt 28/30)
+[0]  GET / 500 in 18ms
+[1] ⏳ Waiting for Next.js server... (attempt 29/30)
+[0]  GET / 500 in 22ms
+[1] ⏳ Waiting for Next.js server... (attempt 30/30)
+[1] (node:92088) UnhandledPromiseRejectionWarning: Error: Next.js server did not become ready within 30 seconds
+[1]     at waitForNextJS (/Users/adwda/Repos/soundhaven-desktop/main/dist/main/src/main.js:90:11)
+[1]     at async createMainWindow (/Users/adwda/Repos/soundhaven-desktop/main/dist/main/src/main.js:107:9)
+[1] (Use `Electron --trace-warnings ...` to show where the warning was created)
+[1] (node:92088) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:509:1]
+[0]  [2m506[0m |           // console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+[0]  [2m507[0m |           setCurrentPlaylistTracks((prev: Track[]) => {
+[0]  [2m508[0m |             // console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+[0]  [2m509[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           prevLength: prev.length,
+[0]  [2m510[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                    ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m511[0m |               tracksToRemove: [trackId]
+[0]  [2m512[0m |             });
+[0]  [2m513[0m |             
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  GET /api/tracks 500 in 1042ms
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:517:1]
+[0]  [2m514[0m |             const filtered = prev.filter((track: Track) => track.id !== trackId);
+[0]  [2m515[0m |             
+[0]  [2m516[0m |             // console.log('📓 [DELETE KEY] Optimistic update result:', {
+[0]  [2m517[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           beforeLength: prev.length,
+[0]  [2m518[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           afterLength: filtered.length,
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                     ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m519[0m |               removedIds: [trackId],
+[0]  [2m520[0m |               remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
+[0]  [2m521[0m |             });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:559:1]
+[0]  [2m556[0m |       const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
+[0]  [2m557[0m |         if (contextMenu && contextMenu.trackIds.length > 0) {
+[0]  [2m558[0m |           // console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+[0]  [2m559[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m         trackIds: contextMenu.trackIds,
+[0]  [2m560[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m         currentPlaylistTracksLength: currentPlaylistTracks.length
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                                   ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m561[0m |           });
+[0]  [2m562[0m |           
+[0]  [2m563[0m |           // Optimistic update - immediately remove all tracks from UI
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:559:1]
+[0]  [2m556[0m |       const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
+[0]  [2m557[0m |         if (contextMenu && contextMenu.trackIds.length > 0) {
+[0]  [2m558[0m |           // console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+[0]  [2m559[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m         trackIds: contextMenu.trackIds,
+[0]  [2m560[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m         currentPlaylistTracksLength: currentPlaylistTracks.length
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                                   ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m561[0m |           });
+[0]  [2m562[0m |           
+[0]  [2m563[0m |           // Optimistic update - immediately remove all tracks from UI
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:559:1]
+[0]  [2m556[0m |       const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
+[0]  [2m557[0m |         if (contextMenu && contextMenu.trackIds.length > 0) {
+[0]  [2m558[0m |           // console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+[0]  [2m559[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m         trackIds: contextMenu.trackIds,
+[0]  [2m560[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m         currentPlaylistTracksLength: currentPlaylistTracks.length
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                                   ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m561[0m |           });
+[0]  [2m562[0m |           
+[0]  [2m563[0m |           // Optimistic update - immediately remove all tracks from UI
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:559:1]
+[0]  [2m556[0m |       const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
+[0]  [2m557[0m |         if (contextMenu && contextMenu.trackIds.length > 0) {
+[0]  [2m558[0m |           // console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+[0]  [2m559[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m         trackIds: contextMenu.trackIds,
+[0]  [2m560[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m         currentPlaylistTracksLength: currentPlaylistTracks.length
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                                   ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m561[0m |           });
+[0]  [2m562[0m |           
+[0]  [2m563[0m |           // Optimistic update - immediately remove all tracks from UI
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  GET /api/tracks 500 in 1486ms
+[0]  GET /api/tracks 500 in 75ms
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:567:1]
+[0]  [2m564[0m |           setCurrentPlaylistTracks((prev: Track[]) => {
+[0]  [2m565[0m |             const filtered = prev.filter((track: Track) => !contextMenu.trackIds.includes(track.id));
+[0]  [2m566[0m |             // console.log('📓 [CONTEXT MENU] Optimistic update result:', {
+[0]  [2m567[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m           beforeLength: prev.length,
+[0]  [2m568[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m           afterLength: filtered.length,
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                     ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m569[0m |               removedIds: contextMenu.trackIds
+[0]  [2m570[0m |             });
+[0]  [2m571[0m |             return filtered;
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:803:1]
+[0]  [2m800[0m |                   
+[0]  [2m801[0m |                   // In playlist view, remove from playlist (optimistic)
+[0]  [2m802[0m |                   // console.log('📓 [DELETE KEY] Before optimistic update:', {
+[0]  [2m803[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m                 selectedTrackIds,
+[0]  [2m804[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m                 currentPlaylistTracksLength: currentPlaylistTracks.length,
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                                           ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m805[0m |                     selectedPlaylistTracksLength: selectedPlaylistTracks?.length || 0,
+[0]  [2m806[0m |                     tracksLength: tracks.length
+[0]  [2m807[0m |                   });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expression expected
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:865:1]
+[0]  [2m862[0m |                       if (updatedPlaylist) {
+[0]  [2m863[0m |                         // console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+[0]  [2m864[0m |                           tracksCount: updatedPlaylist.tracks?.length || 0
+[0]  [2m865[0m |                         });
+[0]      : [35;1m                         ^[0m
+[0]  [2m866[0m |                         setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+[0]  [2m867[0m |                       } else {
+[0]  [2m868[0m |                         console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expression expected
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:865:1]
+[0]  [2m862[0m |                       if (updatedPlaylist) {
+[0]  [2m863[0m |                         // console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+[0]  [2m864[0m |                           tracksCount: updatedPlaylist.tracks?.length || 0
+[0]  [2m865[0m |                         });
+[0]      : [35;1m                         ^[0m
+[0]  [2m866[0m |                         setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+[0]  [2m867[0m |                       } else {
+[0]  [2m868[0m |                         console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expression expected
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:865:1]
+[0]  [2m862[0m |                       if (updatedPlaylist) {
+[0]  [2m863[0m |                         // console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+[0]  [2m864[0m |                           tracksCount: updatedPlaylist.tracks?.length || 0
+[0]  [2m865[0m |                         });
+[0]      : [35;1m                         ^[0m
+[0]  [2m866[0m |                         setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+[0]  [2m867[0m |                       } else {
+[0]  [2m868[0m |                         console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expression expected
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:865:1]
+[0]  [2m862[0m |                       if (updatedPlaylist) {
+[0]  [2m863[0m |                         // console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+[0]  [2m864[0m |                           tracksCount: updatedPlaylist.tracks?.length || 0
+[0]  [2m865[0m |                         });
+[0]      : [35;1m                         ^[0m
+[0]  [2m866[0m |                         setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
+[0]  [2m867[0m |                       } else {
+[0]  [2m868[0m |                         console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:876:1]
+[0]  [2m873[0m |                       }
+[0]  [2m874[0m |                     } else {
+[0]  [2m875[0m |                       // console.log('📓 [API SUCCESS] Successfully removed all tracks:', {
+[0]  [2m876[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m                     removedCount: tracksToRemove.length,
+[0]  [2m877[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m                     trackIds: tracksToRemove
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                            ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m878[0m |                       });
+[0]  [2m879[0m |                     }
+[0]  [2m880[0m |                   }).catch(error => {
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/components/tracks/TracksManager.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/components/tracks/TracksManager.tsx[0m:876:1]
+[0]  [2m873[0m |                       }
+[0]  [2m874[0m |                     } else {
+[0]  [2m875[0m |                       // console.log('📓 [API SUCCESS] Successfully removed all tracks:', {
+[0]  [2m876[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m                     removedCount: tracksToRemove.length,
+[0]  [2m877[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m                     trackIds: tracksToRemove
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                            ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m878[0m |                       });
+[0]  [2m879[0m |                     }
+[0]  [2m880[0m |                   }).catch(error => {
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/components/tracks/TracksManager.tsx
+[0] ./src/app/components/layout/MainContent.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/providers/TracksProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/TracksProvider.tsx[0m:123:1]
+[0]  [2m120[0m |       }, [manualTestAPI]);
+[0]  [2m121[0m |       
+[0]  [2m122[0m |       // console.log('🎯 TracksProvider state:', { 
+[0]  [2m123[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m     tracksLength: tracks.length, 
+[0]  [2m124[0m | [35;1m|[0m       isLoading, 
+[0]  [2m125[0m | [35;1m|[0m       error,
+[0]  [2m126[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m     token: token ? 'present' : 'null',
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m         ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m127[0m |         tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+[0]  [2m128[0m |         testState
+[0]  [2m129[0m |       });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/TracksProvider.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/providers/TracksProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/TracksProvider.tsx[0m:123:1]
+[0]  [2m120[0m |       }, [manualTestAPI]);
+[0]  [2m121[0m |       
+[0]  [2m122[0m |       // console.log('🎯 TracksProvider state:', { 
+[0]  [2m123[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m     tracksLength: tracks.length, 
+[0]  [2m124[0m | [35;1m|[0m       isLoading, 
+[0]  [2m125[0m | [35;1m|[0m       error,
+[0]  [2m126[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m     token: token ? 'present' : 'null',
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m         ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m127[0m |         tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+[0]  [2m128[0m |         testState
+[0]  [2m129[0m |       });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/TracksProvider.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/providers/TracksProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/TracksProvider.tsx[0m:123:1]
+[0]  [2m120[0m |       }, [manualTestAPI]);
+[0]  [2m121[0m |       
+[0]  [2m122[0m |       // console.log('🎯 TracksProvider state:', { 
+[0]  [2m123[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m     tracksLength: tracks.length, 
+[0]  [2m124[0m | [35;1m|[0m       isLoading, 
+[0]  [2m125[0m | [35;1m|[0m       error,
+[0]  [2m126[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m     token: token ? 'present' : 'null',
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m         ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m127[0m |         tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+[0]  [2m128[0m |         testState
+[0]  [2m129[0m |       });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/TracksProvider.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/providers/TracksProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/TracksProvider.tsx[0m:123:1]
+[0]  [2m120[0m |       }, [manualTestAPI]);
+[0]  [2m121[0m |       
+[0]  [2m122[0m |       // console.log('🎯 TracksProvider state:', { 
+[0]  [2m123[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m     tracksLength: tracks.length, 
+[0]  [2m124[0m | [35;1m|[0m       isLoading, 
+[0]  [2m125[0m | [35;1m|[0m       error,
+[0]  [2m126[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m     token: token ? 'present' : 'null',
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m         ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m127[0m |         tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+[0]  [2m128[0m |         testState
+[0]  [2m129[0m |       });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/TracksProvider.tsx
+[0] ./src/app/page.tsx
+[0]  ⨯ ./src/app/providers/TracksProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/TracksProvider.tsx[0m:123:1]
+[0]  [2m120[0m |       }, [manualTestAPI]);
+[0]  [2m121[0m |       
+[0]  [2m122[0m |       // console.log('🎯 TracksProvider state:', { 
+[0]  [2m123[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m     tracksLength: tracks.length, 
+[0]  [2m124[0m | [35;1m|[0m       isLoading, 
+[0]  [2m125[0m | [35;1m|[0m       error,
+[0]  [2m126[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m     token: token ? 'present' : 'null',
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m         ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m127[0m |         tracks: tracks.map(t => ({ id: t.id, name: t.name })),
+[0]  [2m128[0m |         testState
+[0]  [2m129[0m |       });
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/TracksProvider.tsx
+[0] ./src/app/page.tsx
+[0]  HEAD / 500 in 2293ms
+[0]  GET / 500 in 36ms
+[0]  ⨯ ./src/app/providers/PlaybackProvider.tsx
+[0] Error:   [31mx[0m Expression expected
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/PlaybackProvider.tsx[0m:126:1]
+[0]  [2m123[0m |                 newIndex,
+[0]  [2m124[0m |                 isSameTrackAndIndex,
+[0]  [2m125[0m |                 isPlaying
+[0]  [2m126[0m |             });
+[0]      : [35;1m             ^[0m
+[0]  [2m127[0m |             
+[0]  [2m128[0m |             if (isSameTrackAndIndex && isPlaying && !autoPlay) {
+[0]  [2m129[0m |                 // console.log("😺 [SELECT TRACK] Same track and index already playing - pausing");
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/PlaybackProvider.tsx
+[0] ./src/app/layout.tsx
+[0]  GET /_next/static/webpack/bdd081f6a6cfaa5e.webpack.hot-update.json 500 in 1710ms
+[0]  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[0]  GET / 500 in 16ms
+[0]  GET / 500 in 22ms
+[0]  ⨯ ./src/app/providers/PlaybackProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/PlaybackProvider.tsx[0m:133:1]
+[0]  [2m130[0m |                     setIsPlaying(false);
+[0]  [2m131[0m |                 } else {
+[0]  [2m132[0m |                     // console.log("😺 [SELECT TRACK] Setting new track:", {
+[0]  [2m133[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m                     trackName: track.name,
+[0]  [2m134[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m                     trackId: track.id,
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                           ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m135[0m |                         index: index,
+[0]  [2m136[0m |                         willAutoPlay: autoPlay,
+[0]  [2m137[0m |                         context: context
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/PlaybackProvider.tsx
+[0] ./src/app/layout.tsx
+[0]  GET /_next/static/webpack/bdd081f6a6cfaa5e.webpack.hot-update.json 500 in 1400ms
+[0]  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[0]  ⨯ ./src/app/providers/PlaybackProvider.tsx
+[0] Error:   [31mx[0m Expected ';', '}' or <eof>
+[0]      ,-[[36;1;4m/Users/adwda/Repos/soundhaven-desktop/frontend/src/app/providers/PlaybackProvider.tsx[0m:133:1]
+[0]  [2m130[0m |                     setIsPlaying(false);
+[0]  [2m131[0m |                 } else {
+[0]  [2m132[0m |                     // console.log("😺 [SELECT TRACK] Setting new track:", {
+[0]  [2m133[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m                     trackName: track.name,
+[0]  [2m134[0m | [35;1m|[0m[35;1m-[0m[35;1m>[0m                     trackId: track.id,
+[0]      : [35;1m`[0m[35;1m---[0m[33;1m                           ^[0m
+[0]      : [35;1m`[0m[35;1m---[0m[35;1m-[0m [35;1mThis is the expression part of an expression statement[0m
+[0]  [2m135[0m |                         index: index,
+[0]  [2m136[0m |                         willAutoPlay: autoPlay,
+[0]  [2m137[0m |                         context: context
+[0]      `----
+[0] 
+[0] Caused by:
+[0]     Syntax Error
+[0] 
+[0] Import trace for requested module:
+[0] ./src/app/providers/PlaybackProvider.tsx
+[0] ./src/app/layout.tsx
+[0]  GET / 500 in 562ms
+[0]  ✓ Compiled /_not-found in 2.9s (945 modules)
+[0]  ✓ Compiled (931 modules)
+[0] 🔍 [ELECTRON DETECTION] Running on server (SSR)
+[0] 📱 [DataLayer] Using HTTP API mode
+[0]  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[0]  GET /_next/static/webpack/bdd081f6a6cfaa5e.webpack.hot-update.json 404 in 3794ms
+[0]  ✓ Compiled / in 381ms (451 modules)
+[0] 🔍 [ELECTRON DETECTION] Running on server (SSR)
+[0] 📱 [DataLayer] Using HTTP API mode
+[0] 🎯 HomePage: Auto-fetch disabled - infinite loop fixed
+[0] 🔍 [NavBar] Data sources: {
+[0]   propTracks: 0,
+[0]   propPlaylists: 0,
+[0]   contextTracks: 0,
+[0]   contextPlaylists: 0,
+[0]   actualTracks: 0,
+[0]   actualPlaylists: 0,
+[0]   comments: 0,
+[0]   commentsError: false
+[0] }
+[0] 🔍 PlaylistSidebar: Component rendering...
+[0] 🔍 PlaylistSidebar: Token from useAuth: false
+[0] 🔍 PlaylistSidebar: User from useAuth: null
+[0] 🔍 PlaylistSidebar: Playlists from usePlaylists: []
+[0] 🔍 PlaylistSidebar: Playlists count: 0
+[0] 🔍 PlaylistSidebar: Loading state: false
+[0] 🔍 PlaylistSidebar: Error state: null
+[0] 🔍 PlaylistSidebar: createPlaylist function: function
+[0] 🔍 PlaylistSidebar: About to render component
+[0] 🎯 TracksManager state: {
+[0]   tracks: [],
+[0]   safeTracks: [],
+[0]   safeTracksLength: 0,
+[0]   playbackCurrentTrack: null,
+[0]   isPlaylistView: false,
+[0]   selectedPlaylistId: null,
+[0]   selectedPlaylistName: null,
+[0]   playlistSortMode: 'manual',
+[0]   selectedPlaylistTracks: 0
+[0] }
+[0] 📱 [TracksManager] Mobile detection: { isMobile: false }
+[0] 🎵 [SEQUENTIAL] No sort column selected, using original order
+[0] 🎵 [SEQUENTIAL] Final displayTracks order: []
+[0] 🔧 [TRACKS TABLE] isDragEnabled: true isPlaylistView: false playlistSortMode: manual
+[0] 📱 [DataLayer] Using HTTP API mode
+[0] 🎯 HomePage: Auto-fetch disabled - infinite loop fixed
+[0] 🔍 [NavBar] Data sources: {
+[0]   propTracks: 0,
+[0]   propPlaylists: 0,
+[0]   contextTracks: 0,
+[0]   contextPlaylists: 0,
+[0]   actualTracks: 0,
+[0]   actualPlaylists: 0,
+[0]   comments: 0,
+[0]   commentsError: false
+[0] }
+[0] 🔍 PlaylistSidebar: Component rendering...
+[0] 🔍 PlaylistSidebar: Token from useAuth: false
+[0] 🔍 PlaylistSidebar: User from useAuth: null
+[0] 🔍 PlaylistSidebar: Playlists from usePlaylists: []
+[0] 🔍 PlaylistSidebar: Playlists count: 0
+[0] 🔍 PlaylistSidebar: Loading state: false
+[0] 🔍 PlaylistSidebar: Error state: null
+[0] 🔍 PlaylistSidebar: createPlaylist function: function
+[0] 🔍 PlaylistSidebar: About to render component
+[0] 🎯 TracksManager state: {
+[0]   tracks: [],
+[0]   safeTracks: [],
+[0]   safeTracksLength: 0,
+[0]   playbackCurrentTrack: null,
+[0]   isPlaylistView: false,
+[0]   selectedPlaylistId: null,
+[0]   selectedPlaylistName: null,
+[0]   playlistSortMode: 'manual',
+[0]   selectedPlaylistTracks: 0
+[0] }
+[0] 📱 [TracksManager] Mobile detection: { isMobile: false }
+[0] 🎵 [SEQUENTIAL] No sort column selected, using original order
+[0] 🎵 [SEQUENTIAL] Final displayTracks order: []
+[0] 🔧 [TRACKS TABLE] isDragEnabled: true isPlaylistView: false playlistSortMode: manual
+[0]  GET / 200 in 1163ms
+[0]  ○ Compiling /api/tracks ...
+[0]  ✓ Compiled /api/tracks in 10.2s (1044 modules)
+[0] 📱 [Database] Database path: /Users/adwda/Repos/soundhaven-desktop/main/db.sqlite
+[0] 📱 [Next.js API] /api/tracks called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           t.*,
+[0]           a.name as artist_name,
+[0]           al.name as album_name,
+[0]           al.album_art_path
+[0]         FROM tracks t
+[0]         LEFT JOIN artists a ON t.artist_id = a.id  
+[0]         LEFT JOIN albums al ON t.album_id = al.id
+[0]         ORDER BY t.created_at DESC LIMIT 10
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Next.js API] /api/playlists called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           p.*,
+[0]           u.email as user_email,
+[0]           COUNT(pt.track_id) as track_count
+[0]         FROM playlists p
+[0]         LEFT JOIN users u ON p.user_id = u.id  
+[0]         LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+[0]         GROUP BY p.id, u.email
+[0]         ORDER BY p.created_at DESC
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Next.js API] /api/comments called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           c.*,
+[0]           u.email as user_email,
+[0]           t.name as track_name
+[0]         FROM comments c
+[0]         LEFT JOIN users u ON c.user_id = u.id  
+[0]         LEFT JOIN tracks t ON c.track_id = t.id
+[0]        ORDER BY c.created_at DESC LIMIT ? OFFSET ?
+[0] 📱 [Database] Params: [ 100, 0 ]
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 3
+[0] 📱 [Database] First row sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artist_id: null,
+[0]   album_id: null,
+[0]   user_id: 1,
+[0]   file_path: '/uploads/careless_whisper.mp3',
+[0]   bitrate: null,
+[0]   sample_rate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   track_number: null,
+[0]   album_art_path: null,
+[0]   waveform_data: null,
+[0]   preprocessed_chunks: null,
+[0]   created_at: 1752279264,
+[0]   updated_at: 1752279264,
+[0]   artist_name: null,
+[0]   album_name: null
+[0] }
+[0] 📱 [Next.js API] Mapped tracks: 3
+[0] 📱 [Next.js API] First track sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artistId: null,
+[0]   artistName: 'Unknown Artist',
+[0]   albumId: null,
+[0]   albumName: 'Unknown Album',
+[0]   albumArtPath: null,
+[0]   filePath: '/uploads/careless_whisper.mp3',
+[0]   streamingUrl: '/audio/c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   fileSize: undefined,
+[0]   format: undefined,
+[0]   bitrate: null,
+[0]   sampleRate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   trackNumber: null,
+[0]   userId: 1,
+[0]   createdAt: 1752279264,
+[0]   updatedAt: 1752279264
+[0] }
+[0]  GET /api/tracks 200 in 10647ms
+[0] 📱 [Database] Query successful, rows: 11
+[0] 📱 [Database] First row sample: {
+[0]   id: 'comment_1753776717811_vb9rr5jse',
+[0]   content: 'test comment',
+[0]   track_id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   user_id: 1,
+[0]   timestamp: 102.41855854241338,
+[0]   created_at: 1753776717,
+[0]   updated_at: 1753776717,
+[0]   reply_to_id: null,
+[0]   user_email: 'test@example.com',
+[0]   track_name: 'Careless Whisper'
+[0] }
+[0] 📱 [Next.js API] Comments query result: {
+[0]   success: true,
+[0]   data: [
+[0]     {
+[0]       id: 'comment_1753776717811_vb9rr5jse',
+[0]       content: 'test comment',
+[0]       track_id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]       user_id: 1,
+[0]       timestamp: 102.41855854241338,
+[0]       created_at: 1753776717,
+[0]       updated_at: 1753776717,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Careless Whisper'
+[0]     },
+[0]     {
+[0]       id: 'comment_1753761249554_14tof7rp8',
+[0]       content: 'Test comment from integration testing',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 150.25,
+[0]       created_at: 1753761249,
+[0]       updated_at: 1753761249,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: 'comment_1753758899214_2ug7rfvor',
+[0]       content: 'Test comment from API',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 300.5,
+[0]       created_at: 1753758899,
+[0]       updated_at: 1753758899,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '16183064-b3fd-48dc-9310-5fd9e6ebbcd8',
+[0]       content: 'igorrrr',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 293.9861331062864,
+[0]       created_at: 1752907509,
+[0]       updated_at: 1752907509,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '23813e15-b5d3-451c-8459-b94b1613c598',
+[0]       content: 'igor',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 288.7137997256516,
+[0]       created_at: 1752907495,
+[0]       updated_at: 1752907495,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: 'fe59cf40-2130-41ee-81fd-ce083df43c80',
+[0]       content: 'yes master',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 297.5045422696116,
+[0]       created_at: 1752903443,
+[0]       updated_at: 1752903443,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '2f6f2fc7-4263-41af-b59c-72def9c2897c',
+[0]       content: 'frankenstein 2',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 294.39185783193705,
+[0]       created_at: 1752901850,
+[0]       updated_at: 1752901850,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '2bf878d5-9c6a-4c54-b862-88fc09a31c89',
+[0]       content: 'frankenstein',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 291.2791733942625,
+[0]       created_at: 1752901460,
+[0]       updated_at: 1752901460,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: 'e3231420-019f-4035-997e-509e2b325c82',
+[0]       content: 'frank',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 293.3542963527122,
+[0]       created_at: 1752900908,
+[0]       updated_at: 1752900908,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '63a460b6-c2f8-4ddc-a03f-1f437d54e792',
+[0]       content: 'frankenstein',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 290.58746574144595,
+[0]       created_at: 1752900597,
+[0]       updated_at: 1752900597,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '2306e6b0-2ea3-4d94-afcb-ee0d908b7dff',
+[0]       content: 'frankenstein',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       user_id: 1,
+[0]       timestamp: 294.39185783193705,
+[0]       created_at: 1752900521,
+[0]       updated_at: 1752900521,
+[0]       reply_to_id: null,
+[0]       user_email: 'test@example.com',
+[0]       track_name: 'Aquemini'
+[0]     }
+[0]   ],
+[0]   message: 'Query completed successfully, 11 rows returned'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           m.*,
+[0]           t.name as track_name
+[0]         FROM markers m
+[0]         LEFT JOIN tracks t ON m.track_id = t.id
+[0]        ORDER BY m.time ASC
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Database] Query successful, rows: 10
+[0] 📱 [Database] First row sample: {
+[0]   id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]   name: 'New Playlist 10',
+[0]   description: 'A new playlist',
+[0]   user_id: 1,
+[0]   order: 0,
+[0]   created_at: 1753685444,
+[0]   updated_at: 1753685444,
+[0]   user_email: 'test@example.com',
+[0]   track_count: 0
+[0] }
+[0] 📱 [Next.js API] Database query result: {
+[0]   success: true,
+[0]   data: [
+[0]     {
+[0]       id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]       name: 'New Playlist 10',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1753685444,
+[0]       updated_at: 1753685444,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 0
+[0]     },
+[0]     {
+[0]       id: '69a5d388-2f5e-4934-a700-c86189fb7097',
+[0]       name: 'New Playlist 9',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 3,
+[0]       created_at: 1752724694,
+[0]       updated_at: 1752724694,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'd5cdbc84-178f-4651-9b45-d0abd74dc7cf',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 2,
+[0]       created_at: 1752724692,
+[0]       updated_at: 1752724692,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: '574dbd01-4686-421d-856e-9294d0566026',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 6,
+[0]       created_at: 1752028536,
+[0]       updated_at: 1752028536,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 6
+[0]     },
+[0]     {
+[0]       id: '3b7b3c59-0c22-4890-92d6-fbdaa7e8977e',
+[0]       name: 'New Playlist 7',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 5,
+[0]       created_at: 1752028533,
+[0]       updated_at: 1752028533,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'a331a2db-6c21-4ef0-b555-c1098d8d3f81',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 4,
+[0]       created_at: 1752027336,
+[0]       updated_at: 1752027336,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'c94dae60-cfdc-45b8-9235-c1e4e0843cea',
+[0]       name: 'new name',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 1,
+[0]       created_at: 1751257394,
+[0]       updated_at: 1751257394,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'f4e7e8c4-91c6-4363-9f6e-eb179b73a1c3',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 8,
+[0]       created_at: 1751160482,
+[0]       updated_at: 1751160482,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 10
+[0]     },
+[0]     {
+[0]       id: 'ff8fb309-17b3-4a31-95dd-2a6fffac52de',
+[0]       name: 'New Playlist 2',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 7,
+[0]       created_at: 1751146866,
+[0]       updated_at: 1751146866,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'd6d70a45-914b-44c8-b261-4837c898b83f',
+[0]       name: 'living on a prayer',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1751146583,
+[0]       updated_at: 1751146583,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 7
+[0]     }
+[0]   ],
+[0]   message: 'Query completed successfully, 10 rows returned'
+[0] }
+[0] 📱 [Next.js API] Mapped playlists: 10
+[0]  GET /api/playlists 200 in 10679ms
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Database] Query successful, rows: 5
+[0] 📱 [Database] First row sample: {
+[0]   id: '6abf5503-2941-469f-a17f-57064092314e',
+[0]   wave_surfer_region_id: 'region-6abf5503-2941-469f-a17f-57064092314e',
+[0]   time: 288.7137997256516,
+[0]   duration: 0.1,
+[0]   comment_id: '23813e15-b5d3-451c-8459-b94b1613c598',
+[0]   track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]   created_at: 1752907495,
+[0]   color: '#FF0000',
+[0]   track_name: 'Aquemini'
+[0] }
+[0] 📱 [Next.js API] Markers query result: {
+[0]   success: true,
+[0]   data: [
+[0]     {
+[0]       id: '6abf5503-2941-469f-a17f-57064092314e',
+[0]       wave_surfer_region_id: 'region-6abf5503-2941-469f-a17f-57064092314e',
+[0]       time: 288.7137997256516,
+[0]       duration: 0.1,
+[0]       comment_id: '23813e15-b5d3-451c-8459-b94b1613c598',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       created_at: 1752907495,
+[0]       color: '#FF0000',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '55c6c930-d1e7-4b99-a94c-a892a2cd5b44',
+[0]       wave_surfer_region_id: 'region-55c6c930-d1e7-4b99-a94c-a892a2cd5b44',
+[0]       time: 291.2791733942625,
+[0]       duration: 0.1,
+[0]       comment_id: '2bf878d5-9c6a-4c54-b862-88fc09a31c89',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       created_at: 1752901460,
+[0]       color: '#FF0000',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: '94aa5ac2-6515-4dc9-a4e1-8a3a92622c04',
+[0]       wave_surfer_region_id: 'region-94aa5ac2-6515-4dc9-a4e1-8a3a92622c04',
+[0]       time: 293.9861331062864,
+[0]       duration: 0.1,
+[0]       comment_id: '16183064-b3fd-48dc-9310-5fd9e6ebbcd8',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       created_at: 1752907509,
+[0]       color: '#FF0000',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: 'cd6a508d-1f53-43b7-a60d-1734d3de4ce6',
+[0]       wave_surfer_region_id: 'region-cd6a508d-1f53-43b7-a60d-1734d3de4ce6',
+[0]       time: 294.39185783193705,
+[0]       duration: 0.1,
+[0]       comment_id: '2f6f2fc7-4263-41af-b59c-72def9c2897c',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       created_at: 1752901850,
+[0]       color: '#FF0000',
+[0]       track_name: 'Aquemini'
+[0]     },
+[0]     {
+[0]       id: 'd242783c-b82e-43ad-8f7f-e7c0d7d2f797',
+[0]       wave_surfer_region_id: 'region-d242783c-b82e-43ad-8f7f-e7c0d7d2f797',
+[0]       time: 297.5045422696116,
+[0]       duration: 0.1,
+[0]       comment_id: 'fe59cf40-2130-41ee-81fd-ce083df43c80',
+[0]       track_id: '561904fb-02ad-459a-9e99-470763af2801',
+[0]       created_at: 1752903443,
+[0]       color: '#FF0000',
+[0]       track_name: 'Aquemini'
+[0]     }
+[0]   ],
+[0]   message: 'Query completed successfully, 5 rows returned'
+[0] }
+[0] 📱 [Next.js API] Mapped comments: 11
+[0] 📱 [Next.js API] Mapped markers: 5
+[0] 📱 [Database] Query attempt: SELECT COUNT(*) as total FROM comments
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 1
+[0] 📱 [Database] First row sample: { total: 11 }
+[0]  GET /api/comments?page=1&limit=100 200 in 10717ms
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Next.js API] /api/playlists called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           p.*,
+[0]           u.email as user_email,
+[0]           COUNT(pt.track_id) as track_count
+[0]         FROM playlists p
+[0]         LEFT JOIN users u ON p.user_id = u.id  
+[0]         LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+[0]         GROUP BY p.id, u.email
+[0]         ORDER BY p.created_at DESC
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 10
+[0] 📱 [Database] First row sample: {
+[0]   id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]   name: 'New Playlist 10',
+[0]   description: 'A new playlist',
+[0]   user_id: 1,
+[0]   order: 0,
+[0]   created_at: 1753685444,
+[0]   updated_at: 1753685444,
+[0]   user_email: 'test@example.com',
+[0]   track_count: 0
+[0] }
+[0] 📱 [Next.js API] Database query result: {
+[0]   success: true,
+[0]   data: [
+[0]     {
+[0]       id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]       name: 'New Playlist 10',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1753685444,
+[0]       updated_at: 1753685444,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 0
+[0]     },
+[0]     {
+[0]       id: '69a5d388-2f5e-4934-a700-c86189fb7097',
+[0]       name: 'New Playlist 9',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 3,
+[0]       created_at: 1752724694,
+[0]       updated_at: 1752724694,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'd5cdbc84-178f-4651-9b45-d0abd74dc7cf',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 2,
+[0]       created_at: 1752724692,
+[0]       updated_at: 1752724692,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: '574dbd01-4686-421d-856e-9294d0566026',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 6,
+[0]       created_at: 1752028536,
+[0]       updated_at: 1752028536,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 6
+[0]     },
+[0]     {
+[0]       id: '3b7b3c59-0c22-4890-92d6-fbdaa7e8977e',
+[0]       name: 'New Playlist 7',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 5,
+[0]       created_at: 1752028533,
+[0]       updated_at: 1752028533,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'a331a2db-6c21-4ef0-b555-c1098d8d3f81',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 4,
+[0]       created_at: 1752027336,
+[0]       updated_at: 1752027336,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'c94dae60-cfdc-45b8-9235-c1e4e0843cea',
+[0]       name: 'new name',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 1,
+[0]       created_at: 1751257394,
+[0]       updated_at: 1751257394,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'f4e7e8c4-91c6-4363-9f6e-eb179b73a1c3',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 8,
+[0]       created_at: 1751160482,
+[0]       updated_at: 1751160482,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 10
+[0]     },
+[0]     {
+[0]       id: 'ff8fb309-17b3-4a31-95dd-2a6fffac52de',
+[0]       name: 'New Playlist 2',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 7,
+[0]       created_at: 1751146866,
+[0]       updated_at: 1751146866,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'd6d70a45-914b-44c8-b261-4837c898b83f',
+[0]       name: 'living on a prayer',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1751146583,
+[0]       updated_at: 1751146583,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 7
+[0]     }
+[0]   ],
+[0]   message: 'Query completed successfully, 10 rows returned'
+[0] }
+[0] 📱 [Next.js API] Mapped playlists: 10
+[0]  GET /api/playlists 200 in 27ms
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Next.js API] /api/playlists called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           p.*,
+[0]           u.email as user_email,
+[0]           COUNT(pt.track_id) as track_count
+[0]         FROM playlists p
+[0]         LEFT JOIN users u ON p.user_id = u.id  
+[0]         LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+[0]         GROUP BY p.id, u.email
+[0]         ORDER BY p.created_at DESC
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 10
+[0] 📱 [Database] First row sample: {
+[0]   id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]   name: 'New Playlist 10',
+[0]   description: 'A new playlist',
+[0]   user_id: 1,
+[0]   order: 0,
+[0]   created_at: 1753685444,
+[0]   updated_at: 1753685444,
+[0]   user_email: 'test@example.com',
+[0]   track_count: 0
+[0] }
+[0] 📱 [Next.js API] Database query result: {
+[0]   success: true,
+[0]   data: [
+[0]     {
+[0]       id: '8504f16d-ef4c-480e-b716-71f913cebd74',
+[0]       name: 'New Playlist 10',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1753685444,
+[0]       updated_at: 1753685444,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 0
+[0]     },
+[0]     {
+[0]       id: '69a5d388-2f5e-4934-a700-c86189fb7097',
+[0]       name: 'New Playlist 9',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 3,
+[0]       created_at: 1752724694,
+[0]       updated_at: 1752724694,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'd5cdbc84-178f-4651-9b45-d0abd74dc7cf',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 2,
+[0]       created_at: 1752724692,
+[0]       updated_at: 1752724692,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: '574dbd01-4686-421d-856e-9294d0566026',
+[0]       name: 'New Playlist 8',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 6,
+[0]       created_at: 1752028536,
+[0]       updated_at: 1752028536,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 6
+[0]     },
+[0]     {
+[0]       id: '3b7b3c59-0c22-4890-92d6-fbdaa7e8977e',
+[0]       name: 'New Playlist 7',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 5,
+[0]       created_at: 1752028533,
+[0]       updated_at: 1752028533,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'a331a2db-6c21-4ef0-b555-c1098d8d3f81',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 4,
+[0]       created_at: 1752027336,
+[0]       updated_at: 1752027336,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'c94dae60-cfdc-45b8-9235-c1e4e0843cea',
+[0]       name: 'new name',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 1,
+[0]       created_at: 1751257394,
+[0]       updated_at: 1751257394,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 4
+[0]     },
+[0]     {
+[0]       id: 'f4e7e8c4-91c6-4363-9f6e-eb179b73a1c3',
+[0]       name: 'New Playlist 1',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 8,
+[0]       created_at: 1751160482,
+[0]       updated_at: 1751160482,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 10
+[0]     },
+[0]     {
+[0]       id: 'ff8fb309-17b3-4a31-95dd-2a6fffac52de',
+[0]       name: 'New Playlist 2',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 7,
+[0]       created_at: 1751146866,
+[0]       updated_at: 1751146866,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 5
+[0]     },
+[0]     {
+[0]       id: 'd6d70a45-914b-44c8-b261-4837c898b83f',
+[0]       name: 'living on a prayer',
+[0]       description: 'A new playlist',
+[0]       user_id: 1,
+[0]       order: 0,
+[0]       created_at: 1751146583,
+[0]       updated_at: 1751146583,
+[0]       user_email: 'test@example.com',
+[0]       track_count: 7
+[0]     }
+[0]   ],
+[0]   message: 'Query completed successfully, 10 rows returned'
+[0] }
+[0] 📱 [Next.js API] Mapped playlists: 10
+[0]  GET /api/playlists 200 in 36ms
+[0] 📱 [Database] Database connection closed
+[0] 🔍 [ELECTRON DETECTION] Running on server (SSR)
+[0] 📱 [DataLayer] Using HTTP API mode
+[0] 🎯 HomePage: Auto-fetch disabled - infinite loop fixed
+[0] 🔍 [NavBar] Data sources: {
+[0]   propTracks: 0,
+[0]   propPlaylists: 0,
+[0]   contextTracks: 0,
+[0]   contextPlaylists: 0,
+[0]   actualTracks: 0,
+[0]   actualPlaylists: 0,
+[0]   comments: 0,
+[0]   commentsError: false
+[0] }
+[0] 🔍 PlaylistSidebar: Component rendering...
+[0] 🔍 PlaylistSidebar: Token from useAuth: false
+[0] 🔍 PlaylistSidebar: User from useAuth: null
+[0] 🔍 PlaylistSidebar: Playlists from usePlaylists: []
+[0] 🔍 PlaylistSidebar: Playlists count: 0
+[0] 🔍 PlaylistSidebar: Loading state: false
+[0] 🔍 PlaylistSidebar: Error state: null
+[0] 🔍 PlaylistSidebar: createPlaylist function: function
+[0] 🔍 PlaylistSidebar: About to render component
+[0] 🎯 TracksManager state: {
+[0]   tracks: [],
+[0]   safeTracks: [],
+[0]   safeTracksLength: 0,
+[0]   playbackCurrentTrack: null,
+[0]   isPlaylistView: false,
+[0]   selectedPlaylistId: null,
+[0]   selectedPlaylistName: null,
+[0]   playlistSortMode: 'manual',
+[0]   selectedPlaylistTracks: 0
+[0] }
+[0] 📱 [TracksManager] Mobile detection: { isMobile: false }
+[0] 🎵 [SEQUENTIAL] No sort column selected, using original order
+[0] 🎵 [SEQUENTIAL] Final displayTracks order: []
+[0] 🔧 [TRACKS TABLE] isDragEnabled: true isPlaylistView: false playlistSortMode: manual
+[0]  HEAD / 200 in 1394ms
+[0] 📱 [Next.js API] /api/tracks called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           t.*,
+[0]           a.name as artist_name,
+[0]           al.name as album_name,
+[0]           al.album_art_path
+[0]         FROM tracks t
+[0]         LEFT JOIN artists a ON t.artist_id = a.id  
+[0]         LEFT JOIN albums al ON t.album_id = al.id
+[0]         ORDER BY t.created_at DESC LIMIT 10
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 3
+[0] 📱 [Database] First row sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artist_id: null,
+[0]   album_id: null,
+[0]   user_id: 1,
+[0]   file_path: '/uploads/careless_whisper.mp3',
+[0]   bitrate: null,
+[0]   sample_rate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   track_number: null,
+[0]   album_art_path: null,
+[0]   waveform_data: null,
+[0]   preprocessed_chunks: null,
+[0]   created_at: 1752279264,
+[0]   updated_at: 1752279264,
+[0]   artist_name: null,
+[0]   album_name: null
+[0] }
+[0] 📱 [Next.js API] Mapped tracks: 3
+[0] 📱 [Next.js API] First track sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artistId: null,
+[0]   artistName: 'Unknown Artist',
+[0]   albumId: null,
+[0]   albumName: 'Unknown Album',
+[0]   albumArtPath: null,
+[0]   filePath: '/uploads/careless_whisper.mp3',
+[0]   streamingUrl: '/audio/c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   fileSize: undefined,
+[0]   format: undefined,
+[0]   bitrate: null,
+[0]   sampleRate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   trackNumber: null,
+[0]   userId: 1,
+[0]   createdAt: 1752279264,
+[0]   updatedAt: 1752279264
+[0] }
+[0]  GET /api/tracks 200 in 173ms
+[0] 📱 [Database] Database connection closed
+[0] 📱 [Next.js API] /api/tracks called from mobile
+[0] 📱 [Database] Database file exists: true
+[0] 📱 [Database] Current working directory: /Users/adwda/Repos/soundhaven-desktop/frontend
+[0] 📱 [Next.js API] Database connection: {
+[0]   connected: true,
+[0]   path: '/Users/adwda/Repos/soundhaven-desktop/main/db.sqlite',
+[0]   message: 'Database file found'
+[0] }
+[0] 📱 [Database] Query attempt: 
+[0]         SELECT 
+[0]           t.*,
+[0]           a.name as artist_name,
+[0]           al.name as album_name,
+[0]           al.album_art_path
+[0]         FROM tracks t
+[0]         LEFT JOIN artists a ON t.artist_id = a.id  
+[0]         LEFT JOIN albums al ON t.album_id = al.id
+[0]         ORDER BY t.created_at DESC LIMIT 10
+[0]       
+[0] 📱 [Database] Params: []
+[0] 📱 [Database] Successfully connected to SQLite database
+[0] 📱 [Database] Query successful, rows: 3
+[0] 📱 [Database] First row sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artist_id: null,
+[0]   album_id: null,
+[0]   user_id: 1,
+[0]   file_path: '/uploads/careless_whisper.mp3',
+[0]   bitrate: null,
+[0]   sample_rate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   track_number: null,
+[0]   album_art_path: null,
+[0]   waveform_data: null,
+[0]   preprocessed_chunks: null,
+[0]   created_at: 1752279264,
+[0]   updated_at: 1752279264,
+[0]   artist_name: null,
+[0]   album_name: null
+[0] }
+[0] 📱 [Next.js API] Mapped tracks: 3
+[0] 📱 [Next.js API] First track sample: {
+[0]   id: 'c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   name: 'Careless Whisper',
+[0]   duration: 300,
+[0]   artistId: null,
+[0]   artistName: 'Unknown Artist',
+[0]   albumId: null,
+[0]   albumName: 'Unknown Album',
+[0]   albumArtPath: null,
+[0]   filePath: '/uploads/careless_whisper.mp3',
+[0]   streamingUrl: '/audio/c37a62da-71b0-48e4-a22e-ce854276268d',
+[0]   fileSize: undefined,
+[0]   format: undefined,
+[0]   bitrate: null,
+[0]   sampleRate: null,
+[0]   channels: null,
+[0]   year: null,
+[0]   genre: null,
+[0]   trackNumber: null,
+[0]   userId: 1,
+[0]   createdAt: 1752279264,
+[0]   updatedAt: 1752279264
+[0] }
+[0]  GET /api/tracks 200 in 1096ms
+[0] 📱 [Database] Database connection closed
+[1] /Users/adwda/Repos/soundhaven-desktop/main/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGKILL
+[1] error Command failed with exit code 1.
+[1] info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
+[0] cd frontend && yarn dev -H 0.0.0.0 exited with code SIGTERM
+[1] cd main && yarn start exited with code 1
+error Command failed with signal "SIGTERM".
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

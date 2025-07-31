@@ -30,6 +30,7 @@ interface TracksManagerProps {
   onRegisterReorderHandler?: (handler: (startIndex: number, endIndex: number) => void) => void;
   onRegisterSelectHandler?: (handler: (trackId: string) => void) => void;
   onRegisterPlayHandler?: (handler: (trackId: string) => void) => void;
+  onRegisterAddCommentHandler?: (handler: (time: number) => void) => void;
   searchResults?: {
     tracks: Track[];
     playlists: any[];
@@ -44,9 +45,19 @@ export default function TracksManager({
   onRegisterReorderHandler,
   onRegisterSelectHandler,
   onRegisterPlayHandler,
+  onRegisterAddCommentHandler,
   searchResults
 }: TracksManagerProps) {
-  console.log('🎯 TracksManager component rendering...');
+  // console.log('🎯 TracksManager component rendering...');
+  
+  // Track if component is mounted to prevent calls during initialization
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   const { 
     tracks: allTracks = [], 
@@ -63,7 +74,7 @@ export default function TracksManager({
   const tracks = (() => {
     // If search is active, use search results
     if (searchResults?.isActive) {
-      console.log('📓 [TRACKS MANAGER] Using search results:', searchResults.tracks.length, 'tracks');
+      // // console.log('📓 [TRACKS MANAGER] Using search results:', searchResults.tracks.length, 'tracks');
       return searchResults.tracks;
     }
     
@@ -71,29 +82,29 @@ export default function TracksManager({
     return selectedPlaylistId ? currentPlaylistTracks : allTracks;
   })();
   
-  console.log(`📓 [TRACKS MANAGER] Tracks determination:`, {
-    selectedPlaylistId,
-    searchActive: searchResults?.isActive || false,
-    searchResultsLength: searchResults?.tracks.length || 0,
-    currentPlaylistTracksLength: currentPlaylistTracks.length,
-    allTracksLength: allTracks.length,
-    finalTracksLength: tracks.length,
-    usingSource: searchResults?.isActive ? 'search' : selectedPlaylistId ? 'playlist' : 'all',
-    tracks: tracks.map(t => ({ id: t.id, name: t.name }))
-  });
+  // // console.log(`📓 [TRACKS MANAGER] Tracks determination:`, {
+  //   selectedPlaylistId,
+  //   searchActive: searchResults?.isActive || false,
+  //   searchResultsLength: searchResults?.tracks.length || 0,
+  //   currentPlaylistTracksLength: currentPlaylistTracks.length,
+  //   allTracksLength: allTracks.length,
+  //   finalTracksLength: tracks.length,
+  //   usingSource: searchResults?.isActive ? 'search' : selectedPlaylistId ? 'playlist' : 'all',
+  //   tracks: tracks.map(t => ({ id: t.id, name: t.name }))
+  // });
   
   const isPlaylistView = !!selectedPlaylistId;
   
   // Debug: Log which data source we're using
-  console.log('📓 TracksManager tracks source:', {
-    selectedPlaylistId,
-    contextTracksLength: currentPlaylistTracks.length,
-    propTracksLength: selectedPlaylistTracks?.length || 0,
-    allTracksLength: allTracks.length,
-    usingSource: selectedPlaylistId ? 'context' : 'allTracks',
-    actualTracksUsed: tracks.length,
-    trackIds: tracks.map(t => t.id)
-  });
+  // // console.log('📓 TracksManager tracks source:', {
+  //   selectedPlaylistId,
+  //   contextTracksLength: currentPlaylistTracks.length,
+  //   propTracksLength: selectedPlaylistTracks?.length || 0,
+  //   allTracksLength: allTracks.length,
+  //   usingSource: selectedPlaylistId ? 'context' : 'allTracks',
+  //   actualTracksUsed: tracks.length,
+  //   trackIds: tracks.map(t => t.id)
+  // });
   
   const {
     isPlaying,
@@ -154,6 +165,7 @@ export default function TracksManager({
   const [commentContent, setCommentContent] = useState('');
   const [commentTime, setCommentTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // Drag & Drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -180,17 +192,17 @@ export default function TracksManager({
   const sortedTracks = useCallback(() => {
     // Don't sort if we're in playlist view and manual mode
     if (isPlaylistView && playlistSortMode === 'manual') {
-      console.log('🎵 [SEQUENTIAL] Using manual playlist order (no sorting applied)');
+      // console.log('🎵 [SEQUENTIAL] Using manual playlist order (no sorting applied)');
       return safeTracks;
     }
     
     // Don't sort if no sort column is selected
     if (!sortColumn) {
-      console.log('🎵 [SEQUENTIAL] No sort column selected, using original order');
+      // console.log('🎵 [SEQUENTIAL] No sort column selected, using original order');
       return safeTracks;
     }
 
-    console.log('🎵 [SEQUENTIAL] Applying sorting:', { sortColumn, sortDirection, isPlaylistView, playlistSortMode });
+    // console.log('🎵 [SEQUENTIAL] Applying sorting:', { sortColumn, sortDirection, isPlaylistView, playlistSortMode });
 
     return [...safeTracks].sort((a, b) => {
       let aValue: any;
@@ -229,18 +241,33 @@ export default function TracksManager({
 
   // Use displayTracks for playback and selection logic
   const displayTracks = sortedTracks();
-  console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+  // console.log('🎵 [SEQUENTIAL] Final displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
 
   const handlePlayTrack = useCallback((trackId: string) => {
-    console.log('😺 [TRACK PLAY] === handlePlayTrack START ===');
-    console.log('😺 [TRACK PLAY] Called with trackId:', trackId);
-    console.log('😺 [TRACK PLAY] isPlaylistView:', isPlaylistView);
-    console.log('😺 [TRACK PLAY] Available tracks count:', tracks.length);
-    console.log('🎵 [HANDLE PLAY TRACK] === START ===');
-    console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
-    console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
-    console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
-    console.log('🎵 [SEQUENTIAL] Using displayTracks for proper sort order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    // Safety check for null/undefined trackId
+    if (!trackId) {
+      console.error('❌ [HANDLE PLAY TRACK] Invalid trackId:', trackId);
+      if (isMountedRef.current) {
+        console.trace('Stack trace for invalid trackId');
+      }
+      return;
+    }
+    
+    // Don't process if component is not mounted
+    if (!isMountedRef.current) {
+      console.warn('handlePlayTrack called before component mounted');
+      return;
+    }
+    
+    // console.log('😺 [TRACK PLAY] === handlePlayTrack START ===');
+    // console.log('😺 [TRACK PLAY] Called with trackId:', trackId);
+    // console.log('😺 [TRACK PLAY] isPlaylistView:', isPlaylistView);
+    // console.log('😺 [TRACK PLAY] Available tracks count:', tracks.length);
+    // console.log('🎵 [HANDLE PLAY TRACK] === START ===');
+    // console.log('🎵 [HANDLE PLAY TRACK] Called with trackId:', trackId);
+    // console.log('🎵 [HANDLE PLAY TRACK] isPlaylistView:', isPlaylistView);
+    // console.log('🎵 [HANDLE PLAY TRACK] Available tracks count:', tracks.length);
+    // console.log('🎵 [SEQUENTIAL] Using displayTracks for proper sort order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
     
     // IMPORTANT: Use displayTracks instead of tracks to respect current sort order
     let trackIndex = -1;
@@ -258,22 +285,22 @@ export default function TracksManager({
       trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
     }
     
-    console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
-    console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
+    // console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
+    // console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
     
     if (trackIndex !== -1) {
       foundTrack = displayTracks[trackIndex];
-      console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
-        index: trackIndex,
-        id: foundTrack.id,
-        name: foundTrack.name,
-        playlist_track_id: foundTrack.playlist_track_id,
-        filePath: foundTrack.filePath
-      });
+      // console.log('🎵 [HANDLE PLAY TRACK] Track found:', {
+      //   index: trackIndex,
+      //   id: foundTrack.id,
+      //   name: foundTrack.name,
+      //   playlist_track_id: foundTrack.playlist_track_id,
+      //   filePath: foundTrack.filePath
+      // });
       
-      console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with sorted index and autoplay=true');
+      // console.log('🎵 [HANDLE PLAY TRACK] About to call selectTrack with sorted index and autoplay=true');
       selectTrack(foundTrack, trackIndex, true, { isPlaylistView, playlistId: selectedPlaylistId });
-      console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
+      // console.log('🎵 [HANDLE PLAY TRACK] selectTrack called successfully');
     } else {
       console.error('❌ [HANDLE PLAY TRACK] Track not found for playback:', trackId);
       console.error('❌ [HANDLE PLAY TRACK] Available track IDs:', displayTracks.map(t => ({
@@ -404,8 +431,13 @@ export default function TracksManager({
   // Register the reorder handler with MainContent once
   useEffect(() => {
     if (onRegisterReorderHandler) {
-      console.log('🔧 [TRACKS MANAGER] Registering reorder handler with MainContent');
-      onRegisterReorderHandler(handleReorderTracks);
+      // Defer registration to next tick to avoid setState during render
+      const timeoutId = setTimeout(() => {
+        // console.log('🔧 [TRACKS MANAGER] Registering reorder handler with MainContent');
+        onRegisterReorderHandler(handleReorderTracks);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [onRegisterReorderHandler, handleReorderTracks]);
 
@@ -500,26 +532,26 @@ export default function TracksManager({
       console.log(`🗑️ Removing track ${trackId} from playlist ${selectedPlaylistId}`);
       
       // Optimistic update - immediately remove from UI
-      console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
+      // console.log('📓 [OPTIMISTIC] Before setCurrentPlaylistTracks call');
       setCurrentPlaylistTracks((prev: Track[]) => {
-        console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
-          prevLength: prev.length,
-          prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
-          tracksToRemove: [trackId]
-        });
+        // console.log('📓 [OPTIMISTIC UPDATE] Before filter:', {
+        //   prevLength: prev.length,
+        //   prevTracks: prev.map(t => ({ id: t.id, name: t.name })),
+        //   tracksToRemove: [trackId]
+        // });
         
         const filtered = prev.filter((track: Track) => track.id !== trackId);
         
-        console.log('📓 [DELETE KEY] Optimistic update result:', {
-          beforeLength: prev.length,
-          afterLength: filtered.length,
-          removedIds: [trackId],
-          remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
-        });
+        // console.log('📓 [DELETE KEY] Optimistic update result:', {
+        //   beforeLength: prev.length,
+        //   afterLength: filtered.length,
+        //   removedIds: [trackId],
+        //   remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name }))
+        // });
         
         return filtered;
       });
-      console.log('📓 [OPTIMISTIC] After setCurrentPlaylistTracks call');
+      // console.log('📓 [OPTIMISTIC] After setCurrentPlaylistTracks call');
       setSelectedTrackIds(prev => prev.filter(id => id !== trackId));
       
       // Make API call in background
@@ -552,19 +584,19 @@ export default function TracksManager({
   // Handle remove from playlist via context menu
   const handleRemoveFromPlaylistContextMenu = useCallback(async () => {
     if (contextMenu && contextMenu.trackIds.length > 0) {
-      console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
-        trackIds: contextMenu.trackIds,
-        currentPlaylistTracksLength: currentPlaylistTracks.length
-      });
+      // console.log('📓 [CONTEXT MENU] Starting optimistic removal:', {
+      //   trackIds: contextMenu.trackIds,
+      //   currentPlaylistTracksLength: currentPlaylistTracks.length
+      // });
       
       // Optimistic update - immediately remove all tracks from UI
       setCurrentPlaylistTracks((prev: Track[]) => {
         const filtered = prev.filter((track: Track) => !contextMenu.trackIds.includes(track.id));
-        console.log('📓 [CONTEXT MENU] Optimistic update result:', {
-          beforeLength: prev.length,
-          afterLength: filtered.length,
-          removedIds: contextMenu.trackIds
-        });
+        // console.log('📓 [CONTEXT MENU] Optimistic update result:', {
+        //   beforeLength: prev.length,
+        //   afterLength: filtered.length,
+        //   removedIds: contextMenu.trackIds
+        // });
         return filtered;
       });
       setSelectedTrackIds(prev => prev.filter(id => !contextMenu.trackIds.includes(id)));
@@ -634,10 +666,25 @@ export default function TracksManager({
   }, [sortColumn, sortDirection, isPlaylistView]);
 
   const handleSelectTrack = useCallback((trackId: string, event?: React.MouseEvent) => {
-    console.log('🐥 [TRACKS MANAGER] handleSelectTrack called with trackId:', trackId);
-    console.log('🐥 [TRACKS MANAGER] Available tracks (displayTracks):', displayTracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
-    console.log('🐥 [TRACKS MANAGER] isPlaylistView:', isPlaylistView);
-    console.log('🐥 [TRACKS MANAGER] Current selectedTrackIds:', selectedTrackIds);
+    // console.log('🐥 [TRACKS MANAGER] handleSelectTrack called with trackId:', trackId);
+    // console.log('🐥 [TRACKS MANAGER] Available tracks (displayTracks):', displayTracks.map(t => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id })));
+    // console.log('🐥 [TRACKS MANAGER] isPlaylistView:', isPlaylistView);
+    // console.log('🐥 [TRACKS MANAGER] Current selectedTrackIds:', selectedTrackIds);
+    
+    // Guard against being called during render or with invalid data
+    if (!trackId) {
+      console.error('❌ [HANDLE SELECT TRACK] Invalid trackId:', trackId);
+      if (isMountedRef.current) {
+        console.trace('Stack trace for invalid trackId');
+      }
+      return;
+    }
+    
+    // Don't process if component is not mounted
+    if (!isMountedRef.current) {
+      console.warn('handleSelectTrack called before component mounted');
+      return;
+    }
     
     if (event) {
       // Handle multi-selection with Ctrl/Cmd/Option key
@@ -746,18 +793,31 @@ export default function TracksManager({
   // Register the select handler with MainContent once
   useEffect(() => {
     if (onRegisterSelectHandler) {
-      console.log('🔧 [TRACKS MANAGER] Registering select handler with MainContent');
-      onRegisterSelectHandler(handleSelectTrack);
+      // Defer registration to next tick to avoid setState during render
+      const timeoutId = setTimeout(() => {
+        // console.log('🔧 [TRACKS MANAGER] Registering select handler with MainContent');
+        onRegisterSelectHandler(handleSelectTrack);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [onRegisterSelectHandler, handleSelectTrack]);
 
   // Register the play handler with MainContent once
   useEffect(() => {
     if (onRegisterPlayHandler) {
-      console.log('🔧 [TRACKS MANAGER] Registering play handler with MainContent');
-      onRegisterPlayHandler(handlePlayTrack);
+      // Defer registration to next tick to avoid setState during render
+      const timeoutId = setTimeout(() => {
+        // console.log('🔧 [TRACKS MANAGER] Registering play handler with MainContent');
+        onRegisterPlayHandler(handlePlayTrack);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [onRegisterPlayHandler, handlePlayTrack]);
+
+  // We'll register the add comment handler after it's defined
+  // (Moving this useEffect after handleAddComment definition)
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -793,12 +853,12 @@ export default function TracksManager({
               console.log('🐥 [PLAYLIST DELETE] Processing playlist deletion...');
               
               // In playlist view, remove from playlist (optimistic)
-              console.log('📓 [DELETE KEY] Before optimistic update:', {
-                selectedTrackIds,
-                currentPlaylistTracksLength: currentPlaylistTracks.length,
-                selectedPlaylistTracksLength: selectedPlaylistTracks?.length || 0,
-                tracksLength: tracks.length
-              });
+              // console.log('📓 [DELETE KEY] Before optimistic update:', {
+              //   selectedTrackIds,
+              //   currentPlaylistTracksLength: currentPlaylistTracks.length,
+              //   selectedPlaylistTracksLength: selectedPlaylistTracks?.length || 0,
+              //   tracksLength: tracks.length
+              // });
               
               const tracksToRemove = selectedTrackIds.slice(); // Copy array
               console.log('🐥 [TRACKS TO REMOVE]', tracksToRemove);
@@ -817,28 +877,28 @@ export default function TracksManager({
                   return !tracksToRemove.includes(trackKey);
                 });
                 
-                console.log('🐥 [DELETE KEY] Optimistic update result:', {
-                  beforeLength: prev.length,
-                  afterLength: filtered.length,
-                  removedIds: tracksToRemove,
-                  remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id }))
-                });
+                // console.log('🐥 [DELETE KEY] Optimistic update result:', {
+                //   beforeLength: prev.length,
+                //   afterLength: filtered.length,
+                //   removedIds: tracksToRemove,
+                //   remainingTracks: filtered.map((t: Track) => ({ id: t.id, name: t.name, playlist_track_id: t.playlist_track_id }))
+                // });
                 
                 return filtered;
               });
               
-              console.log('📓 [SELECTION CLEAR] Clearing selected track IDs');
+              // console.log('📓 [SELECTION CLEAR] Clearing selected track IDs');
               setSelectedTrackIds([]);
               
               // Remove tracks from playlist in background
-              console.log('📓 [API CALLS] Starting background API calls...');
+              // console.log('📓 [API CALLS] Starting background API calls...');
               Promise.allSettled(
                 tracksToRemove.map(trackId => {
-                  console.log('📓 [API CALL] Removing track:', trackId);
+                  // console.log('📓 [API CALL] Removing track:', trackId);
                   return removeTrackFromPlaylist(selectedPlaylistId!, trackId, true);
                 })
               ).then(results => {
-                console.log('📓 [API RESULTS] All API calls completed:', results);
+                // console.log('📓 [API RESULTS] All API calls completed:', results);
                 
                 const failedRemovals = results.filter(result => result.status === 'rejected' || !result.value);
                 
@@ -851,12 +911,12 @@ export default function TracksManager({
                   
                   // Revert optimistic update by refetching
                   if (selectedPlaylistId) {
-                    console.log('📓 [REVERT] Reverting optimistic update...');
+                    // console.log('📓 [REVERT] Reverting optimistic update...');
                     fetchPlaylistById(selectedPlaylistId).then(updatedPlaylist => {
                       if (updatedPlaylist) {
-                        console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
-                          tracksCount: updatedPlaylist.tracks?.length || 0
-                        });
+                        // console.log('📓 [REVERT SUCCESS] Playlist refetched:', {
+                        //   tracksCount: updatedPlaylist.tracks?.length || 0
+                        // });
                         setCurrentPlaylistTracks(updatedPlaylist.tracks || []);
                       } else {
                         console.error('📓 [REVERT FAILURE] Failed to refetch playlist');
@@ -866,21 +926,21 @@ export default function TracksManager({
                     });
                   }
                 } else {
-                  console.log('📓 [API SUCCESS] Successfully removed all tracks:', {
-                    removedCount: tracksToRemove.length,
-                    trackIds: tracksToRemove
-                  });
+                  // console.log('📓 [API SUCCESS] Successfully removed all tracks:', {
+                  //   removedCount: tracksToRemove.length,
+                  //   trackIds: tracksToRemove
+                  // });
                 }
               }).catch(error => {
                 console.error('📓 [API ERROR] Unexpected error in Promise.allSettled:', error);
               });
             } else {
-              console.log('📓 [LIBRARY DELETE] Processing library deletion...');
+              // console.log('📓 [LIBRARY DELETE] Processing library deletion...');
               // In library view, delete tracks entirely
               handleDeleteTrack();
             }
           } else {
-            console.log('📓 [NO SELECTION] No tracks selected for deletion');
+            // console.log('📓 [NO SELECTION] No tracks selected for deletion');
           }
           break;
 
@@ -989,17 +1049,17 @@ export default function TracksManager({
   };
 
   const handleNext = () => {
-    console.log('🎵 [SEQUENTIAL] Next track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    // console.log('🎵 [SEQUENTIAL] Next track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
     nextTrack(displayTracks, true); // autoPlay = true
   };
 
   const handlePrevious = () => {
-    console.log('🎵 [SEQUENTIAL] Previous track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
+    // console.log('🎵 [SEQUENTIAL] Previous track requested - displayTracks order:', displayTracks.map((t, i) => ({ index: i, name: t.name })));
     previousTrack(displayTracks, true); // autoPlay = true
   };
 
   // Add comments functionality
-  const handleAddComment = async (time: number) => {
+  const handleAddComment = useCallback(async (time: number) => {
     if (!playbackCurrentTrack?.id || !user || !token) {
       console.log('Cannot add comment: missing track, user, or token');
       return;
@@ -1007,9 +1067,28 @@ export default function TracksManager({
 
     setCommentTime(time);
     setShowCommentModal(true);
-  };
+  }, [playbackCurrentTrack?.id, user, token]);
+
+  // Register the add comment handler with MainContent once
+  useEffect(() => {
+    if (onRegisterAddCommentHandler) {
+      // Defer registration to next tick to avoid setState during render
+      const timeoutId = setTimeout(() => {
+        // console.log('🔧 [TRACKS MANAGER] Registering add comment handler with MainContent');
+        onRegisterAddCommentHandler(handleAddComment);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [onRegisterAddCommentHandler, handleAddComment]);
 
   const handleSubmitComment = async () => {
+    // Prevent double submission
+    if (isSubmittingComment) {
+      console.log('Comment submission already in progress, ignoring duplicate request');
+      return;
+    }
+
     if (!commentContent.trim() || !playbackCurrentTrack?.id || !user || !token) {
       console.error('Cannot submit comment: missing required data', { 
         hasContent: !!commentContent.trim(), 
@@ -1029,27 +1108,44 @@ export default function TracksManager({
       return;
     }
 
+    setIsSubmittingComment(true);
+    setError(null); // Clear any previous errors
+
     try {
-      console.log('Submitting comment:', { 
+      console.log('🤗 [COMMENT SUBMISSION] Starting comment submission...');
+      console.log('🤗 [COMMENT SUBMISSION] Data:', { 
         trackId: playbackCurrentTrack.id,
         time: commentTime,
-        contentLength: commentContent.length
+        contentLength: commentContent.length,
+        hasUser: !!user,
+        hasToken: !!token,
+        userId: user?.id
       });
       
-      await addMarkerAndComment(
+      console.log('🤗 [COMMENT SUBMISSION] Calling addMarkerAndComment...');
+      const result = await addMarkerAndComment(
         playbackCurrentTrack.id,
         commentContent.trim(),
         commentTime,
         '#FF0000' // Default color
       );
-      console.log('Comment added successfully at time:', commentTime);
+      console.log('🤗 [COMMENT SUBMISSION] addMarkerAndComment returned:', result);
+      console.log('🤗 ✅ [COMMENT SUBMISSION] Comment added successfully at time:', commentTime);
       setCommentContent('');
       setShowCommentModal(false);
+      setIsSubmittingComment(false);
       
       // No need to refresh - addMarkerAndComment already updates the state
     } catch (error) {
-      console.error('Error adding comment:', error);
-      setError(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('🤗 ❌ [COMMENT SUBMISSION] Error adding comment:', error);
+      console.error('🤗 ❌ [COMMENT SUBMISSION] Error type:', typeof error);
+      console.error('🤗 ❌ [COMMENT SUBMISSION] Error name:', error instanceof Error ? error.name : 'Not an Error object');
+      console.error('🤗 ❌ [COMMENT SUBMISSION] Error message:', error instanceof Error ? error.message : 'No message');
+      console.error('🤗 ❌ [COMMENT SUBMISSION] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Failed to add comment: ${errorMessage}`);
+      setIsSubmittingComment(false);
       // Keep the modal open so the user can try again
     }
   };
@@ -1084,10 +1180,10 @@ export default function TracksManager({
     
     // Only show overlay for external file drops, not internal track dragging
     if (hasFiles || hasFileType) {
-      console.log('🔧 [DRAG] External file drag detected, showing overlay');
+      // console.log('🔧 [DRAG] External file drag detected, showing overlay');
     setIsDragOver(true);
     } else {
-      console.log('🔧 [DRAG] Internal track drag detected, not showing overlay');
+      // console.log('🔧 [DRAG] Internal track drag detected, not showing overlay');
       setIsDragOver(false);
     }
   }, []);
@@ -1100,7 +1196,7 @@ export default function TracksManager({
     const hasFileType = e.dataTransfer.types.includes('Files');
     
     if (hasFiles || hasFileType) {
-      console.log('🔧 [DRAG] External file drag left, hiding overlay');
+      // console.log('🔧 [DRAG] External file drag left, hiding overlay');
     setIsDragOver(false);
     }
   }, []);
@@ -1662,23 +1758,32 @@ export default function TracksManager({
               className="w-full p-3 border border-gray-300 rounded-md mb-4 resize-none"
               rows={3}
               autoFocus
+              disabled={isSubmittingComment}
             />
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowCommentModal(false);
                   setCommentContent('');
+                  setIsSubmittingComment(false);
+                  setError(null);
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                disabled={isSubmittingComment}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmitComment}
-                disabled={!commentContent.trim()}
+                disabled={!commentContent.trim() || isSubmittingComment}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                Add Comment
+                {isSubmittingComment ? 'Adding...' : 'Add Comment'}
               </button>
             </div>
           </div>

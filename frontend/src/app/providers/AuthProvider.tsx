@@ -42,7 +42,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
       const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
       
       if (!isElectron) {
-        console.log('📱 [AuthProvider] Mobile browser detected - skipping auth initialization');
+        // console.log('📱 [AuthProvider] Mobile browser detected - skipping auth initialization');
         setLoading(false);
         return;
       }
@@ -53,10 +53,10 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
           electronApiService.getToken()
         ]);
 
-        console.log('Initializing auth state from secure storage', {
-          storedUser,
-          storedToken
-        });
+        // console.log('Initializing auth state from secure storage', {
+        //   storedUser,
+        //   storedToken
+        // });
 
         if (storedUser && storedToken) {
           // Create a full User object with required fields
@@ -73,7 +73,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
           setToken(storedToken);
         } else {
           // Auto-login test user for desktop app convenience
-          console.log('🔐 No stored auth found, attempting auto-login for test user...');
+          // console.log('🔐 No stored auth found, attempting auto-login for test user...');
           try {
             const response = await electronApiService.login({
               email: 'test@example.com',
@@ -94,9 +94,9 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
 
             setUser(user);
             setToken(accessToken);
-            console.log('✅ Auto-login successful for user:', user.name);
+            // console.log('✅ Auto-login successful for user:', user.name);
           } catch (error) {
-            console.log('❌ Auto-login failed:', error);
+            // console.log('❌ Auto-login failed:', error);
           }
         }
       } catch (error) {
@@ -141,14 +141,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (email: string, password: string): Promise<User> => {
-    console.log('AuthProvider: Starting login...');
+    // console.log('AuthProvider: Starting login...');
     setLoading(true);
     
     // Detect mobile browser and handle gracefully - use consistent detection
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     
     if (!isElectron) {
-      console.log('📱 [AuthProvider] Mobile browser login - using test user');
+      // console.log('📱 [AuthProvider] Mobile browser login - using test user');
       
       // For mobile browsers, create a simple test user without backend validation
       const mobileUser: User = {
@@ -168,7 +168,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
        setToken('mobile-test-token');
        setLoading(false);
       
-      console.log('📱 [AuthProvider] Mobile login successful:', mobileUser);
+      // console.log('📱 [AuthProvider] Mobile login successful:', mobileUser);
       return mobileUser;
     }
     
@@ -178,14 +178,14 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
         password
       });
       
-      console.log('AuthProvider: Login response:', response);
+      // console.log('AuthProvider: Login response:', response);
       
       if (!response?.data) {
         throw new Error('No response from server');
       }
 
       const { user, accessToken, refreshToken } = response.data;
-      console.log('AuthProvider: Setting user and tokens...');
+      // console.log('AuthProvider: Setting user and tokens...');
 
       await Promise.all([
         electronApiService.setUser(user),
@@ -193,10 +193,10 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
         refreshToken ? electronApiService.setRefreshToken(refreshToken) : Promise.resolve()
       ]);
 
-      console.log('AuthProvider: Updating state...');
+      // console.log('AuthProvider: Updating state...');
       setUser(user);
       setToken(accessToken);
-      console.log('AuthProvider: Login complete, returning user:', user);
+      // console.log('AuthProvider: Login complete, returning user:', user);
       return user;
     } catch (error) {
       console.error('AuthProvider: Login error:', error);
@@ -213,12 +213,12 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
     const isElectron = typeof window !== 'undefined' && !!window.electron?.ipcRenderer;
     
     try {
-      console.log('Logout initiated');
+      // console.log('Logout initiated');
       
       if (isElectron) {
         await electronApiService.logout();
       } else {
-        console.log('📱 [AuthProvider] Logout on mobile browser - clearing local state only');
+        // console.log('📱 [AuthProvider] Logout on mobile browser - clearing local state only');
       }
       
       // Clear local state (works for both environments)
@@ -227,7 +227,7 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setToken(null);
 
-      console.log('Logout completed');
+      // console.log('Logout completed');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -236,10 +236,10 @@ export const AuthProvider: FC<AuthProviderProps> = ({ children }) => {
   }, [clearTracks, clearPlaylists]);
 
   const refreshToken = useCallback(async (): Promise<string | null> => {
-    console.log('Attempting to refresh token via Electron');
+    // console.log('Attempting to refresh token via Electron');
     const storedRefreshToken = await electronApiService.getRefreshToken();
     if (!storedRefreshToken) {
-      console.log('No refresh token available');
+      // console.log('No refresh token available');
       await logout();
       return null;
     }

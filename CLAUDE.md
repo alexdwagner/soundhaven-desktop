@@ -24,7 +24,7 @@ The application uses a monorepo structure with Yarn workspaces. The frontend com
 
 ### Starting Development
 ```bash
-# Start both frontend and electron in development mode
+# Start both frontend and electron in development mode. ALWAYS use this to start the application and servers.
 yarn dev
 
 # Clean restart (kills ports and restarts)

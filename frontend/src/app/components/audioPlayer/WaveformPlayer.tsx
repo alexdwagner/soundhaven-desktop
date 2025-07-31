@@ -48,7 +48,7 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({
       if (isElectron) {
         // Desktop: Use Electron audio server
         const fileName = filePath.replace('/uploads/', '');
-        const audioServerUrl = `http://localhost:3000/audio/${fileName}`;
+        const audioServerUrl = `http://localhost:3002/audio/${fileName}`;
         console.log('🎵 WaveformPlayer: Using Electron audio server URL:', audioServerUrl);
         return audioServerUrl;
       } else {

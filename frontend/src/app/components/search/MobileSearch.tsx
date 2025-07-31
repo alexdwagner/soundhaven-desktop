@@ -72,6 +72,13 @@ const MobileSearch: React.FC<MobileSearchProps> = ({
   const handleTrackPlay = (trackId: string, event: React.MouseEvent | React.TouchEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    
+    // Validate trackId before calling handler
+    if (!trackId) {
+      console.error('🔍 [MOBILE SEARCH] Invalid trackId in handleTrackPlay:', trackId);
+      return;
+    }
+    
     if (onTrackPlay) {
       onTrackPlay(trackId);
     }
@@ -149,7 +156,7 @@ const MobileSearch: React.FC<MobileSearchProps> = ({
                   Tracks ({searchResults.tracks.length})
                 </h3>
                 <div className="divide-y divide-gray-200">
-                  {searchResults.tracks.map((track: Track) => (
+                  {searchResults.tracks.filter(track => track && track.id).map((track: Track) => (
                     <div
                       key={track.id}
                       className="p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"

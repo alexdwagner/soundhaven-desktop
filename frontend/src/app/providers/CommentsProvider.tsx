@@ -83,20 +83,20 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         return;
       }
 
-      console.log('🔍 [CommentsProvider] Starting fetchCommentsAndMarkers for track:', trackId);
+      // console.log('🔍 [CommentsProvider] Starting fetchCommentsAndMarkers for track:', trackId);
       setIsLoadingMarkers(true);
 
       try {
-        console.log('📡 [CommentsProvider] Calling apiService.fetchCommentsAndMarkers...');
+        // console.log('📡 [CommentsProvider] Calling apiService.fetchCommentsAndMarkers...');
         const response = await apiService.fetchCommentsAndMarkers(trackId, page, limit);
-        console.log('📡 [CommentsProvider] API Response received:', response);
+        // console.log('📡 [CommentsProvider] API Response received:', response);
 
         if (response.error) {
-          console.error('❌ [CommentsProvider] API Error:', response.error);
+          console.error('API Error:', response.error);
           
           // Handle specific error cases
           if (response.error.includes('Failed to fetch') || response.error.includes('Load failed')) {
-            console.error('❌ [CommentsProvider] Network/CORS error detected:', response.error);
+            console.error('Network/CORS error detected:', response.error);
             setError(`Network error - please check connection: ${response.error}`);
           } else {
             setError(`API error: ${response.error}`);
@@ -107,7 +107,7 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         }
 
         const responseData = response.data;
-        console.log('📋 [CommentsProvider] Response data:', responseData);
+        // console.log('📋 [CommentsProvider] Response data:', responseData);
 
         // Handle pagination structure from API
         let fetchedComments;
@@ -117,7 +117,7 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
           // New pagination structure with separate comments and markers arrays
           fetchedComments = responseData.comments;
           fetchedMarkers = responseData.markers || [];
-          console.log('📋 [CommentsProvider] Using pagination structure, comments:', fetchedComments?.length);
+          // console.log('📋 [CommentsProvider] Using pagination structure, comments:', fetchedComments?.length);
           console.log('📋 [CommentsProvider] Using pagination structure, markers:', fetchedMarkers?.length);
         } else if (Array.isArray(responseData)) {
           // Legacy array structure
@@ -272,10 +272,10 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
     setIsCommentAdding(true);
 
     try {
-      console.log('Adding comment with marker:', { trackId, content, time, color, userId: user?.id });
+      console.log('🤗 [CommentsProvider] Adding comment with marker:', { trackId, content, time, color, userId: user?.id });
       
       if (!user?.id) {
-        console.error('Cannot add comment: User ID is missing');
+        console.error('🤗 ❌ [CommentsProvider] Cannot add comment: User ID is missing');
         throw new Error('User ID is required to add a comment');
       }
       
@@ -287,14 +287,14 @@ export const CommentsProvider: FunctionComponent<CommentsProviderProps> = ({
         userId: user.id,
       };
       
-      console.log('🎵 [CommentsProvider] About to call addMarkerAndComment with:', commentData);
+      console.log('🤗 [CommentsProvider] About to call apiService.addMarkerAndComment with:', commentData);
       const comment = await apiService.addMarkerAndComment(commentData);
-      console.log('🎵 [CommentsProvider] Comment added successfully:', comment);
-      console.log('🎵 [CommentsProvider] Comment type:', typeof comment, 'is object:', typeof comment === 'object');
+      console.log('🤗 [CommentsProvider] Comment added successfully:', comment);
+      console.log('🤗 [CommentsProvider] Comment type:', typeof comment, 'is object:', typeof comment === 'object');
 
       if (!comment || typeof comment !== 'object') {
-        console.error('🎵 [CommentsProvider] Invalid response format from API');
-        console.error('🎵 [CommentsProvider] Expected object, got:', typeof comment, comment);
+        console.error('🤗 ❌ [CommentsProvider] Invalid response format from API');
+        console.error('🤗 ❌ [CommentsProvider] Expected object, got:', typeof comment, comment);
         throw new Error('Invalid response format from server');
       }
 

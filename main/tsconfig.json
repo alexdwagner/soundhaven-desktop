@@ -14,7 +14,8 @@
       "@shared/*": ["../shared/*"]
     },
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": []
   },
   "ts-node": {
     "require": ["tsconfig-paths/register"]

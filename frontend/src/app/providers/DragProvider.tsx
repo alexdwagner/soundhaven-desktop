@@ -18,15 +18,15 @@ export const DragProvider: React.FC<DragProviderProps> = ({ children }) => {
   });
 
   const startDrag = useCallback((track: Track, position: { x: number; y: number }) => {
-    console.log(`[DRAG N DROP] 🚀 DragProvider: Starting custom drag for track:`, track);
-    console.log(`[DRAG N DROP] 🚀 DragProvider: Initial position:`, position);
+    // console.log(`[DRAG N DROP] 🚀 DragProvider: Starting custom drag for track:`, track);
+    // console.log(`[DRAG N DROP] 🚀 DragProvider: Initial position:`, position);
     setDragState({
       isDragging: true,
       draggedTrack: track,
       dragPosition: position,
       dragStartPosition: position,
     });
-    console.log(`[DRAG N DROP] 🚀 DragProvider: Drag state updated to isDragging=true`);
+    // console.log(`[DRAG N DROP] 🚀 DragProvider: Drag state updated to isDragging=true`);
   }, []);
 
   const updateDragPosition = useCallback((position: { x: number; y: number }) => {
@@ -36,19 +36,19 @@ export const DragProvider: React.FC<DragProviderProps> = ({ children }) => {
     }));
     // Only log occasionally to avoid spam
     if (Math.random() < 0.01) { // 1% of the time
-      console.log(`[DRAG N DROP] 🚀 DragProvider: Updated drag position:`, position);
+      // console.log(`[DRAG N DROP] 🚀 DragProvider: Updated drag position:`, position);
     }
   }, []);
 
   const endDrag = useCallback(() => {
-    console.log(`[DRAG N DROP] 🚀 DragProvider: Ending custom drag`);
+    // console.log(`[DRAG N DROP] 🚀 DragProvider: Ending custom drag`);
     setDragState({
       isDragging: false,
       draggedTrack: null,
       dragPosition: { x: 0, y: 0 },
       dragStartPosition: { x: 0, y: 0 },
     });
-    console.log(`[DRAG N DROP] 🚀 DragProvider: Drag state reset to isDragging=false`);
+    // console.log(`[DRAG N DROP] 🚀 DragProvider: Drag state reset to isDragging=false`);
   }, []);
 
   // Track mouse movement during drag
@@ -60,7 +60,7 @@ export const DragProvider: React.FC<DragProviderProps> = ({ children }) => {
     };
 
     const handleMouseUp = () => {
-      console.log(`[DRAG N DROP] 🚀 DragProvider: Mouse up detected, ending drag`);
+      // console.log(`[DRAG N DROP] 🚀 DragProvider: Mouse up detected, ending drag`);
       endDrag();
     };
 

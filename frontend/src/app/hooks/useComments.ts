@@ -110,23 +110,7 @@ export const useComments = (
   // console.log("🎣 [useComments] Hook called - regionCommentMap:", regionCommentMap);
   // console.log("🎣 [useComments] Hook called - comments:", comments?.length, "comments");
 
-  // Add debugging for waveSurfer and regions
-  useEffect(() => {
-    console.log("useComments - waveSurferRef.current:", !!waveSurferRef.current);
-    console.log("useComments - regionsRef.current:", !!regionsRef.current);
-    
-    if (waveSurferRef.current && regionsRef.current && markers?.length) {
-      console.log("useComments - We have waveSurfer, regions, and markers. Should be able to create regions.");
-      
-      // Check if regions are being created
-      setTimeout(() => {
-        if (regionsRef.current) {
-          const regions = regionsRef.current.getRegions();
-          console.log("useComments - Current regions:", regions);
-        }
-      }, 1000);
-    }
-  }, [markers]); // Refs themselves don't need to be in deps array
+  // Debug logging removed to prevent infinite loops
 
   // console.log("Markers in useComments:•", markers);
 

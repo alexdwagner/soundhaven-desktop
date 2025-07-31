@@ -64,3 +64,7 @@ docs_internal/
 # claude config
 
 CLAUDE.md
+test-results/
+
+# Planning documents
+plans/

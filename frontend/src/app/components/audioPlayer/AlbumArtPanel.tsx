@@ -35,7 +35,7 @@ const AlbumArtPanel: React.FC<AlbumArtPanelProps> = ({ track, show }) => {
     
     if (isElectron) {
       // Desktop: use Electron audio server
-      const url = `http://localhost:3000${track.albumArtPath}`;
+      const url = `http://localhost:3002${track.albumArtPath}`;
       console.log('🖼️ [AlbumArtPanel] Using desktop URL:', url);
       return url;
     } else {

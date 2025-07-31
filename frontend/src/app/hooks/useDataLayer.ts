@@ -17,7 +17,7 @@ export function useDataLayer(): DataLayer {
   const getTracks = useCallback(async () => {
     if (isElectron) {
       try {
-        const response = await (window as any).electronAPI.invoke('api-request', {
+        const response = await (window as any).electron.ipcRenderer.invoke('api-request', {
           endpoint: '/api/tracks',
           method: 'GET'
         });
@@ -42,7 +42,7 @@ export function useDataLayer(): DataLayer {
   const getTrack = useCallback(async (id: string) => {
     if (isElectron) {
       try {
-        const response = await (window as any).electronAPI.invoke('api-request', {
+        const response = await (window as any).electron.ipcRenderer.invoke('api-request', {
           endpoint: `/api/tracks/${id}`,
           method: 'GET'
         });
@@ -67,7 +67,7 @@ export function useDataLayer(): DataLayer {
   const getPlaylists = useCallback(async () => {
     if (isElectron) {
       try {
-        const response = await (window as any).electronAPI.invoke('api-request', {
+        const response = await (window as any).electron.ipcRenderer.invoke('api-request', {
           endpoint: '/api/playlists',
           method: 'GET'
         });
@@ -92,7 +92,7 @@ export function useDataLayer(): DataLayer {
   const getComments = useCallback(async (trackId?: string) => {
     if (isElectron) {
       try {
-        const response = await (window as any).electronAPI.invoke('api-request', {
+        const response = await (window as any).electron.ipcRenderer.invoke('api-request', {
           endpoint: `/api/comments${trackId ? `?trackId=${trackId}` : ''}`,
           method: 'GET'
         });

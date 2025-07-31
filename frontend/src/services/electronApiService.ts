@@ -565,8 +565,9 @@ export const apiService = {
     console.log(`[DRAG N DROP] 🌐 ElectronAPI: playlistId="${playlistId}", trackId="${trackId}"`);
     
     try {
-      const { data, error } = await makeRequest(`/api/playlists/${playlistId}/tracks/${trackId}`, {
+      const { data, error } = await makeRequest(`/api/playlists/${playlistId}/tracks`, {
         method: 'POST',
+        body: JSON.stringify({ trackId }),
       });
       console.log(`[DRAG N DROP] 🌐 ElectronAPI: makeRequest response:`, { data, error });
       
@@ -584,15 +585,16 @@ export const apiService = {
   },
 
   async removeTrackFromPlaylist(playlistId: string, trackId: string) {
-    const { error } = await makeRequest(`/api/playlists/${playlistId}/tracks/${trackId}`, {
+    const { error } = await makeRequest(`/api/playlists/${playlistId}/tracks`, {
       method: 'DELETE',
+      body: JSON.stringify({ trackId }),
     });
     if (error) throw new Error(error);
   },
 
   async updatePlaylistMetadata(playlistId: string, updates: { name?: string; description?: string }): Promise<Playlist> {
     console.log(`[EDIT PLAYLIST] Step 3: updatePlaylistMetadata in apiService called for playlist ID: ${playlistId} with updates:`, updates);
-    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${playlistId}/metadata`, {
+    const { data, error } = await makeRequest<Playlist>(`/api/playlists/${playlistId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -974,7 +976,8 @@ export const apiService = {
   },
 
   async addMarkerAndComment(dto: CreateCommentDto): Promise<Comment> {
-    console.log('Adding marker and comment:', dto);
+    console.log('🤗 [ApiService] Adding marker and comment:', dto);
+    console.log('🤗 [ApiService] Token available:', !!this.getToken());
     try {
       const response = await makeRequest<Comment>('/api/comments', {
       method: 'POST',
@@ -985,16 +988,17 @@ export const apiService = {
       body: JSON.stringify(dto),
     });
       
-      console.log('Add marker and comment response:', response);
+      console.log('🤗 [ApiService] Add marker and comment response:', response);
       
       if (response.error || !response.data) {
-        console.error('Failed to add comment with marker:', response.error || 'No data returned');
+        console.error('🤗 ❌ [ApiService] Failed to add comment with marker:', response.error || 'No data returned');
         throw new Error(response.error || 'Failed to add comment with marker');
       }
       
+      console.log('🤗 ✅ [ApiService] Comment added successfully, returning data');
       return response.data;
     } catch (error) {
-      console.error('Error in addMarkerAndComment:', error);
+      console.error('🤗 ❌ [ApiService] Error in addMarkerAndComment:', error);
       throw error;
     }
   },
