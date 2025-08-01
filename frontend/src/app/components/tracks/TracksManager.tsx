@@ -274,19 +274,29 @@ export default function TracksManager({
     let foundTrack = null;
     
     if (isPlaylistView) {
-      // In playlist view, trackId could be playlist_track_id (number) or track.id (string)
+      // In playlist view, prefer playlist_track_id for unique identification
+      // First, try to find by playlist_track_id (this is unique within a playlist)
       trackIndex = displayTracks.findIndex((t) => {
         const playlistTrackId = t.playlist_track_id?.toString();
-        const regularTrackId = t.id.toString();
-        return playlistTrackId === trackId || regularTrackId === trackId;
+        return playlistTrackId === trackId;
       });
+      
+      // If not found by playlist_track_id, fall back to track.id
+      // This handles cases where we might be playing from a different context
+      if (trackIndex === -1) {
+        trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
+      }
     } else {
       // In library view, trackId is always track.id
       trackIndex = displayTracks.findIndex((t) => t.id.toString() === trackId);
     }
     
-    // console.log('🎵 [HANDLE PLAY TRACK] Found trackIndex in displayTracks:', trackIndex);
-    // console.log('🎵 [SEQUENTIAL] Track index in sorted order:', trackIndex);
+    console.log('🎵 [HANDLE PLAY TRACK] Track lookup result:', {
+      trackId,
+      foundIndex: trackIndex,
+      isPlaylistView,
+      totalTracks: displayTracks.length
+    });
     
     if (trackIndex !== -1) {
       foundTrack = displayTracks[trackIndex];

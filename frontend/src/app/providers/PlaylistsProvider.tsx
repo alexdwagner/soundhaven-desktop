@@ -117,8 +117,9 @@ export const PlaylistsProvider: React.FC<PlaylistsProviderProps> = ({ children }
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error("Error fetching playlists:", errorMessage);
-      // console.error("🎵 [PLAYLISTS PROVIDER] Full error:", error);
+      console.error("📱 [PLAYLISTS PROVIDER] Error fetching playlists:", errorMessage);
+      console.error("📱 [PLAYLISTS PROVIDER] Full error:", error);
+      console.error("📱 [PLAYLISTS PROVIDER] Is mobile browser:", typeof window !== 'undefined' && !window.electron?.ipcRenderer);
       setError(errorMessage);
     } finally {
       setLoading(false);

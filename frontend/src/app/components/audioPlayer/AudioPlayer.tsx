@@ -89,6 +89,7 @@ interface AudioPlayerProps {
   playbackSpeed: number;
   waveSurferRef?: React.MutableRefObject<WaveSurferWithRegions | null>;
   regionsRef?: React.MutableRefObject<any>;
+  trackIndex?: number | null;
 }
 
 // Define the region type
@@ -113,7 +114,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   playbackSpeed,
   waveSurferRef: externalWaveSurferRef,
   regionsRef: externalRegionsRef,
+  trackIndex,
 }) => {
+  // Debug log to see when AudioPlayer re-renders
+  console.log('🎵 AudioPlayer: Component rendering with:', {
+    trackName: track?.name,
+    trackId: track?.id,
+    trackIndex: trackIndex,
+    isPlaying: isPlaying
+  });
   const waveformRef = useRef<HTMLDivElement>(null);
   const internalWaveSurferRef = useRef<WaveSurferWithRegions | null>(null);
   const internalRegionsRef = useRef<any>(null);
@@ -614,9 +623,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       return;
     }
 
-    const trackId = `${track.id}-${track.filePath}`;
+    // Include trackIndex in the trackId to distinguish between duplicate tracks in playlists
+    const trackId = `${track.id}-${track.filePath}-${trackIndex ?? 'library'}`;
     currentTrackRef.current = trackId;
-    console.log('🎵 AudioPlayer: Starting initialization for track:', trackId);
+    console.log('🎵 AudioPlayer: Starting initialization for track:', trackId, 'at index:', trackIndex);
+    console.log('🎵 AudioPlayer: Track details:', {
+        trackName: track.name,
+        trackId: track.id,
+        trackIndex: trackIndex,
+        currentTrackRef: currentTrackRef.current
+    });
 
     try {
       // Step 1: Proper cleanup with real completion check
@@ -780,7 +796,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       // Cleanup on failure
       await destroyWaveSurfer();
     }
-  }, [track?.id, track?.filePath, destroyWaveSurfer, loadAudioWithPromise, getFileUrl, onNext, activeMarkers, addMarkersToWaveform]);
+  }, [track?.id, track?.filePath, trackIndex, destroyWaveSurfer, loadAudioWithPromise, getFileUrl, onNext, activeMarkers, addMarkersToWaveform]);
 
 
   // Set audio URL based on track file path
@@ -866,7 +882,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [audioUrl]);
 
-  // Create WaveSurfer when audioUrl is available (for visualization only)
+  // Create WaveSurfer when audioUrl is available or trackIndex changes (for duplicate tracks)
   useEffect(() => {
     if (audioUrl && waveformRef.current) {
       // Type check to ensure audioUrl is a string
@@ -875,10 +891,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               return;
             }
             
-      console.log('AudioPlayer: Creating WaveSurfer for visualization:', audioUrl);
+      console.log('AudioPlayer: Creating WaveSurfer for visualization:', audioUrl, 'trackIndex:', trackIndex);
       initializeWaveSurfer();
     }
-  }, [audioUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl, trackIndex]);
 
   // Handle play/pause - Unified WaveSurfer approach for all platforms
   const handlePlayPause = useCallback(() => {

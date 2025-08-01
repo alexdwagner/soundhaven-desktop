@@ -31,18 +31,19 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   const { user, token } = useAuth();
   const { isMobile } = useEnvironment();
   
-  console.log("🔍 PlaylistSidebar: Component rendering...");
-  console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
-  console.log("🔍 PlaylistSidebar: User from useAuth:", user ? user.email : 'null');
-  console.log("🔍 PlaylistSidebar: Playlists from usePlaylists:", playlists);
-  console.log("🔍 PlaylistSidebar: Playlists count:", playlists?.length || 0);
-  console.log("🔍 PlaylistSidebar: Loading state:", loading);
-  console.log("🔍 PlaylistSidebar: Error state:", playlistError);
-  console.log("🔍 PlaylistSidebar: createPlaylist function:", typeof createPlaylist);
-  
-  if (playlists && playlists.length > 0) {
-    console.log("🔍 PlaylistSidebar: First playlist:", playlists[0]);
-  }
+  // Log only once on mount and when error state changes
+  useEffect(() => {
+    console.log("🔍 PlaylistSidebar: Component mounted/updated");
+    console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
+    console.log("🔍 PlaylistSidebar: User from useAuth:", user ? user.email : 'null');
+    console.log("🔍 PlaylistSidebar: Playlists count:", playlists?.length || 0);
+    console.log("🔍 PlaylistSidebar: Loading state:", loading);
+    console.log("🔍 PlaylistSidebar: Error state:", playlistError);
+    
+    if (playlists && playlists.length > 0) {
+      console.log("🔍 PlaylistSidebar: First playlist:", playlists[0]);
+    }
+  }, [playlistError, loading]); // Only log when error or loading state changes
   
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -184,6 +185,50 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
   console.log("🔍 PlaylistSidebar: About to render component");
 
+  // Error state handling
+  if (playlistError) {
+    return (
+      <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
+        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
+          + Add Playlist
+        </button>
+        <button ref={libraryButtonRef} className="w-full hover:bg-gray-700 text-gray-100 font-medium py-1 px-2 rounded text-sm mb-2 text-left transition-colors bg-gray-900" onClick={handleViewAllTracks}>
+          {user ? `${user.name}'s Library` : "My Library"}
+        </button>
+        <div className="bg-red-900/20 border border-red-700 rounded p-3 mt-2">
+          <p className="text-red-400 text-sm font-medium">Failed to load playlists</p>
+          <p className="text-red-300 text-xs mt-1">{playlistError}</p>
+          <button 
+            className="text-xs text-red-400 underline mt-2 hover:text-red-300"
+            onClick={() => {
+              console.log("🔍 PlaylistSidebar: Retrying playlist fetch...");
+              fetchPlaylists();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (loading && playlists.length === 0) {
+    return (
+      <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
+        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-2 rounded text-sm mb-2" onClick={handleCreatePlaylist}>
+          + Add Playlist
+        </button>
+        <button ref={libraryButtonRef} className="w-full hover:bg-gray-700 text-gray-100 font-medium py-1 px-2 rounded text-sm mb-2 text-left transition-colors bg-gray-900" onClick={handleViewAllTracks}>
+          {user ? `${user.name}'s Library` : "My Library"}
+        </button>
+        <div className="flex items-center justify-center p-4">
+          <p className="text-gray-400 text-sm">Loading playlists...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="playlist-sidebar bg-gray-800 text-gray-100 p-2 h-full min-w-48">
 
@@ -197,7 +242,16 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
 
         <h3 className="font-medium text-xs uppercase text-gray-400 border-b border-gray-600 pb-1 mb-2">Playlists</h3>
 
-        {!isMobile ? (
+        {/* Empty state */}
+        {playlists.length === 0 && !loading && !playlistError && (
+          <div className="text-center py-8">
+            <p className="text-gray-400 text-sm mb-2">No playlists yet</p>
+            <p className="text-gray-500 text-xs">Click "Add Playlist" to create one</p>
+          </div>
+        )}
+
+        {/* Playlist list */}
+        {playlists.length > 0 && !isMobile ? (
           // Desktop: Enable drag and drop
           <DndContext onDragEnd={handleDragEnd}>
             <SortableContext items={playlists.map((p) => p.id)} strategy={verticalListSortingStrategy}>
@@ -215,7 +269,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
               </ul>
             </SortableContext>
           </DndContext>
-        ) : (
+        ) : playlists.length > 0 ? (
           // Mobile: Disable drag and drop
           <ul className="px-1">
             {playlists.map((playlist) => (
@@ -229,7 +283,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
               />
             ))}
           </ul>
-        )}
+        ) : null}
       </div>
   );
 };

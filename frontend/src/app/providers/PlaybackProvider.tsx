@@ -137,7 +137,11 @@ export const PlaybackProvider: FC<PlaybackProviderProps> = ({ children }) => {
                 //     context: context
                 // });
                 
-                // console.log("😺 [SELECT TRACK] About to call setCurrentTrack, setCurrentTrackIndex, setCurrentPlaylistContext");
+                console.log("🎵 [SELECT TRACK] About to update state with:", {
+                    track: track.name,
+                    index: index,
+                    context: context
+                });
                 setCurrentTrack(track);
                 setCurrentTrackIndex(index);
                 setCurrentPlaylistContext(context || { isPlaylistView: false, playlistId: null });

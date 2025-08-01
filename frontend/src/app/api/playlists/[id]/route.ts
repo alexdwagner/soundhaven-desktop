@@ -47,7 +47,8 @@ export async function GET(
           a.name as artist_name,
           al.name as album_name,
           al.album_art_path,
-          pt."order" as playlist_position
+          pt."order" as playlist_position,
+          pt.id as playlist_track_id
         FROM playlist_tracks pt
         JOIN tracks t ON pt.track_id = t.id
         LEFT JOIN artists a ON t.artist_id = a.id  
@@ -56,7 +57,7 @@ export async function GET(
         ORDER BY pt."order" ASC
       `, [id]);
       
-      console.log('📱 [Next.js API] Tracks query result:', tracksResult);
+      // console.log('📱 [Next.js API] Tracks query result:', tracksResult);
       
       // Map tracks to frontend expected format
       const mappedTracks = (tracksResult.data || []).map((track: any) => ({
@@ -81,7 +82,8 @@ export async function GET(
         userId: track.user_id,
         createdAt: track.created_at,
         updatedAt: track.updated_at,
-        playlistPosition: track.playlist_position
+        playlistPosition: track.playlist_position,
+        playlist_track_id: track.playlist_track_id
       }));
       
       // Map playlist to frontend expected format

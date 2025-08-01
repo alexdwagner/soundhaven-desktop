@@ -162,15 +162,18 @@ const TracksTable: React.FC<TracksTableProps> = ({
   const renderTableBody = () => (
     <tbody className="bg-white divide-y divide-gray-200">
       {tracks.map((track, index) => {
-        const uniqueKey = track.playlist_track_id || track.id;
+        // Create truly unique key for duplicate tracks
+        const baseKey = track.playlist_track_id || track.id;
+        const uniqueKey = `${baseKey}-${index}`;
+        
         return (
           <TrackItem
             key={uniqueKey}
             track={track}
             index={index}
-            onSelectTrack={(_, event) => onSelectTrack(uniqueKey.toString(), event)}
-            onPlayTrack={() => onPlayTrack(uniqueKey.toString())}
-            isSelected={selectedTrackIds.includes(uniqueKey.toString())}
+            onSelectTrack={(_, event) => onSelectTrack(baseKey.toString(), event)}
+            onPlayTrack={() => onPlayTrack(baseKey.toString())}
+            isSelected={selectedTrackIds.includes(baseKey.toString())}
             selectedTrackIds={selectedTrackIds}
             allTracks={tracks}
             onRemoveFromPlaylist={onRemoveFromPlaylist}
@@ -196,7 +199,7 @@ const TracksTable: React.FC<TracksTableProps> = ({
           onDragEnd={handleLocalDragEnd}
         >
           <SortableContext 
-            items={tracks.map((track) => track.playlist_track_id || track.id)} 
+            items={tracks.map((track, index) => `${track.playlist_track_id || track.id}-${index}`)} 
             strategy={verticalListSortingStrategy}
           >
             <table className="min-w-full divide-y divide-gray-200">

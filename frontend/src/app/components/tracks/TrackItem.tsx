@@ -16,7 +16,6 @@ interface TrackItemProps {
   onPlayTrack: (trackId: string) => void;
   isSelected: boolean;
   selectedTrackIds?: string[]; // Add this to pass all selected track IDs
-  allTracks?: Track[]; // All tracks in the current view to help with ID mapping
   onRemoveFromPlaylist?: (trackId: string) => void;
   isPlaylistView?: boolean;
   currentPlaylistId?: string | null; // Add playlist context
@@ -33,7 +32,6 @@ const TrackItem: React.FC<TrackItemProps> = ({
   onPlayTrack,
   isSelected,
   selectedTrackIds = [],
-  allTracks = [],
   onRemoveFromPlaylist,
   isPlaylistView = false,
   currentPlaylistId = null,
@@ -42,7 +40,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
   columnVisibility,
   isMobile = false,
 }) => {
-  const { dragState, startDrag, endDrag } = useDrag();
+  const { dragState } = useDrag();
   const [isBeingDragged, setIsBeingDragged] = useState(false);
   // isMobile is now passed as a prop from TracksTable
 
@@ -110,7 +108,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
     return wrappedListeners;
   }, [listeners, isDragEnabled, track.name, isPlaylistView, isMobile]);
 
-  const { isPlaying, currentTrack, currentTrackIndex: playbackCurrentTrackIndex, currentPlaylistContext } = usePlayback();
+  const { currentTrack, currentTrackIndex: playbackCurrentTrackIndex, currentPlaylistContext } = usePlayback();
 
   // Apply drag transform and transition when drag is enabled
   const style = {
@@ -134,24 +132,25 @@ const TrackItem: React.FC<TrackItemProps> = ({
   }, [isDragging, track.name, style]);
 
   // Enhanced current track detection - only highlight the specific instance that's playing
+  // For playlists, use playlist_track_id for unique identification, otherwise use track.id
+  const uniqueTrackKey = track.playlist_track_id || track.id;
   const isCurrentTrack = currentTrack?.id === track.id && 
                          playbackCurrentTrackIndex === index &&
                          currentPlaylistContext.isPlaylistView === isPlaylistView &&
                          currentPlaylistContext.playlistId === currentPlaylistId;
   
-  // Debug logging for current track detection (only when track is actually current)
-  if (isCurrentTrack || (currentTrack?.id === track.id && !isCurrentTrack)) {
-    // console.log(`🎵 [TRACK HIGHLIGHT] ${track.name} - isCurrentTrack:`, isCurrentTrack, {
-    //   trackIdMatch: currentTrack?.id === track.id,
-    //   indexMatch: playbackCurrentTrackIndex === index,
-    //   contextMatch: currentPlaylistContext.isPlaylistView === isPlaylistView,
-    //   playlistIdMatch: currentPlaylistContext.playlistId === currentPlaylistId,
-    //   playbackIndex: playbackCurrentTrackIndex,
-    //   thisIndex: index,
-    //   playbackContext: currentPlaylistContext,
-    //   thisContext: { isPlaylistView, currentPlaylistId }
-    // });
-  }
+  // Debug logging for current track detection when there might be duplicates
+  // Only log once per track change to avoid spam
+  React.useEffect(() => {
+    if (currentTrack?.id === track.id && isCurrentTrack) {
+      console.log(`🎵 [DUPLICATE DEBUG] Playing track: ${track.name} at index ${index}`, {
+        playbackIndex: playbackCurrentTrackIndex,
+        thisIndex: index,
+        uniqueKey: uniqueTrackKey,
+        playlist_track_id: track.playlist_track_id
+      });
+    }
+  }, [currentTrack?.id, isCurrentTrack, track.name, index, playbackCurrentTrackIndex, uniqueTrackKey, track.playlist_track_id]);
 
   // Track selection with proper event handling
   const handleClick = (e: React.MouseEvent) => {

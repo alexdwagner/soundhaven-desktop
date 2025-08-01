@@ -574,6 +574,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
                   playbackSpeed={playbackSpeed}
                   waveSurferRef={waveSurferRef}
                   regionsRef={regionsRef}
+                  trackIndex={playbackCurrentTrackIndex}
                 />
               </div>
             )}
@@ -688,6 +689,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
                     playbackSpeed={playbackSpeed}
                     waveSurferRef={waveSurferRef}
                     regionsRef={regionsRef}
+                    trackIndex={playbackCurrentTrackIndex}
                   />
                 </div>
               )}

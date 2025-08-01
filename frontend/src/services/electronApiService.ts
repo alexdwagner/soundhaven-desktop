@@ -83,6 +83,7 @@ const getBaseUrl = () => {
   
   // If we have an explicit environment variable, use it
   if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+    console.log('📱 [DataLayer] Using environment variable NEXT_PUBLIC_BACKEND_URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
     return process.env.NEXT_PUBLIC_BACKEND_URL;
   }
   
@@ -95,6 +96,9 @@ const getBaseUrl = () => {
   
   console.log('📱 [DataLayer] Auto-detected base URL:', baseUrl);
   console.log('📱 [DataLayer] Current host:', host);
+  console.log('📱 [DataLayer] Port:', port);
+  console.log('📱 [DataLayer] Protocol:', protocol);
+  console.log('📱 [DataLayer] window.location.hostname:', typeof window !== 'undefined' ? window.location.hostname : 'undefined');
   console.log('📱 [DataLayer] Is mobile browser:', isMobileBrowser());
   
   return baseUrl;
@@ -210,9 +214,10 @@ const makeRequest = async <T = any>(
       };
     }
   } else {
-    // Use fetch for web
+    // Use fetch for web with relative URLs (browser handles host resolution)
     try {
-      const response = await fetch(`${getBaseUrl()}${endpoint}`, {
+      console.log('📱 [MAKE REQUEST] Using relative URL for mobile:', endpoint);
+      const response = await fetch(endpoint, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -245,10 +250,10 @@ const makeRequest = async <T = any>(
       console.error('🌐 [ApiService] API returned error:', error instanceof Error ? error.message : 'Network error');
       console.error('🌐 [ApiService] Request details:', {
         endpoint,
-        baseUrl: getBaseUrl(),
-        fullUrl: `${getBaseUrl()}${endpoint}`,
+        relativeURL: endpoint,
         isMobile: isMobileBrowser(),
-        host: getCurrentHost()
+        host: getCurrentHost(),
+        currentLocation: typeof window !== 'undefined' ? window.location.href : 'undefined'
       });
       return {
         error: error instanceof Error ? error.message : 'Network error',
