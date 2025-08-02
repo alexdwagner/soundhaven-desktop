@@ -623,16 +623,21 @@ export default function MainContent({ searchResults }: MainContentProps) {
                 </div>
 
                 {/* Comments View - Right (1/3 width) */}
-                <div className="w-1/3 h-full flex-shrink-0">
+                <div className="w-1/3 h-full flex-shrink-0 relative overflow-hidden">
                   {playbackCurrentTrack?.id ? (
-                    <CommentsPanel
-                      trackId={typeof playbackCurrentTrack.id === 'string' ? parseInt(playbackCurrentTrack.id, 10) : playbackCurrentTrack.id}
-                      show={mobileView === 'comments'}
-                      onClose={() => setMobileView('library')}
-                      regionsRef={regionsRef}
-                      waveSurferRef={waveSurferRef}
-                      onSelectComment={(commentId) => setSelectedCommentId(commentId)}
-                    />
+                    /* Mobile Carousel Wrapper - Override CommentsPanel's positioning */
+                    <div className="absolute inset-0 overflow-hidden">
+                      <div className="h-full w-full relative" style={{ isolation: 'isolate' }}>
+                        <CommentsPanel
+                          trackId={typeof playbackCurrentTrack.id === 'string' ? parseInt(playbackCurrentTrack.id, 10) : playbackCurrentTrack.id}
+                          show={true}
+                          onClose={() => setMobileView('library')}
+                          regionsRef={regionsRef}
+                          waveSurferRef={waveSurferRef}
+                          onSelectComment={(commentId) => setSelectedCommentId(commentId)}
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div className="h-full flex items-center justify-center bg-gray-50">
                       <div className="text-center">
