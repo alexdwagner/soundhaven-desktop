@@ -28,15 +28,15 @@ export function useEnvironment(): Environment {
 
       setEnv({ isElectron, isMobile, isStandalone });
       
-      console.log('🌍 [Environment Detection]', { 
-        isElectron, 
-        isMobile,
-        isMobileUserAgent,
-        isSmallScreen,
-        hasTouchSupport,
-        screenWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
-        isStandalone 
-      });
+      // console.log('🌍 [Environment Detection]', { 
+      //   isElectron, 
+      //   isMobile,
+      //   isMobileUserAgent,
+      //   isSmallScreen,
+      //   hasTouchSupport,
+      //   screenWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
+      //   isStandalone 
+      // });
     };
 
     // Initial detection

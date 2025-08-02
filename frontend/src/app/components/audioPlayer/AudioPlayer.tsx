@@ -117,15 +117,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   trackIndex,
 }) => {
   // Debug log to see when AudioPlayer re-renders
-  console.log('🎵 AudioPlayer: Component rendering with:', {
-    trackName: track?.name,
-    trackId: track?.id,
-    trackIndex: trackIndex,
-    isPlaying: isPlaying
-  });
+  // console.log('🎵 AudioPlayer: Component rendering with:', {
+  //   trackName: track?.name,
+  //   trackId: track?.id,
+  //   trackIndex: trackIndex,
+  //   isPlaying: isPlaying
+  // });
   const waveformRef = useRef<HTMLDivElement>(null);
   const internalWaveSurferRef = useRef<WaveSurferWithRegions | null>(null);
   const internalRegionsRef = useRef<any>(null);
+  const unsubscribeFunctionsRef = useRef<(() => void)[]>([]);
   
   // Log markers for debugging
   // console.log('🎯 AudioPlayer using markers from context');
@@ -444,8 +445,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
       const handleReady = () => {
         console.log('✅ AudioPlayer: Audio actually loaded and ready');
-        wavesurfer.un('ready', handleReady);
-        wavesurfer.un('error', handleError);
+        // No need to manually unsubscribe here as they're handled by unsubscribeFunctionsRef
         
         // Set state after actual completion
         setIsReady(true);
@@ -457,21 +457,20 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       
       const handleError = (error: any) => {
         console.error('❌ AudioPlayer: Audio load failed:', error);
-        wavesurfer.un('ready', handleReady);
-        wavesurfer.un('error', handleError);
+        // No need to manually unsubscribe here as they're handled by unsubscribeFunctionsRef
         reject(error);
       };
       
       // Set up event listeners
-      wavesurfer.on('ready', handleReady);
-      wavesurfer.on('error', handleError);
+      const unsubReady = wavesurfer.on('ready', handleReady);
+      const unsubError = wavesurfer.on('error', handleError);
+      unsubscribeFunctionsRef.current.push(unsubReady, unsubError);
       
       // Start loading
       try {
         wavesurfer.load(url);
       } catch (loadError) {
-        wavesurfer.un('ready', handleReady);
-        wavesurfer.un('error', handleError);
+        // No need to manually unsubscribe here as they're handled by unsubscribeFunctionsRef
         reject(loadError);
       }
     });
@@ -756,22 +755,24 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       }
 
       // Step 5: Set up core event listeners (not including ready - handled by loadAudioWithPromise)
-      wavesurfer.on('play', () => {
+      const unsubPlay = wavesurfer.on('play', () => {
         console.log('🎵 AudioPlayer: WaveSurfer play event');
       });
       
-      wavesurfer.on('pause', () => {
+      const unsubPause = wavesurfer.on('pause', () => {
         console.log('🎵 AudioPlayer: WaveSurfer pause event');
       });
       
-      wavesurfer.on('finish', () => {
+      const unsubFinish = wavesurfer.on('finish', () => {
         console.log('🎵 AudioPlayer: WaveSurfer finish event');
         onNext();
       });
       
-      wavesurfer.on('timeupdate', (currentTime: number) => {
+      const unsubTimeUpdate = wavesurfer.on('timeupdate', (currentTime: number) => {
         setCurrentTime(currentTime);
       });
+      
+      unsubscribeFunctionsRef.current.push(unsubPlay, unsubPause, unsubFinish, unsubTimeUpdate);
 
       // Step 6: Load audio with proper completion check
       console.log('🎵 AudioPlayer: Loading audio...');
@@ -897,6 +898,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl, trackIndex]);
 
+
+
   // Handle play/pause - Unified WaveSurfer approach for all platforms
   const handlePlayPause = useCallback(() => {
     console.log('🎵 [UNIFIED PLAYBACK] handlePlayPause called - using WaveSurfer for all platforms');
@@ -944,7 +947,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
     try {
       console.log('🎵 [UNIFIED SEEK] Seeking WaveSurfer to time:', time);
-      waveSurferRef.current.seekTo(time / duration);
+      waveSurferRef.current.setTime(time);
     } catch (error) {
       console.error('❌ AudioPlayer: Error during WaveSurfer seek:', error);
     }
@@ -1123,11 +1126,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     };
     
     // @ts-ignore - The events exist on the regions plugin
-    regionsRef.current.on('region-clicked', handleRegionClick);
+    const unsubRegionClick = regionsRef.current.on('region-clicked', handleRegionClick);
     
     return () => {
-      // @ts-ignore - The events exist on the regions plugin
-      regionsRef.current?.un('region-clicked', handleRegionClick);
+      // Call the unsubscribe function if it exists
+      if (typeof unsubRegionClick === 'function') {
+        unsubRegionClick();
+      }
     };
   }, [setSelectedCommentId, regionCommentMap]);
 
@@ -1198,32 +1203,39 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (waveSurferRef.current) {
+      // Clean up event listeners
+      if (unsubscribeFunctionsRef.current.length > 0) {
+        console.log('🧹 AudioPlayer: Cleaning up event listeners...');
+        unsubscribeFunctionsRef.current.forEach(unsub => unsub());
+        unsubscribeFunctionsRef.current = [];
+      }
+      
+      // Only destroy WaveSurfer if we're using internal refs (not external/shared)
+      if (!externalWaveSurferRef && waveSurferRef.current) {
         try {
-          console.log('🧹 AudioPlayer: Destroying WaveSurfer instance on unmount...');
+          console.log('🧹 AudioPlayer: Destroying internal WaveSurfer instance on unmount...');
           
           // Properly pause and stop the audio first
           if (waveSurferRef.current.isPlaying()) {
             waveSurferRef.current.pause();
           }
           
-          // Clear all event listeners
-          waveSurferRef.current.unAll();
-          
           // Destroy the instance
           waveSurferRef.current.destroy();
           waveSurferRef.current = null;
           
           // Clear refs
-                    regionsRef.current = null;
+          regionsRef.current = null;
           
-          console.log('✅ AudioPlayer: WaveSurfer instance destroyed successfully');
+          console.log('✅ AudioPlayer: Internal WaveSurfer instance destroyed successfully');
         } catch (destroyError) {
           console.error('❌ AudioPlayer: Error destroying WaveSurfer instance on unmount:', destroyError);
         }
+      } else if (externalWaveSurferRef) {
+        console.log('🎵 AudioPlayer: Using external WaveSurfer ref - preserving instance for audio persistence');
       }
     };
-  }, []);
+  }, [externalWaveSurferRef]);
 
   // Debug markers
   // console.log('AudioPlayer render - markers:', markers);

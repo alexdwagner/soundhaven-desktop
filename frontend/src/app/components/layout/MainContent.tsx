@@ -43,6 +43,11 @@ export default function MainContent({ searchResults }: MainContentProps) {
   
   // Mobile navigation state
   const [mobileView, setMobileView] = useState<MobileView>('library');
+  
+  // Debug mobileView changes
+  useEffect(() => {
+    console.log('🔍 [MOBILE VIEW] View changed to:', mobileView);
+  }, [mobileView]);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [mobileSearchQuery, setMobileSearchQuery] = useState("");
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -68,6 +73,15 @@ export default function MainContent({ searchResults }: MainContentProps) {
     setPlaybackSpeed
   } = usePlayback();
   
+  // Debug playback state changes
+  useEffect(() => {
+    console.log('🔍 [PLAYBACK STATE] Track changed:', playbackCurrentTrack?.name || 'none');
+  }, [playbackCurrentTrack]);
+  
+  useEffect(() => {
+    console.log('🔍 [PLAYBACK STATE] Playing state changed:', isPlaying);
+  }, [isPlaying]);
+  
   // Audio player refs for waveform and regions - persistent across view switches
   const waveSurferRef = useRef<any>(null);
   const regionsRef = useRef<any>(null);
@@ -86,12 +100,12 @@ export default function MainContent({ searchResults }: MainContentProps) {
   };
   
   const handleNext = () => {
-    console.log('🎵 [MAIN CONTENT] Next track requested');
+    console.log('🔍 [MAIN CONTENT] Next track requested');
     nextTrack(contextTracks, true); // autoPlay = true
   };
   
   const handlePrevious = () => {
-    console.log('🎵 [MAIN CONTENT] Previous track requested');
+    console.log('🔍 [MAIN CONTENT] Previous track requested');
     previousTrack(contextTracks, true); // autoPlay = true
   };
   
@@ -124,7 +138,15 @@ export default function MainContent({ searchResults }: MainContentProps) {
   useEffect(() => {
     if (playbackCurrentTrack?.id) {
       console.log('🎯 Fetching comments and markers for track:', playbackCurrentTrack.id);
-      fetchCommentsAndMarkers(playbackCurrentTrack.id);
+      // Convert string id to number for fetchCommentsAndMarkers
+      const trackIdNumber = typeof playbackCurrentTrack.id === 'string' ? parseInt(playbackCurrentTrack.id, 10) : playbackCurrentTrack.id;
+      
+      // Only fetch if we have a valid number
+      if (!isNaN(trackIdNumber) && trackIdNumber > 0) {
+        fetchCommentsAndMarkers(trackIdNumber);
+      } else {
+        console.warn('🎯 Invalid trackId, skipping fetchCommentsAndMarkers:', playbackCurrentTrack.id);
+      }
     }
   }, [playbackCurrentTrack?.id, fetchCommentsAndMarkers]);
 
@@ -154,13 +176,17 @@ export default function MainContent({ searchResults }: MainContentProps) {
   }, []);
 
   const handleRegisterPlayHandler = useCallback((handler: (trackId: string) => void) => {
-    // console.log('🔧 [MAIN CONTENT] Registering play handler:', typeof handler);
+    console.log('🔍 [MAIN CONTENT] Registering play handler:', typeof handler);
     // Wrap handler to ensure it's not called with invalid values during registration
     const safeHandler = (trackId: string) => {
       if (trackId === undefined || trackId === null) {
         console.warn('Play handler called with invalid trackId during registration, ignoring');
         return;
       }
+      
+      // Ensure we stay on library view when playing tracks (don't let play action change view)
+      console.log('🔍 [PLAY HANDLER] Playing track, ensuring library view');
+      setMobileView('library');
       
       // Call the original handler
       handler(trackId);
@@ -200,6 +226,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
   const minSwipeDistance = 50;
 
   const onTouchStart = (e: React.TouchEvent) => {
+    console.log('🔍 [TOUCH] TouchStart detected at:', e.targetTouches[0].clientX);
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
   };
@@ -209,22 +236,30 @@ export default function MainContent({ searchResults }: MainContentProps) {
   };
 
   const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      console.log('🔍 [TOUCH] TouchEnd ignored - no start/end coordinates');
+      return;
+    }
     
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
+    
+    console.log('🔍 [TOUCH] TouchEnd - distance:', distance, 'isLeftSwipe:', isLeftSwipe, 'isRightSwipe:', isRightSwipe);
 
     if (isLeftSwipe) {
       // Swipe left - go to next view
       switch (mobileView) {
         case 'playlists':
+          console.log('🔍 [SWIPE LEFT] Switching from playlists to library');
           setMobileView('library');
           break;
         case 'library':
+          console.log('🔍 [SWIPE LEFT] Switching from library to comments');
           setMobileView('comments');
           break;
         case 'comments':
+          console.log('🔍 [SWIPE LEFT] Already on comments, staying');
           // Stay on comments
           break;
       }
@@ -232,17 +267,21 @@ export default function MainContent({ searchResults }: MainContentProps) {
       // Swipe right - go to previous view
       switch (mobileView) {
         case 'playlists':
+          console.log('🔍 [SWIPE RIGHT] Already on playlists, staying');
           // Stay on playlists
           break;
         case 'library':
+          console.log('🔍 [SWIPE RIGHT] Switching from library to playlists');
           setMobileView('playlists');
           break;
         case 'comments':
+          console.log('🔍 [SWIPE RIGHT] Switching from comments to library');
           setMobileView('library');
           break;
       }
     }
   };
+
 
   const handleSelectPlaylist = (tracks: Track[], playlistId: string, playlistName?: string) => {
     console.log("📋 Playlist selected:", { playlistId, playlistName, tracksCount: tracks.length });
@@ -251,6 +290,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
     setSelectedPlaylistName(playlistName || 'Unknown Playlist');
     // On mobile, switch to library view when playlist is selected
     if (isMobile) {
+      console.log('🔍 [PLAYLIST SELECT] Switching to library view');
       setMobileView('library');
     }
   };
@@ -475,53 +515,8 @@ export default function MainContent({ searchResults }: MainContentProps) {
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           >
-            {/* Mobile Navigation Header */}
-            <div className="flex items-center justify-center bg-white border-b border-gray-200 px-4 py-3 relative">
-              <div className="flex space-x-8">
-                <button
-                  onClick={() => setMobileView('playlists')}
-                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
-                    mobileView === 'playlists' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Playlists
-                </button>
-                <button
-                  onClick={() => setMobileView('library')}
-                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
-                    mobileView === 'library' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Library
-                </button>
-                <button
-                  onClick={() => setMobileView('comments')}
-                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
-                    mobileView === 'comments' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Comments
-                </button>
-              </div>
-              
-              {/* Swipe indicators */}
-              <div className="swipe-indicator left"></div>
-              <div className="swipe-indicator right"></div>
-              
-              {/* Swipe hint */}
-              <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 text-xs text-gray-400">
-                Swipe to navigate
-              </div>
-            </div>
-            
-            {/* Mobile Search Field - positioned directly below navigation */}
-            <div className="bg-white border-b border-gray-200 px-4 py-3">
+            {/* Mobile Search Field */}
+            <div className="bg-white border-b border-gray-200 px-4 py-3 relative z-20">
               <div className="relative">
                 <input
                   type="text"
@@ -546,44 +541,61 @@ export default function MainContent({ searchResults }: MainContentProps) {
               </div>
             </div>
 
-            {/* Persistent Mobile AudioPlayer - Hidden when not in library view */}
-            {playbackCurrentTrack && (
-              <div 
-                className={
-                  mobileView === 'library' 
-                    ? "border-b bg-white p-2 flex-shrink-0" 
-                    : ""
-                }
-                style={
-                  mobileView !== 'library' 
-                    ? { height: 0, overflow: 'hidden' }
-                    : undefined
-                }
-              >
-                <AudioPlayer 
-                  track={playbackCurrentTrack}
-                  isPlaying={isPlaying}
-                  onPlayPause={togglePlayback}
-                  onNext={handleNext}
-                  onPrevious={handlePrevious}
-                  onSeek={handleSeek}
-                  onVolumeChange={setVolume}
-                  onPlaybackSpeedChange={setPlaybackSpeed}
-                  onAddComment={handleAddComment}
-                  volume={volume}
-                  playbackSpeed={playbackSpeed}
-                  waveSurferRef={waveSurferRef}
-                  regionsRef={regionsRef}
-                  trackIndex={playbackCurrentTrackIndex}
-                />
+            {/* Persistent Mobile AudioPlayer - Always rendered, slides up when not in library view */}
+            <div className={`
+              ${mobileView === 'library' ? 'relative' : 'absolute top-0 left-0 right-0 z-10'}
+              overflow-hidden
+            `}>
+              <div className={`
+                border-b bg-white p-2 flex-shrink-0
+                transform transition-transform duration-300 ease-in-out
+                ${mobileView === 'library' ? 'translate-y-0' : '-translate-y-32'}
+                ${mobileView === 'library' ? '' : 'will-change-transform'}
+              `}>
+                {playbackCurrentTrack ? (
+                  <AudioPlayer 
+                    track={playbackCurrentTrack}
+                    isPlaying={isPlaying}
+                    onPlayPause={togglePlayback}
+                    onNext={handleNext}
+                    onPrevious={handlePrevious}
+                    onSeek={handleSeek}
+                    onVolumeChange={setVolume}
+                    onPlaybackSpeedChange={setPlaybackSpeed}
+                    onAddComment={handleAddComment}
+                    volume={volume}
+                    playbackSpeed={playbackSpeed}
+                    waveSurferRef={waveSurferRef}
+                    regionsRef={regionsRef}
+                    trackIndex={playbackCurrentTrackIndex}
+                  />
+                ) : (
+                  /* Empty Audio Player State */
+                  <div className="h-32 flex items-center justify-center bg-gray-50 rounded border border-gray-300">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">🎵</div>
+                      <p className="text-gray-600 text-sm">Play a track 👄</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
-            {/* Mobile Content Area */}
-            <div className="flex-1 overflow-hidden">
-              {/* Playlists View - Mobile */}
-              {mobileView === 'playlists' && (
-                <div className="h-full overflow-auto">
+            {/* Mobile Content Area - Sliding Views */}
+            <div className="flex-1 overflow-hidden relative">
+              {/* Sliding Container - Library is home (center) */}
+              <div 
+                className={`flex h-full transition-transform duration-300 ease-in-out`}
+                style={{ 
+                  width: '300%',
+                  transform: mobileView === 'playlists' ? 'translateX(0%)' :
+                           mobileView === 'library' ? 'translateX(-33.333333%)' :
+                           mobileView === 'comments' ? 'translateX(-66.666667%)' :
+                           'translateX(-33.333333%)' // default to library
+                }}
+              >
+                {/* Playlists View - Left (1/3 width) */}
+                <div className="w-1/3 h-full overflow-auto flex-shrink-0">
                   <PlaylistSidebar 
                     key="mobile-playlist-sidebar"
                     keyPrefix="mobile-"
@@ -593,12 +605,9 @@ export default function MainContent({ searchResults }: MainContentProps) {
                     onRegisterDragHandler={handleRegisterPlaylistDragHandler}
                   />
                 </div>
-              )}
 
-              {/* Library View */}
-              {mobileView === 'library' && (
-                <div className="h-full overflow-hidden flex flex-col">
-                  {/* Tracks Manager Content */}
+                {/* Library View - Center (1/3 width) */}
+                <div className="w-1/3 h-full overflow-hidden flex-shrink-0 flex flex-col">
                   <div className="flex-1 overflow-hidden">
                     <TracksManager 
                       selectedPlaylistTracks={selectedPlaylistTracks}
@@ -612,30 +621,29 @@ export default function MainContent({ searchResults }: MainContentProps) {
                     />
                   </div>
                 </div>
-              )}
 
-              {/* Comments View */}
-              {mobileView === 'comments' && playbackCurrentTrack?.id && (
-                <div className="h-full relative">
-                  <CommentsPanel
-                    trackId={playbackCurrentTrack.id}
-                    show={true}
-                    onClose={() => setMobileView('library')}
-                    regionsRef={regionsRef}
-                    waveSurferRef={waveSurferRef}
-                    onSelectComment={(commentId) => setSelectedCommentId(commentId)}
-                  />
+                {/* Comments View - Right (1/3 width) */}
+                <div className="w-1/3 h-full flex-shrink-0">
+                  {playbackCurrentTrack?.id ? (
+                    <CommentsPanel
+                      trackId={typeof playbackCurrentTrack.id === 'string' ? parseInt(playbackCurrentTrack.id, 10) : playbackCurrentTrack.id}
+                      show={mobileView === 'comments'}
+                      onClose={() => setMobileView('library')}
+                      regionsRef={regionsRef}
+                      waveSurferRef={waveSurferRef}
+                      onSelectComment={(commentId) => setSelectedCommentId(commentId)}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center bg-gray-50">
+                      <div className="text-center">
+                        <div className="text-4xl mb-4">💬</div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Track Playing</h3>
+                        <p className="text-gray-600">Select a track to view comments</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-              {mobileView === 'comments' && !playbackCurrentTrack?.id && (
-                <div className="h-full flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <div className="text-4xl mb-4">💬</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Track Playing</h3>
-                    <p className="text-gray-600">Select a track to view comments</p>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Persistent Mobile Audio Controls - Fixed at bottom */}
@@ -713,7 +721,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
             <div className={`transition-all duration-300 ${selectedCommentId ? 'w-1/5' : 'w-0'} border-l border-gray-300 overflow-hidden flex-shrink-0`}>
               {selectedCommentId && playbackCurrentTrack?.id && (
                 <CommentsPanel
-                  trackId={playbackCurrentTrack.id}
+                  trackId={typeof playbackCurrentTrack.id === 'string' ? parseInt(playbackCurrentTrack.id, 10) : playbackCurrentTrack.id}
                   show={true}
                   onClose={() => setSelectedCommentId(null)}
                   regionsRef={regionsRef}
@@ -770,6 +778,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
           onTrackSelect={(trackId) => {
             console.log('🔍 [MOBILE SEARCH] Track selected:', trackId);
             // Switch to library view FIRST so TracksManager uses the correct track context
+            console.log('🔍 [SEARCH SELECT] Switching to library view for track select');
             setMobileView('library');
             // Then call the TracksManager's select handler to highlight the track
             setTimeout(() => {
@@ -808,6 +817,7 @@ export default function MainContent({ searchResults }: MainContentProps) {
           }}
           onPlaylistSelect={(playlistId) => {
             // Switch to playlists view and select the playlist
+            console.log('🔍 [SEARCH PLAYLIST] Switching to playlists view for playlist select');
             setMobileView('playlists');
             setSelectedPlaylistId(playlistId);
             setShowMobileSearch(false);

@@ -45,8 +45,18 @@ const CommentBlock = forwardRef<HTMLDivElement, CommentBlockProps>(({
     };
   }, [showMenu]);
 
-  const formatDateTime = (dateInput: string | Date): string => {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  const formatDateTime = (dateInput: string | Date | number): string => {
+    let date: Date;
+    
+    if (typeof dateInput === 'number') {
+      // Unix timestamp (seconds) - convert to milliseconds
+      date = new Date(dateInput * 1000);
+    } else if (typeof dateInput === 'string') {
+      date = new Date(dateInput);
+    } else {
+      date = dateInput;
+    }
+    
     if (!date || isNaN(date.getTime())) { // Check if date is valid
       return 'Invalid date'; // Return a placeholder or fallback value
     }

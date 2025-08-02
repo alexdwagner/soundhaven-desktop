@@ -57,16 +57,16 @@ const NavBar: React.FC<NavBarProps> = ({
   // Ensure comments is always a safe array
   const safeComments = Array.isArray(comments) ? comments : [];
   
-  console.log('🔍 [NavBar] Data sources:', {
-    propTracks: tracks.length,
-    propPlaylists: playlists.length,
-    contextTracks: contextTracks.length,
-    contextPlaylists: contextPlaylists.length,
-    actualTracks: actualTracks.length,
-    actualPlaylists: actualPlaylists.length,
-    comments: safeComments.length,
-    commentsError: !!commentsError
-  });
+  // console.log('🔍 [NavBar] Data sources:', {
+  //   propTracks: tracks.length,
+  //   propPlaylists: playlists.length,
+  //   contextTracks: contextTracks.length,
+  //   contextPlaylists: contextPlaylists.length,
+  //   actualTracks: actualTracks.length,
+  //   actualPlaylists: actualPlaylists.length,
+  //   comments: safeComments.length,
+  //   commentsError: !!commentsError
+  // });
   
   // Log comments state for debugging
   useEffect(() => {
@@ -121,7 +121,7 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <nav className="w-full bg-white border-b border-gray-200 shadow-sm">
+    <nav className="w-full bg-white border-b border-gray-200 shadow-sm relative z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center flex-shrink-0">

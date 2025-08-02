@@ -33,12 +33,12 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   onSelectComment,
   // setIsCommentInputFocused,
 }) => {
-  console.log("🔴 [COMMENTS PANEL] Rendered with props:", {
-    trackId,
-    show,
-    onClose: typeof onClose,
-    onCloseFunction: onClose.toString().substring(0, 100)
-  });
+  // console.log("🔴 [COMMENTS PANEL] Rendered with props:", {
+  //   trackId,
+  //   show,
+  //   onClose: typeof onClose,
+  //   onCloseFunction: onClose.toString().substring(0, 100)
+  // });
 
   const { user, token, loading: authLoading } = useAuth();
   // TODO: Refactor so CommentsProvider handles newComment and setNewComment.
@@ -68,12 +68,12 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
   }, [show]);
   
   // Debug: Monitor onClose function changes
-  useEffect(() => {
-    console.log('🔴 [COMMENTS PANEL] onClose function changed:', {
-      type: typeof onClose,
-      functionString: onClose.toString().substring(0, 150)
-    });
-  }, [onClose]);
+  // useEffect(() => {
+  //   console.log('🔴 [COMMENTS PANEL] onClose function changed:', {
+  //     type: typeof onClose,
+  //     functionString: onClose.toString().substring(0, 150)
+  //   });
+  // }, [onClose]);
   
   // Edit modal state
   const [editingComment, setEditingComment] = useState<any | null>(null);
@@ -244,7 +244,7 @@ const CommentsPanel: React.FC<CommentsPanelProps> = ({
     return <div className="fixed top-0 right-0 h-full bg-red-500 w-64 shadow-lg p-4">Loading comments...</div>;
   }
 
-  console.log('CommentsPanel rendered, comments:', comments);
+  // console.log('CommentsPanel rendered, comments:', comments);
 
   // Detect if we're in mobile view (full screen mode)
   const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;

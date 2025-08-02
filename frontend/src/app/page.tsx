@@ -57,7 +57,7 @@ export default function HomePage() {
   //   }
   // }, [tracks, isLoading, error, fetchTracks]);
   
-  console.log('🎯 HomePage: Auto-fetch disabled - infinite loop fixed');
+  // console.log('🎯 HomePage: Auto-fetch disabled - infinite loop fixed');
 
   const handleLoginClick = () => {
     setAuthMode('login');

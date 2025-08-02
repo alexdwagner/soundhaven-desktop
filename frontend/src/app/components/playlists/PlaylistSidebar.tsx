@@ -34,11 +34,11 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
   // Log only once on mount and when error state changes
   useEffect(() => {
     console.log("🔍 PlaylistSidebar: Component mounted/updated");
-    console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
-    console.log("🔍 PlaylistSidebar: User from useAuth:", user ? user.email : 'null');
-    console.log("🔍 PlaylistSidebar: Playlists count:", playlists?.length || 0);
-    console.log("🔍 PlaylistSidebar: Loading state:", loading);
-    console.log("🔍 PlaylistSidebar: Error state:", playlistError);
+    // console.log("🔍 PlaylistSidebar: Token from useAuth:", !!token);
+    // console.log("🔍 PlaylistSidebar: User from useAuth:", user ? user.email : 'null');
+    // console.log("🔍 PlaylistSidebar: Playlists count:", playlists?.length || 0);
+    // console.log("🔍 PlaylistSidebar: Loading state:", loading);
+    // console.log("🔍 PlaylistSidebar: Error state:", playlistError);
     
     if (playlists && playlists.length > 0) {
       console.log("🔍 PlaylistSidebar: First playlist:", playlists[0]);
@@ -183,7 +183,7 @@ const PlaylistSidebar: React.FC<PlaylistSidebarProps> = ({
     }
   }, [onRegisterDragHandler, handleDragEnd]);
 
-  console.log("🔍 PlaylistSidebar: About to render component");
+  // console.log("🔍 PlaylistSidebar: About to render component");
 
   // Error state handling
   if (playlistError) {
